@@ -34,7 +34,7 @@ jobs:
       - name: checkout the lane substrate sibling (path dep)
         uses: actions/checkout@v6
         with:
-          repository: gist-rs/riir-infer
+          repository: riir-ai/riir-infer
           ref: develop
           path: riir-infer
       - name: place the sibling at the layout path

@@ -4,8 +4,8 @@ version = "0.2.4"
 edition = "2024"
 license = "MIT"
 description = "Decision-engine serving + comparison + contribution (Plan 603 / Proposal 014 Phase 1): the modelless lane over katgpt_core::decision_wire, the laya comparison lane, and the honest-metrics harness."
-repository = "https://github.com/gist-rs/riir-reflex"
-homepage = "https://github.com/gist-rs/riir-reflex"
+repository = "https://github.com/riir-ai/riir-reflex"
+homepage = "https://github.com/riir-ai/riir-reflex"
 publish = false
 
 [workspace]

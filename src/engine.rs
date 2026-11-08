@@ -77,8 +77,9 @@ use katgpt_core::variable_rank_domain_expert::pick_domain;
 pub mod threshold;
 
 pub use threshold::{
-    FusedGateRecommendation, GateObservation, Posture, RecommendationStatus, THIN_SUPPORT_FLOOR,
-    ThresholdRecommendation, ThresholdSupport, recommend_fused_gate, threshold_recommendation,
+    FusedGateRecommendation, GateObservation, Posture, RISK_TARGET_GRID_POINTS,
+    RecommendationStatus, RiskTargetFit, THIN_SUPPORT_FLOOR, ThresholdRecommendation,
+    ThresholdSupport, recommend_fused_gate, risk_target_fit, threshold_recommendation,
 };
 
 /// Sigmoid temperature on raw LZ4 score deltas (i32-scale diffs; /24 puts

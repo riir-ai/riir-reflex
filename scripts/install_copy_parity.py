@@ -7,9 +7,9 @@ Usage:
 
 Fails (exit 1) when a canonical command present in one surface is missing
 from the other. Canonical commands (exact substrings):
-  - curl -fsSL https://raw.githubusercontent.com/gist-rs/reflex/main/install.sh | sh
-  - iwr -useb https://raw.githubusercontent.com/gist-rs/reflex/main/install.ps1 | iex
-  - brew tap gist-rs/tap && brew install riir-reflex
+  - curl -fsSL https://raw.githubusercontent.com/riir-ai/reflex/main/install.sh | sh
+  - iwr -useb https://raw.githubusercontent.com/riir-ai/reflex/main/install.ps1 | iex
+  - brew tap riir-ai/tap && brew install riir-reflex
   - scoop bucket add gist-rs https://github.com/gist-rs/scoop-bucket && scoop install riir-reflex
 """
 
@@ -28,9 +28,9 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 CANONICAL = (
-    "https://raw.githubusercontent.com/gist-rs/reflex/main/install.sh",
-    "https://raw.githubusercontent.com/gist-rs/reflex/main/install.ps1",
-    "brew tap gist-rs/tap && brew install riir-reflex",
+    "https://raw.githubusercontent.com/riir-ai/reflex/main/install.sh",
+    "https://raw.githubusercontent.com/riir-ai/reflex/main/install.ps1",
+    "brew tap riir-ai/tap && brew install riir-reflex",
     "scoop bucket add gist-rs https://github.com/gist-rs/scoop-bucket && scoop install riir-reflex",
 )
 

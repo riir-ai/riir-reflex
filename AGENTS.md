@@ -256,8 +256,8 @@ cargo run --release --bin harness -- --corpus-ab --help
   the test seam.
 - **Release pipeline**: `[profile.dist]` (strip + fat LTO), `scripts/build-release.sh` (dist build + SHA256SUMS +
   licenses), `scripts/binary_leak_scan.sh`, `scripts/install_copy_parity.py`; cross targets via `cargo zigbuild`.
-  Dist surface = **gist-rs/reflex** — NEVER this source repo.
-- **Arena site** (gist-rs/reflex-site) at <https://reflex.riir.ai> (custom domain dashboard-attached, deliberately not
+  Dist surface = **riir-ai/reflex** — NEVER this source repo.
+- **Arena site** (riir-ai/reflex-site) at <https://reflex.riir.ai> (custom domain dashboard-attached, deliberately not
   in `wrangler.toml`); `/bench/` renders from `data/bench.json` via `scripts/publish_bench.py`.
 
 ## Harness (katgpt-rs Plan 603 Phase 1)

@@ -87,7 +87,7 @@ cargo test                                     # the gates
 
 ## Install (binary-only distribution, Plan 606)
 
-Public releases live at [`gist-rs/reflex`](https://github.com/gist-rs/reflex)
+Public releases live at [`riir-ai/reflex`](https://github.com/riir-ai/reflex)
 (this source repo is public under the same amendment — the dist repo stays
 the binary-only install surface); the homebrew tap and scoop
 bucket carry the same archives — the FULL cargo-refine-matching matrix:
@@ -103,13 +103,13 @@ COMMAND is `reflex` (v0.2.2 rename; the formula/scoop/package names stay
 
 ```sh
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/gist-rs/reflex/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riir-ai/reflex/main/install.sh | sh
 
 # Windows (PowerShell)
-iwr -useb https://raw.githubusercontent.com/gist-rs/reflex/main/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/riir-ai/reflex/main/install.ps1 | iex
 
 # Homebrew (macOS / Linux)
-brew tap gist-rs/tap && brew install riir-reflex
+brew tap riir-ai/tap && brew install riir-reflex
 
 # Scoop (Windows)
 scoop bucket add gist-rs https://github.com/gist-rs/scoop-bucket && scoop install riir-reflex

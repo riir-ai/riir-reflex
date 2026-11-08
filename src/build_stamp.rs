@@ -12,7 +12,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/features.rs"));
 
-/// What the public release ships, sorted (the `gist-rs/reflex` release set).
+/// What the public release ships, sorted (the `riir-ai/reflex` release set).
 pub const RELEASE_FEATURES: &[&str] = &["laya-riir", "modelless"];
 
 /// Feature names in the compiled set that the release set requires and the

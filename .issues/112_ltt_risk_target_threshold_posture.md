@@ -1,6 +1,7 @@
 # Issue 112: LTT risk-target threshold posture — certified abstention for the fused gate
 
 **Status:** Open — adoption proposal, no novelty claim (the mechanism is published: Learn-then-Test, arXiv:2110.01052; its typed-decision accept-threshold application is ThinkJev, arXiv:2610.37732 §3.6; AnyJev ships the coverage-at-risk reporting view). Distilled in riir-rethink Research 018 (2026-11-07). PoC scoped below: report-only first, opt-in flag, byte-identical when off. Named house precedents to follow: Plan 615 / Bench 615 (one-sided Clopper–Pearson PAC gating, E=0 closed-form canary) and Bench 688 (`beta_union_bound`, exact-CP named as the upgrade).
+**Claimed:** zed-m3-i112-ltt, 1794157400, expires 2026-11-10T17:45:00Z
 
 ## Problem
 

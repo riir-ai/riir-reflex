@@ -145,6 +145,9 @@ fn router_suite<const N: usize>(
         gate_distance_only: false,
         gate_fit_calibrated: true,
         gate_rho: None,
+        // Issue 112 T4: the report lever never arms on a probe path (its own
+        // ModellessInput literal would need its own arming decision first).
+        gate_risk_target: None,
         kn_route: false,
         drafter_fix: crate::engine::DrafterFix::Off,
         suite: &prepared.suite,

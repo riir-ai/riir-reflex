@@ -344,8 +344,15 @@ pub struct RiskTargetFit {
     /// its support/accuracy disclosures (`finish`-computed, tie-inclusive
     /// `score >= threshold`, same semantics as the other postures).
     pub recommendation: Option<ThresholdRecommendation>,
+    /// Observations the scan saw (the whole fit slice — the disclosure
+    /// half of `n_groups`' accepted-at-cutoff count).
+    pub n_total: usize,
     /// Accepted groups at the certified cutoff (0 when nothing certified).
     pub n_groups: usize,
+    /// Wrong answers inside the accepted subset at the certified cutoff
+    /// (0 when nothing certified) — the CP input the certificate came
+    /// from, disclosed so the report reads it without re-folding.
+    pub n_errors: usize,
     /// The zero-error pass floor: the smallest group count whose ALL-CORRECT
     /// accepted subset still certifies, `ceil(ln(delta) / ln(1 − alpha))` —
     /// below it no candidate is even testable, and the disclosure names the
@@ -383,7 +390,7 @@ pub fn risk_target_fit(
     // are not test failures and do not stop the fixed sequence); the first
     // TESTED failure stops the scan (fixed-sequence testing — no
     // multiplicity correction needed).
-    let mut certified: Option<(f32, usize)> = None;
+    let mut certified: Option<(f32, usize, usize)> = None;
     for i in (0..RISK_TARGET_GRID_POINTS).rev() {
         let t = i as f32 / (RISK_TARGET_GRID_POINTS - 1) as f32;
         let (n_groups, n_errors) = observations.iter().fold((0usize, 0usize), |(n, k), o| {
@@ -397,18 +404,20 @@ pub fn risk_target_fit(
             continue;
         }
         if cp_upper_bound(n_errors, n_groups, delta) <= alpha {
-            certified = Some((t, n_groups));
+            certified = Some((t, n_groups, n_errors));
         } else {
             break;
         }
     }
     let fit = match certified {
-        Some((t, n_groups)) => RiskTargetFit {
+        Some((t, n_groups, n_errors)) => RiskTargetFit {
             alpha,
             delta,
             status: RecommendationStatus::Fitted,
             recommendation: Some(finish(observations, t, RecommendationStatus::Fitted)),
+            n_total: observations.len(),
             n_groups,
+            n_errors,
             floor_groups,
         },
         None => RiskTargetFit {
@@ -416,7 +425,9 @@ pub fn risk_target_fit(
             delta,
             status: RecommendationStatus::NotCertified,
             recommendation: None,
+            n_total: observations.len(),
             n_groups: 0,
+            n_errors: 0,
             floor_groups,
         },
     };
@@ -479,6 +490,29 @@ fn cp_upper_bound(errors: usize, n: usize, delta: f64) -> f64 {
         }
     }
     0.5 * (lo + hi)
+}
+
+/// Both ends of the two-sided exact Clopper–Pearson interval at per-tail
+/// level `delta_each` (Issue 112 T4's realized-error disclosure: the
+/// harness gate reads the LOWER end against the target; each tail is
+/// `delta/2` of the pinned `delta = 0.05`, i.e. a two-sided 95% interval).
+/// Reuses the one-sided upper through the beta symmetry
+/// `F(x; a, b) = 1 − F(1−x; b, a)` — one math home (the same validated
+/// bisection), no second quantile implementation:
+/// upper = `cp_upper_bound(errors, n, delta_each)` (the `Beta(k+1, n−k)`
+/// upper quantile; `1.0` when `k = n`),
+/// lower = `1 − cp_upper_bound(n − errors, n, delta_each)` (the mirrored
+/// `Beta(k, n−k+1)` lower quantile; exactly `0.0` when `k = 0`).
+pub(crate) fn cp_two_sided_ends(errors: usize, n: usize, delta_each: f64) -> (f64, f64) {
+    assert!(n >= 1, "cp_two_sided_ends needs n >= 1");
+    assert!(errors <= n, "cp_two_sided_ends: errors <= n");
+    let upper = cp_upper_bound(errors, n, delta_each);
+    let lower = if errors == 0 {
+        0.0
+    } else {
+        1.0 - cp_upper_bound(n - errors, n, delta_each)
+    };
+    (lower, upper)
 }
 
 /// Regularized incomplete beta `I_x(a, b)` — continued fraction with the
@@ -914,6 +948,48 @@ mod tests {
             let u = super::cp_upper_bound(k, n, d);
             let cdf = binom_cdf(k, n, u);
             assert!((cdf - d).abs() < 1e-9, "k={k} n={n} d={d}: cdf(p_u)={cdf}");
+        }
+    }
+
+    #[test]
+    fn cp_two_sided_ends_match_the_binomial_cdf_identities() {
+        // Issue 112 T4's realized-error interval: UPPER end is the
+        // one-sided law at the per-tail level (P(X <= k | upper) = q);
+        // LOWER end is the mirrored tail (P(X >= k | lower) = q, i.e.
+        // 1 − P(X <= k−1 | lower)). Both validated by the elementary pmf
+        // sum — an independent method from the bisection. Edge rows
+        // (k = 0, k = n) pin the exact 0 / 1 conventions instead: their
+        // identity degenerates (the pmf sum divides by q = 0 at p = 1).
+        let q = 0.025f64;
+        let (lo, hi) = super::cp_two_sided_ends(0, 30, q);
+        assert_eq!(lo, 0.0);
+        assert!((binom_cdf(0, 30, hi) - q).abs() < 1e-9);
+        let (lo, hi) = super::cp_two_sided_ends(40, 40, q);
+        assert_eq!(hi, 1.0);
+        assert!((1.0 - binom_cdf(39, 40, lo) - q).abs() < 1e-9);
+        for &(k, n) in &[
+            (1usize, 100),
+            (3, 59),
+            (7, 299),
+            (2, 30),
+            (12, 40),
+            (25, 120),
+        ] {
+            let (lo, hi) = super::cp_two_sided_ends(k, n, q);
+            assert!((binom_cdf(k, n, hi) - q).abs() < 1e-9, "upper k={k} n={n}");
+            assert!(
+                (1.0 - binom_cdf(k - 1, n, lo) - q).abs() < 1e-9,
+                "lower k={k} n={n}"
+            );
+            // Bracketing + ordering: lower <= rate <= upper, lower rises
+            // with the observed error count.
+            let rate = k as f64 / n as f64;
+            assert!(
+                lo <= rate + 1e-12 && hi >= rate - 1e-12,
+                "bracket k={k} n={n}"
+            );
+            let (lo_prev, _) = super::cp_two_sided_ends(k - 1, n, q);
+            assert!(lo >= lo_prev - 1e-12, "lower monotone k={k} n={n}");
         }
     }
 

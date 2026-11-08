@@ -42,7 +42,7 @@ use serde_json::Value;
 use crate::embed::EMBED_DIM;
 use crate::engine::{
     AbstainCause, DecisionEngine, EngineConfig, ExpertSpec, FusedGateRecommendation,
-    GateObservation, Posture, Scratch, recommend_fused_gate,
+    GateObservation, Posture, RiskTargetFit, Scratch, recommend_fused_gate, risk_target_fit,
 };
 use crate::harness::families::SynthData;
 use crate::harness::latency::{LatencyExtremes, fmt_p99_cell};
@@ -231,6 +231,14 @@ mod gate_stability;
 pub use gate_stability::{
     DEFAULT_MAX_EVAL_PER_SUITE, GATE_STABILITY_ITERS, GATE_STABILITY_SEED, GATE_STABILITY_SUITES,
     GateStabilityOptions, GateStabilityOutput, render_gate_stability_markdown, run_gate_stability,
+};
+
+// Issue 112 T4 — the `--gate-risk-target` certified-abstention lever
+// (report-only; the engine posture lives in `engine::threshold`).
+mod risk_target;
+pub use risk_target::{
+    RISK_TARGET_DELTA, RiskTargetReport, aggregate as risk_target_aggregate,
+    extract_rows as risk_target_extract_rows, render_markdown as render_risk_target_markdown,
 };
 
 // Issue 108 — the gold-support ceiling probe (report-only, judge seat).
@@ -848,6 +856,12 @@ pub struct LaneResult {
     /// axis support and accuracy disclosure; per-axis `null` on thin
     /// support. `None` on lanes that fit no gates (laya).
     pub threshold_recommendation: Option<FusedGateRecommendation>,
+    /// Issue 112 T4: the `--gate-risk-target` certified-abstention record
+    /// (report-only; the cal-side fit + the test-half realization + the
+    /// pre-registered breach read). `None` unless the lever armed — a
+    /// lever-off run serializes nothing (the additive-wire law).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_target: Option<risk_target::RiskTargetSuiteRecord>,
     /// The modelless lane's effective per-label corpus cap and how it was
     /// chosen — always disclosed so a table never reads against an unknown
     /// corpus posture (None = the lane has no corpus: the laya lanes).
@@ -2643,6 +2657,13 @@ struct ModellessInput<'a> {
     /// confidence falls below the threshold), so rho ↑ → escalation ↑ on
     /// every population.
     pub gate_rho: Option<f64>,
+    /// Issue 112 T4 (`--gate-risk-target <alpha>`): the certified-
+    /// abstention lever, REPORT-ONLY — fits the RiskTarget posture over
+    /// the same cal `score_obs` the percentile fit read and realizes the
+    /// certified cutoff on the test half (the pre-registered breach read).
+    /// `None` = off, byte-identical: no fit runs, no record is emitted.
+    /// delta is pinned at [`risk_target::RISK_TARGET_DELTA`] (0.05).
+    pub gate_risk_target: Option<f64>,
     /// Issue 079: the legacy `k == N` index-alignment route binding.
     /// `true` (the default) = the incumbent shipped behavior,
     /// byte-identical; `false` (`--no-kn-route`) = the content-bound
@@ -3117,6 +3138,10 @@ struct FittedPosture {
     score_threshold: f32,
     distance_threshold: f32,
     threshold_recommendation: FusedGateRecommendation,
+    /// Issue 112 T4: the certified-abstention fit over the same
+    /// `score_obs` (only when the lever armed; `None` = lever off or thin
+    /// support — the report row discloses which).
+    risk_target_fit: Option<RiskTargetFit>,
 }
 
 /// Issue 042 levers — resolve the fitted recommendation into the deployed
@@ -3437,7 +3462,7 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
     } else {
         None
     };
-    let (score_threshold, distance_threshold, threshold_recommendation) = {
+    let (score_threshold, distance_threshold, threshold_recommendation, risk_target_fit) = {
         let fit_pool_storage: Vec<TrainDoc>;
         let (fit_cases, fit_state_strs, corpus_pool): (&[SuiteCase], &[String], &[TrainDoc]) =
             match &gate_fit_slice {
@@ -3585,9 +3610,17 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
             &distance_obs,
             Posture::Percentile { rho: gate_rho },
         );
+        // Issue 112 T4 (report-only, opt-in): the certified-abstention fit
+        // over the SAME score_obs the percentile fit read — the certificate
+        // and the shipped gate share one observation surface. `None` when
+        // the lever is off or the support is thin (the engine's null rule;
+        // the report row discloses which).
+        let rt_fit = inp
+            .gate_risk_target
+            .and_then(|alpha| risk_target_fit(&score_obs, alpha, RISK_TARGET_DELTA));
         let (score_threshold, distance_threshold) =
             resolve_gate_thresholds(&rec, &default_cfg, inp.gate_distance_only);
-        (score_threshold, distance_threshold, rec)
+        (score_threshold, distance_threshold, rec, rt_fit)
     };
 
     Ok(FittedPosture {
@@ -3604,6 +3637,7 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
         score_threshold,
         distance_threshold,
         threshold_recommendation,
+        risk_target_fit,
     })
 }
 
@@ -3635,6 +3669,7 @@ fn run_modelless<const N: usize>(
         score_threshold,
         distance_threshold,
         threshold_recommendation,
+        risk_target_fit: rt_fit_state,
     } = fit_posture_inner::<N>(inp)?;
 
     // The event-aware build path (issue 038 T7b): when the lever armed,
@@ -3794,6 +3829,31 @@ fn run_modelless<const N: usize>(
             picks: cal_fitted_eval.picks,
             abstained: cal_fitted_eval.abstained,
         })
+    } else {
+        None
+    };
+
+    // Issue 112 T4 (report-only, opt-in): realize the certified cutoff on
+    // the TEST half. The pairs follow the fit's scale — the calibrated
+    // engine's eval when the gate-fit is on the calibrated scale (the
+    // default), the raw engine's eval at the `--no-gate-fit-calibrated`
+    // measurement posture — and the SAME per-case convention the cal-side
+    // `score_obs` used (last slot per case, noul wire flip). A lever-off
+    // run computes nothing here (byte-identical, T5's emission law).
+    let risk_target_record = if let Some(alpha) = inp.gate_risk_target {
+        let eval = if inp.gate_fit_calibrated {
+            &cal_eval_test
+        } else {
+            &raw_eval
+        };
+        Some(risk_target::suite_record(
+            spec.name,
+            alpha,
+            rt_fit_state,
+            &eval.picks,
+            &eval.confs,
+            &suite.cases,
+        ))
     } else {
         None
     };
@@ -4079,6 +4139,7 @@ fn run_modelless<const N: usize>(
             score_threshold,
             distance_threshold,
             threshold_recommendation: Some(threshold_recommendation),
+            risk_target: risk_target_record,
             corpus_cap: Some(CorpusCapInfo {
                 effective: effective_cap,
                 source: cap_source.to_string(),
@@ -4818,6 +4879,10 @@ pub mod seat {
             gate_distance_only: knobs.gate_distance_only,
             gate_fit_calibrated: true,
             gate_rho: knobs.gate_rho,
+            // Issue 112 T4: the harness's report lever never arms on the
+            // seat (the arena's gate posture is the manifest's, not a CLI
+            // report); None keeps the seat byte-identical.
+            gate_risk_target: None,
             // Issue 079: the seat keeps the engine's INCUMBENT route law
             // (`kn_route: true` — the index-anchored arm, `4ad25df`; the
             // arena's selection surface is the instinct manifest, not a
@@ -5219,6 +5284,13 @@ pub struct RunOptions {
     /// exactly (Bench 095). `--no-gate-fit-calibrated` restores the old
     /// posture.
     pub gate_fit_calibrated: bool,
+    /// Issue 112 T4 (`--gate-risk-target <alpha>`): the certified-
+    /// abstention REPORT lever — the RiskTarget fit over the cal slice plus
+    /// the test-half realization with its pre-registered breach read.
+    /// Report-only: nothing in the served gate changes, the exit code is
+    /// untouched, and `None` (the default) is byte-identical. delta is
+    /// pinned at [`risk_target::RISK_TARGET_DELTA`] (0.05).
+    pub gate_risk_target: Option<f64>,
     /// Issue 079: the legacy `k == N` index-alignment route binding.
     /// Default on = the incumbent shipped behavior, byte-identical;
     /// `--no-kn-route` runs the content-bound posture (route terms arm
@@ -5579,6 +5651,10 @@ impl RunOptions {
             // baseline. `--no-gate-fit-calibrated` restores the old
             // fit-on-raw/apply-on-calibrated posture for measurement.
             gate_fit_calibrated: true,
+            // Issue 112 T4 — the certified-abstention REPORT lever is OFF
+            // by default (byte-identical; `--gate-risk-target <alpha>` arms
+            // it; delta pinned at risk_target::RISK_TARGET_DELTA).
+            gate_risk_target: None,
             // Issue 079 — the legacy `k == N` index-alignment route binding is
             // the incumbent default; `--no-kn-route` runs the content-bound
             // posture (route terms arm only via by-name resolution) so both

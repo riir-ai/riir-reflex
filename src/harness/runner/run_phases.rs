@@ -640,6 +640,7 @@ fn run_modelless_suite(
         gate_distance_only: opts.gate_distance_only,
         gate_fit_calibrated: opts.gate_fit_calibrated,
         gate_rho: None,
+        gate_risk_target: opts.gate_risk_target,
         kn_route: opts.kn_route,
         drafter_fix: opts.drafter_fix,
         set_refine: {

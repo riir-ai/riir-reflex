@@ -564,6 +564,9 @@ pub(super) fn assemble_laya_lane_result(
         score_threshold: f32::NAN, // laya exposes no abstain knob — N/A
         distance_threshold: f32::NAN,
         threshold_recommendation: None,
+        // Issue 112 T4: the certified-abstention record is a modelless-gate
+        // surface — the wire lanes carry the honest absence.
+        risk_target: None,
         corpus_cap: None,     // the laya lanes have no corpus
         head_selection: None, // no fitted heads on the laya lanes
         nb_selection: None,

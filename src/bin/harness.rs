@@ -32,6 +32,9 @@
 //!                                      [--d1] [--pplx] [--d3] [--jeva] [--startlux] [--mammoth] [--elephant] [--opendecider] [--paw] [--paw-local]
 //!                                      [--cascade] [--cascade-worthiness-lcb F]
 //!                                      [--gate-fit-selection] [--gate-distance-only]
+//!                                      [--gate-risk-target <alpha>] (Issue 112 T4 — the
+//!                                       certified-abstention REPORT lever; delta pinned 0.05;
+//!                                       writes risk_target.json + RISK_TARGET.md)
 //!                                      [--no-gate-fit-calibrated] [--no-kn-route]
 //!                                      [--drafter-fix <off|per_byte|ncd|shared_prefix|key_only>]
 //!                                      [--synth-rescue-prefilter] (synth modes: the FlyBy
@@ -437,6 +440,22 @@ fn harness_main() {
             "--gate-distance-only" => opts.gate_distance_only = true,
             "--gate-fit-calibrated" => opts.gate_fit_calibrated = true,
             "--no-gate-fit-calibrated" => opts.gate_fit_calibrated = false,
+            // Issue 112 T4 — the certified-abstention REPORT lever: fits
+            // the RiskTarget posture over the cal slice, realizes the
+            // certified cutoff on the test half, and reports the
+            // pre-registered breach budget (report-only; the exit code is
+            // untouched). delta is pinned at RISK_TARGET_DELTA (0.05).
+            "--gate-risk-target" => {
+                i += 1;
+                let alpha: f64 = args
+                    .get(i)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_else(|| die("--gate-risk-target needs alpha in (0, 1)"));
+                if !(alpha > 0.0 && alpha < 1.0) {
+                    die("--gate-risk-target needs alpha in (0, 1) exclusive");
+                }
+                opts.gate_risk_target = Some(alpha);
+            }
             "--no-kn-route" => opts.kn_route = false,
             "--drafter-fix" => {
                 i += 1;
@@ -2111,6 +2130,38 @@ fn harness_main() {
     }
     println!("harness: wrote {}", json_path.display());
     println!("harness: wrote {}", md_path.display());
+
+    // Issue 112 T4 — the certified-abstention report (report-only). When
+    // the lever armed, every modelless lane carried its suite's record:
+    // aggregate, render, and write `risk_target.json` + `RISK_TARGET.md`
+    // beside the tables. The breach-budget verdict PRINTS the pre-
+    // registered read; the exit code is untouched (T6 records the read).
+    if let Some(alpha) = opts.gate_risk_target {
+        let rows = runner::risk_target_extract_rows(&output.suites);
+        let report = runner::risk_target_aggregate(&rows, alpha);
+        let rt_json_path = out_dir.join("risk_target.json");
+        let rt_md_path = out_dir.join("RISK_TARGET.md");
+        let rt_json = serde_json::to_string_pretty(&report).expect("risk-target serialize");
+        let rt_md = runner::render_risk_target_markdown(&report);
+        if let Err(e) = std::fs::write(&rt_json_path, rt_json) {
+            die(&format!("write {}: {e}", rt_json_path.display()));
+        }
+        if let Err(e) = std::fs::write(&rt_md_path, &rt_md) {
+            die(&format!("write {}: {e}", rt_md_path.display()));
+        }
+        print!("{rt_md}");
+        println!(
+            "harness --gate-risk-target: alpha {} · delta {} · {} suite row(s), {} certified, \
+             {} breach(es) — wrote {} + {}",
+            alpha,
+            runner::RISK_TARGET_DELTA,
+            report.rows.len(),
+            report.certified,
+            report.breaches,
+            rt_json_path.display(),
+            rt_md_path.display()
+        );
+    }
 
     // Issue 072 (`--dump-items`; rethink 028 T1): persist the per-item
     // records every lane materialized. One JSONL file per suite; one line

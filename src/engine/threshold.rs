@@ -403,7 +403,7 @@ pub fn risk_target_fit(
         if n_groups < floor_groups {
             continue;
         }
-        if cp_upper_bound(n_errors, n_groups, delta) <= alpha {
+        if cp_upper(n_errors, n_groups, delta) <= alpha {
             certified = Some((t, n_groups, n_errors));
         } else {
             break;
@@ -452,163 +452,34 @@ fn zero_error_floor(alpha: f64, delta: f64) -> usize {
     m
 }
 
-// TEMPORARY: superseded by the katgpt-core export (Issue 112 T3a — the
-// filed katgpt-rs issue; retire this block when the export lands and
-// consume `katgpt_core::…cp_upper` instead). The seed is Bench 615's
-// private `cp_upper` bisection + E=0 closed form (katgpt-rs
-// `crates/katgpt-core/benches/bench_615_two_fidelity_bai_goat.rs`, the
-// one-sided Clopper–Pearson PAC precedent; `certified_frontier` exports
-// only the closed-form `beta_union_bound`, whose own doc names the exact
-// CP quantile as the upgrade).
-/// One-sided Clopper–Pearson UPPER bound on the error rate: the smallest
-/// `p` with `P(X <= errors | p) = delta`, i.e. the `(1 − delta)`-quantile
-/// of `Beta(errors + 1, n − errors)`. `errors >= n` answers 1.0 (the data
-/// cannot rule out `p = 1`); `errors == 0` takes the E=0 closed form
-/// `1 − delta^(1/n)` (pinned by test); otherwise a bounded deterministic
-/// bisection on the regularized incomplete beta.
-fn cp_upper_bound(errors: usize, n: usize, delta: f64) -> f64 {
-    assert!(n >= 1, "cp_upper_bound needs n >= 1");
-    assert!(delta > 0.0 && delta < 1.0, "delta in (0, 1)");
-    if errors >= n {
-        return 1.0;
-    }
-    if errors == 0 {
-        return 1.0 - delta.powf(1.0 / n as f64);
-    }
-    let a = (errors + 1) as f64;
-    let b = (n - errors) as f64;
-    // f(p) = I_{1−p}(b, a) is the binomial CDF at `errors` under `p`,
-    // strictly decreasing on (0, 1) from 1 to 0; bisect f(p) = delta.
-    let mut lo = 0.0f64;
-    let mut hi = 1.0f64;
-    while hi - lo > 1e-15 {
-        let mid = 0.5 * (lo + hi);
-        if reg_inc_beta(b, a, 1.0 - mid) > delta {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-    }
-    0.5 * (lo + hi)
-}
+// The one-sided Clopper–Pearson UPPER bound is CONSUMED, not carried:
+// `katgpt_core::certified_frontier::cp_upper` (Issue 989's export — the
+// T3a retirement of this file's TEMPORARY port landed 2026-11-09,
+// katgpt-rs `2e55693d9`; the standard-Lentz incomplete beta lives there,
+// beside `beta_union_bound`'s closed form, validated by the same
+// independent binomial-CDF root identity this file's tests replay).
+use katgpt_core::certified_frontier::cp_upper;
 
 /// Both ends of the two-sided exact Clopper–Pearson interval at per-tail
 /// level `delta_each` (Issue 112 T4's realized-error disclosure: the
 /// harness gate reads the LOWER end against the target; each tail is
 /// `delta/2` of the pinned `delta = 0.05`, i.e. a two-sided 95% interval).
-/// Reuses the one-sided upper through the beta symmetry
-/// `F(x; a, b) = 1 − F(1−x; b, a)` — one math home (the same validated
-/// bisection), no second quantile implementation:
-/// upper = `cp_upper_bound(errors, n, delta_each)` (the `Beta(k+1, n−k)`
-/// upper quantile; `1.0` when `k = n`),
-/// lower = `1 − cp_upper_bound(n − errors, n, delta_each)` (the mirrored
-/// `Beta(k, n−k+1)` lower quantile; exactly `0.0` when `k = 0`).
+/// Both ends derive from the EXPORTED one-sided upper through the beta
+/// symmetry `F(x; a, b) = 1 − F(1−x; b, a)` — one math home (the validated
+/// katgpt-core bisection), no second quantile implementation:
+/// upper = `cp_upper(errors, n, delta_each)`,
+/// lower = `1 − cp_upper(n − errors, n, delta_each)` (exactly `0.0` when
+/// `k = 0`; `1.0` when `k = n`).
 pub(crate) fn cp_two_sided_ends(errors: usize, n: usize, delta_each: f64) -> (f64, f64) {
     assert!(n >= 1, "cp_two_sided_ends needs n >= 1");
     assert!(errors <= n, "cp_two_sided_ends: errors <= n");
-    let upper = cp_upper_bound(errors, n, delta_each);
+    let upper = cp_upper(errors, n, delta_each);
     let lower = if errors == 0 {
         0.0
     } else {
-        1.0 - cp_upper_bound(n - errors, n, delta_each)
+        1.0 - cp_upper(n - errors, n, delta_each)
     };
     (lower, upper)
-}
-
-/// Regularized incomplete beta `I_x(a, b)` — continued fraction with the
-/// symmetry split (the Numerical Recipes shape), f64, deterministic.
-fn reg_inc_beta(a: f64, b: f64, x: f64) -> f64 {
-    if x <= 0.0 {
-        return 0.0;
-    }
-    if x >= 1.0 {
-        return 1.0;
-    }
-    let ln_front = ln_gamma(a + b) - ln_gamma(a) - ln_gamma(b) + a * x.ln() + b * (-x).ln_1p();
-    let front = ln_front.exp();
-    if x < (a + 1.0) / (a + b + 2.0) {
-        front * betacf(a, b, x) / a
-    } else {
-        1.0 - front * betacf(b, a, 1.0 - x) / b
-    }
-}
-
-/// The continued fraction for the incomplete beta (Lentz's method, the
-/// Numerical Recipes `betacf` shape), f64, bounded-iteration deterministic.
-fn betacf(a: f64, b: f64, x: f64) -> f64 {
-    const MAX_IT: usize = 300;
-    const EPS: f64 = 3.0e-12;
-    const FPMIN: f64 = 1.0e-300;
-    let qab = a + b;
-    let qap = a + 1.0;
-    let qam = a - 1.0;
-    let mut c = 1.0f64;
-    let mut d = 1.0 - qab * x / qap;
-    if d.abs() < FPMIN {
-        d = FPMIN;
-    }
-    d = 1.0 / d;
-    let mut h = d;
-    for m in 1..=MAX_IT {
-        let m = m as f64;
-        let m2 = 2.0 * m;
-        let mut aa = m * (b - m) * x / ((qam + m2) * (a + m2));
-        d = 1.0 + aa * d;
-        if d.abs() < FPMIN {
-            d = FPMIN;
-        }
-        c = 1.0 + aa / c;
-        if c.abs() < FPMIN {
-            c = FPMIN;
-        }
-        d = 1.0 / d;
-        h *= d * c;
-        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
-        d = 1.0 + aa * d;
-        if d.abs() < FPMIN {
-            d = FPMIN;
-        }
-        c = 1.0 + aa / c;
-        if c.abs() < FPMIN {
-            c = FPMIN;
-        }
-        d = 1.0 / d;
-        let del = d * c;
-        h *= del;
-        if (del - 1.0).abs() < EPS {
-            break;
-        }
-    }
-    h
-}
-
-/// Lanczos ln-gamma (g=7, n=9 coefficients — the Numerical Recipes
-/// shape), f64, deterministic. Valid for x > 0.
-fn ln_gamma(x: f64) -> f64 {
-    const COF: [f64; 9] = [
-        0.999_999_999_999_809_9,
-        676.520_368_121_885_1,
-        -1_259.139_216_722_402_8,
-        771.323_428_777_653_1,
-        -176.615_029_162_140_5,
-        12.507_343_278_686_9,
-        -0.138_571_095_265_720_12,
-        9.984_369_578_019_6e-6,
-        1.505_632_735_149_3e-7,
-    ];
-    if x < 0.5 {
-        // Reflection for the small-x branch (unused by the CP bisection,
-        // whose arguments are integers >= 1, but kept complete).
-        (std::f64::consts::PI / x.sin()).ln() - ln_gamma(1.0 - x)
-    } else {
-        let x = x - 1.0;
-        let mut a = COF[0];
-        let t = x + 7.5;
-        for (i, &c) in COF.iter().enumerate().skip(1) {
-            a += c / (x + i as f64);
-        }
-        0.5 * (2.0 * std::f64::consts::PI).ln() + (x + 0.5) * t.ln() - t + a.ln()
-    }
 }
 
 /// Recompute support and realized accuracy AT the threshold (tie-inclusive:
@@ -910,17 +781,17 @@ mod tests {
         // E=0 closed form pinned verbatim.
         for &(n, d) in &[(59usize, 0.05f64), (299, 0.05), (100, 0.10), (16, 0.05)] {
             let want = 1.0 - d.powf(1.0 / n as f64);
-            let got = super::cp_upper_bound(0, n, d);
+            let got = katgpt_core::certified_frontier::cp_upper(0, n, d);
             assert!((got - want).abs() < 1e-15, "n={n} d={d}");
         }
         // All-wrong answers 1.0; k=n convention.
-        assert_eq!(super::cp_upper_bound(10, 10, 0.05), 1.0);
+        assert_eq!(katgpt_core::certified_frontier::cp_upper(10, 10, 0.05), 1.0);
         // Monotone in errors, never undercuts the observed rate, below 1
         // when k < n.
         for n in [16usize, 59, 120] {
             let mut prev = 0.0f64;
             for k in 0..=n {
-                let u = super::cp_upper_bound(k, n, 0.05);
+                let u = katgpt_core::certified_frontier::cp_upper(k, n, 0.05);
                 assert!(u >= prev - 1e-12, "monotone k={k}");
                 assert!(u >= k as f64 / n as f64 - 1e-12, ">= rate k={k}");
                 if k < n {
@@ -945,7 +816,7 @@ mod tests {
             (5, 200, 0.01),
             (11, 500, 0.05),
         ] {
-            let u = super::cp_upper_bound(k, n, d);
+            let u = katgpt_core::certified_frontier::cp_upper(k, n, d);
             let cdf = binom_cdf(k, n, u);
             assert!((cdf - d).abs() < 1e-9, "k={k} n={n} d={d}: cdf(p_u)={cdf}");
         }
@@ -1054,7 +925,7 @@ mod tests {
             if n < floor {
                 continue;
             }
-            if super::cp_upper_bound(k, n, delta) <= alpha {
+            if katgpt_core::certified_frontier::cp_upper(k, n, delta) <= alpha {
                 want = Some(t);
             } else {
                 break;

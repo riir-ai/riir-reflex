@@ -71,6 +71,7 @@ modelless = [
     "katgpt-core/decision_wire",
     "katgpt-core/state_option_scoring",
     "katgpt-core/template_decode",
+    "katgpt-core/certified_frontier",
     "dep:blake3",
 ]
 # Issue 106 (katgpt-rs Issue 978 T5 consumer lane) — the ρ-per-suite + ρ-gated

@@ -1,0 +1,138 @@
+{
+  "alpha": 0.1,
+  "delta": 0.05,
+  "rows": [
+    {
+      "suite": "typed_decisions",
+      "alpha": 0.1,
+      "delta": 0.05,
+      "fit": {
+        "alpha": 0.1,
+        "delta": 0.05,
+        "status": "notCertified",
+        "recommendation": null,
+        "nTotal": 100,
+        "nGroups": 0,
+        "nErrors": 0,
+        "floorGroups": 29
+      },
+      "test": null
+    },
+    {
+      "suite": "ag_news",
+      "alpha": 0.1,
+      "delta": 0.05,
+      "fit": {
+        "alpha": 0.1,
+        "delta": 0.05,
+        "status": "notCertified",
+        "recommendation": null,
+        "nTotal": 200,
+        "nGroups": 0,
+        "nErrors": 0,
+        "floorGroups": 29
+      },
+      "test": null
+    },
+    {
+      "suite": "emotion",
+      "alpha": 0.1,
+      "delta": 0.05,
+      "fit": {
+        "alpha": 0.1,
+        "delta": 0.05,
+        "status": "notCertified",
+        "recommendation": null,
+        "nTotal": 200,
+        "nGroups": 0,
+        "nErrors": 0,
+        "floorGroups": 29
+      },
+      "test": null
+    },
+    {
+      "suite": "sst5",
+      "alpha": 0.1,
+      "delta": 0.05,
+      "fit": {
+        "alpha": 0.1,
+        "delta": 0.05,
+        "status": "notCertified",
+        "recommendation": null,
+        "nTotal": 200,
+        "nGroups": 0,
+        "nErrors": 0,
+        "floorGroups": 29
+      },
+      "test": null
+    },
+    {
+      "suite": "prompt_injections",
+      "alpha": 0.1,
+      "delta": 0.05,
+      "fit": {
+        "alpha": 0.1,
+        "delta": 0.05,
+        "status": "notCertified",
+        "recommendation": null,
+        "nTotal": 100,
+        "nGroups": 0,
+        "nErrors": 0,
+        "floorGroups": 29
+      },
+      "test": null
+    },
+    {
+      "suite": "xnli_en",
+      "alpha": 0.1,
+      "delta": 0.05,
+      "fit": {
+        "alpha": 0.1,
+        "delta": 0.05,
+        "status": "notCertified",
+        "recommendation": null,
+        "nTotal": 200,
+        "nGroups": 0,
+        "nErrors": 0,
+        "floorGroups": 29
+      },
+      "test": null
+    },
+    {
+      "suite": "massive_intent_en",
+      "alpha": 0.1,
+      "delta": 0.05,
+      "fit": {
+        "alpha": 0.1,
+        "delta": 0.05,
+        "status": "notCertified",
+        "recommendation": null,
+        "nTotal": 200,
+        "nGroups": 0,
+        "nErrors": 0,
+        "floorGroups": 29
+      },
+      "test": null
+    },
+    {
+      "suite": "banking77",
+      "alpha": 0.1,
+      "delta": 0.05,
+      "fit": {
+        "alpha": 0.1,
+        "delta": 0.05,
+        "status": "notCertified",
+        "recommendation": null,
+        "nTotal": 200,
+        "nGroups": 0,
+        "nErrors": 0,
+        "floorGroups": 29
+      },
+      "test": null
+    }
+  ],
+  "certified": 0,
+  "breaches": 0,
+  "verdict": "breach budget clean — 0 breaches on 0 certified suite(s) (pre-registered line: >=2 LOWER-end breaches on <=10 suites = posture wrong)",
+  "shiftRow": null
+}

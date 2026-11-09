@@ -1,6 +1,6 @@
 # Issue 114 — JDI ladder adapters, wave 1: the decision-shaped tools three (BFCL / When2Call / API-Bank) + CLINC150 (retrieval)
 
-**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a; adapters unbulleted, one suite at a time
+**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a; adapters unbulleted, one suite at a time. **Wave state after the 2026-11-09 session (lease zed-464454b5):** T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md): suite live end to end, paired read recorded) · T3 When2Call wire CONFIRMED but **BLOCKED on a lawful corpus source** (three measured refusals + four re-open paths recorded) · T4/T5 same corpus wall (dispositions recorded) · T6 clinc150's reflex half DONE (the feed cells + rethink fold = the rethink-side booking). The wave now funnels to the CORPUS DECISIONS (owner/lane calls) — reflex-side work resumes the moment a corpus path is chosen (the adapter builds are minutes each).
 **Claimed:** zed-464454b5 (JDI ESC serve capture monitoring), 1794138600, expires 2026-11-10T00:00:00Z
 
 Rethink Issue 060 (the beat-the-JDI ladder) orders the areas most-use × quick-win first:
@@ -189,6 +189,13 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
   grammar-not-answers echo-gate on every pass), never a fetch stanza. Routed to
   the rethink-side follow-up; reflex only ships the harness suite once a
   corpus path exists.
-- [ ] T6 — per-suite paired read (modelless + laya on the new suites, the standard
+- [x] T6 — per-suite paired read (modelless + laya on the new suites, the standard
       harness posture) + the results.json cells land in the feed; rethink's fold
       extends (060 R1d/R2a) — separate booking, gate, and record on the rethink side.
+      **clinc150's reflex-side half DONE 2026-11-09** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md):
+      modelless 0.3520 n=500 / laya 0.6500 n=100-capped, chance 0.0066, slice
+      digests pinned; latency NOT QUOTABLE — the box-state disclosure + preflight
+      refusal quoted in the record; re-run at the quiet posture before quoting
+      any p50). The feed cells + the rethink fold (060 R1d/R2a) stay the
+      rethink-side booking, gated on the T3/T4/T5 corpus decisions + owner-gated
+      amo hours.

@@ -1,0 +1,1784 @@
+{
+  "meta": {
+    "date_utc": "2026-11-09T22:56:23Z",
+    "git_sha": "3254602",
+    "host": "m3",
+    "profile": "release",
+    "laya_feature": false,
+    "laya_max_questions": 0,
+    "datasets_dir": "/Users/kat/git/riir-reflex/.raw/datasets",
+    "corpus_cap_mode": "registry defaults",
+    "corpus_protocol": "one engine domain per label; corpus = train-split docs of that label, capped per label (registry), self-doc fallback for labels absent from the fetched train rows",
+    "calibration_protocol": "sigmoid-gate fit on a train-tail calibration slice (same builder over the train rows); fused-gate thresholds fitted per suite at the cal-slice 30th percentile (the T1.6 arena posture rho=30%; the birth constants do not transfer — measured: 100% abstain on several suites at defaults); raw-vs-calibrated readout ECE compared per the G1 gate; no calibration claim when the calibrator never moved",
+    "sampling_protocol": "test sample = label-STRATIFIED round-robin over the whole test split (budget = the registry test cap; first-appearance label order, dataset order within each label, deterministic, no RNG); cal slice = the same law over the train rows; corpus pool = the train rows MINUS the cal front (excluded by construction, not position); budget-0 suites unchanged (identity split) — Issue 039 T2",
+    "readout_posture": "shipped Dispatch law everywhere (Issue 039 T4 DEMOTED: the cal-side arming lever overfit the narrow suites' cal slice — emotion's test G1 regressed — and coincided with Dispatch on the wide suites it targeted; the wide-label G1 gap was closed by T2's stratified cal slice). The candidate table is recorded per suite (report-only); EngineConfig::readout stays the opt-in knob",
+    "floor_definition": "conformal-naive floor = split-conformal recalibration of the raw readout confidence, c'(s) = (1 + #{cal s_i <= s}) / (n_cal + 1) — the exchangeability-valid baseline (G1 fails unless the calibrated ECE beats it)",
+    "modal_floor_definition": "input-keyed modal-answer floor = the cal-split (reference) modal gold over questions sharing the input key, pooled by option identity and mapped through each case's own option order (first-4 normalized input tokens × qid × option-count; ties → global prior → case order; arXiv:2610.17495's anti-mimicry census; LOO over eval only when no cal slice exists) — a lane at/below it carries no input-independent signal (issue 094)",
+    "determinism_scoping": "the bit-identity claim is the MODELLESS lane's (plan caveat 3); the laya lane gets the same observed repeat check and it is reported, not claimed",
+    "laya_device": "n/a (compiled without laya-riir)",
+    "laya_python_lane": "off (pass --laya-python to add the reference lane)",
+    "clm_lane": "off (pass --clm to add the comparison lane; .issues/027)",
+    "gliner_lane": "off (pass --gliner to add the comparison lane; needs the gliner2 venv — .issues/029)",
+    "bekko_lane": "off (pass --bekko to add the comparison lane; needs the bekko venv — Bench 103)",
+    "agentjev_lane": "off (pass --agentjev to add the comparison lane; needs their jev_service on AGENTJEV_SERVE_URL — .issues/025)",
+    "clef_lane": "off (pass --clef to add the comparison lane; the hosted posture needs the owner's Workers AI creds behind the loopback forwarder, or serve the open weights locally — plan 011 Phase A + .research/007)",
+    "openthai_lane": "off (pass --openthai to add the comparison lane; needs their openthai service on OPENTHAI_SERVE_URL — plan 003)",
+    "drex_lane": "off (pass --drex to add the comparison lane; needs their service on DREX_SERVE_URL, default http://127.0.0.1:8000 — Issue 073)",
+    "d1_lane": "off (pass --d1 to add the comparison lane; needs the reference server on D1_SERVE_URL, default http://127.0.0.1:8078 — Issue 078)",
+    "pplx_lane": "off (pass --pplx to add the comparison lane; serve their autojev server on PPLX_SERVE_URL, default http://127.0.0.1:8793 — Issue 082)",
+    "d3_lane": "off (pass --d3 to add the comparison lane; serve their d3_server.py on D3_SERVE_URL, default http://127.0.0.1:8794 — riir-train 629 T2)",
+    "jeva_lane": "off (pass --jeva to add the comparison lane; serve OUR reference server scripts/jeva_server.py on JEVA_SERVE_URL, default http://127.0.0.1:8095, under the venv python with their repo installed — reflex Issue 090 B1)",
+    "startlux_lane": "off (pass --startlux to add the comparison lane; serve their startlux-decide engine on STARTLUX_SERVE_URL, default http://127.0.0.1:8090 — reflex Issue 095, riir-train 635 T3)",
+    "mammoth_lane": "off (pass --mammoth to add the hosted comparison lane; run the loopback TLS forwarder to inference.baseten.co on MAMMOTH_SERVE_URL, default http://127.0.0.1:8793, with MAMMOTH_API_TOKEN set — rethink Issue 032 T10; T10.1: the key is an OWNER act; window ends 2026-10-27 23:59 PT)",
+    "elephant_lane": "off (pass --elephant to add the self-hosted comparison lane; serve our scripts/elephant_server.py under the qev venv on ELEPHANT_SERVE_URL, default http://127.0.0.1:8096 — rethink Issue 032 T10.2, riir-train 640 T2(a) records the exact venv + weight pin)",
+    "opendecider_lane": "off (pass --opendecider to add the self-hosted comparison lane; pip install \"opendecider[serve]\" then `opendecider serve --model manjunathshiva/opendecider-nano` on OPENDECIDER_SERVE_URL, default http://127.0.0.1:8000 — rethink Issue 038 / Research 013)",
+    "paw_lane": "off (pass --paw to add the comparison lane; PAW_API_KEY optional — .issues/033)",
+    "paw_local_lane": "off (pass --paw-local to add the local-runtime twin; needs the programasweights venv + a hosted-lane cache — .issues/033)",
+    "box_state": {
+      "start": {
+        "power": "AC Power",
+        "power_mode": "high",
+        "load_1m": 6.48,
+        "swap_used_mb": 532.44,
+        "load_source": "loadavg1m",
+        "gpu_util_pct": null,
+        "gpu_mem_mib": null,
+        "latency_quotable": false,
+        "refusals": [
+          "load 6.48 > 6 — a sibling job is on the box"
+        ]
+      },
+      "end": {
+        "power": "AC Power",
+        "power_mode": "high",
+        "load_1m": 6.36,
+        "swap_used_mb": 532.44,
+        "load_source": "loadavg1m",
+        "gpu_util_pct": null,
+        "gpu_mem_mib": null,
+        "latency_quotable": false,
+        "refusals": [
+          "load 6.36 > 6 — a sibling job is on the box"
+        ]
+      }
+    },
+    "head_posture": "OFF (head_scale 0 — the published baseline posture)",
+    "nb_posture": "OFF (nb_scale 0 — the published baseline posture)",
+    "divergences": [
+      "massive option sampling: SplitMix64 (fixed seed), not CPython MT19937 — both lanes see byte-identical questions, which is the integrity that matters",
+      "banking77: mteb/banking77 mirror (the reference's own bench_apps variant); PolyAI/banking77 is script-based and unservable",
+      "engine context = state + prompt (wire criteria None) — the modelless serving path",
+      "synthetic fixtures (semantic_defects): in-process fixtures with programmatic gold; the six Issue-004 harness families (2026-10-02) and code_fixtures (2026-10-11) were retired — owner calls — so the modelless lane no longer answers any self-authored suite but the one that reads above chance"
+    ]
+  },
+  "suites": [
+    {
+      "name": "typed_decisions",
+      "n_cases": 400,
+      "n_questions": 2000,
+      "cases_digest": "fnv1a64-6e37760ee2a5b6c9",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 2000,
+          "accuracy": 0.28,
+          "macro_f1": 0.18033537680245268,
+          "ece": 0.06863966716080905,
+          "brier": 0.6912702679455214,
+          "nll": 1.2311125755701748,
+          "aurc": 0.5826486946829745,
+          "mean_confidence": 0.34847092045098543,
+          "acc_at_50_coverage": 0.414,
+          "acc_at_80_coverage": 0.338125
+        },
+        "readout_ece": 0.005988273710012426,
+        "readout_brier": 0.20229162325688152,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.687,
+          "selective_accuracy": 0.23482428115015974,
+          "selective_n": 626
+        },
+        "abstain_causes": {
+          "score_gate": 1124,
+          "distance_gate": 250,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.26714381217956545,
+        "readout_ece_calibrated": 0.005988273710012426,
+        "floor_ece": 0.3682994011976044,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": {
+          "choice": {
+            "n": 600,
+            "accuracy": 0.115,
+            "macro_f1": 0.08384042699832173,
+            "ece": 0.1299632709225019,
+            "brier": 0.7758089112217907,
+            "nll": 1.480587798055628,
+            "aurc": 0.8594994532561574,
+            "mean_confidence": 0.2449632709225019,
+            "acc_at_50_coverage": 0.19333333333333333,
+            "acc_at_80_coverage": 0.13125
+          },
+          "noul": {
+            "n": 600,
+            "accuracy": 0.5033333333333333,
+            "macro_f1": 0.3599289764591328,
+            "ece": 0.002875995437304213,
+            "brier": 0.4998046170143887,
+            "nll": 0.6929517911214418,
+            "aurc": 0.482155794759827,
+            "mean_confidence": 0.5062093287706375,
+            "acc_at_50_coverage": 0.4766666666666667,
+            "acc_at_80_coverage": 0.54375
+          },
+          "score": {
+            "n": 800,
+            "accuracy": 0.23625,
+            "macro_f1": 0.15119730547178317,
+            "ece": 0.07196971813216806,
+            "brier": 0.7714655236866652,
+            "nll": 1.4476267470426523,
+            "aurc": 0.7538171648613213,
+            "mean_confidence": 0.307797851357609,
+            "acc_at_50_coverage": 0.28,
+            "acc_at_80_coverage": 0.2734375
+          }
+        },
+        "soft_acc": 0.31669121474933565,
+        "brier_soft": 0.24478030958599495,
+        "score_mae": 0.7307971803528153,
+        "within_1": 0.72125,
+        "latency_p50_ms": 0.22,
+        "latency_p99_ms": 0.336,
+        "latency_tail_support": 5,
+        "latency_extremes": {
+          "first_ms": 0.194,
+          "max_ms": 0.357,
+          "argmax_case": 140
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.312155625,
+        "n_cases": 400,
+        "n_questions": 2000,
+        "score_threshold": 0.28680578,
+        "distance_threshold": 0.23248059,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.28680578,
+            "status": "fitted",
+            "targetAccuracy": 0.25714287,
+            "support": {
+              "n": 100,
+              "nPass": 70,
+              "nAbstain": 30
+            }
+          },
+          "distance": {
+            "threshold": 0.23248059,
+            "status": "fitted",
+            "targetAccuracy": 0.2,
+            "support": {
+              "n": 100,
+              "nPass": 70,
+              "nAbstain": 30
+            }
+          }
+        },
+        "route_census": {
+          "picks": 2050,
+          "changes": 0,
+          "disagreements": 1500,
+          "latch_armed": true
+        },
+        "corpus_cap": {
+          "effective": 48,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "Elevated; should be handled within the same week.",
+            "pred": "Routine; handle within the normal queue.",
+            "count": 111,
+            "share_of_errors": 0.09719789842381786
+          },
+          {
+            "gold": "Critical; requires action within the same day.",
+            "pred": "Routine; handle within the normal queue.",
+            "count": 96,
+            "share_of_errors": 0.0840630472854641
+          },
+          {
+            "gold": "investigate",
+            "pred": "contain",
+            "count": 74,
+            "share_of_errors": 0.0647985989492119
+          },
+          {
+            "gold": "success",
+            "pred": "failure",
+            "count": 50,
+            "share_of_errors": 0.043782837127845885
+          },
+          {
+            "gold": "Clearly unhappy; repeat problems or explicit complaints.",
+            "pred": "No sign of dissatisfaction.",
+            "count": 47,
+            "share_of_errors": 0.04115586690017513
+          },
+          {
+            "gold": "escalate_to_human",
+            "pred": "close_no_action",
+            "count": 44,
+            "share_of_errors": 0.03852889667250438
+          },
+          {
+            "gold": "High: access to production, secrets or customer data.",
+            "pred": "Low: limited access, easily reversed.",
+            "count": 43,
+            "share_of_errors": 0.03765323992994746
+          },
+          {
+            "gold": "approve",
+            "pred": "hold",
+            "count": 43,
+            "share_of_errors": 0.03765323992994746
+          },
+          {
+            "gold": "No time pressure; can wait indefinitely.",
+            "pred": "Routine; handle within the normal queue.",
+            "count": 39,
+            "share_of_errors": 0.03415061295971979
+          },
+          {
+            "gold": "billing",
+            "pred": "refund",
+            "count": 38,
+            "share_of_errors": 0.03327495621716287
+          },
+          {
+            "gold": "manual_review",
+            "pred": "hold",
+            "count": 38,
+            "share_of_errors": 0.03327495621716287
+          },
+          {
+            "gold": "Material: a large or unexplained difference.",
+            "pred": "None: everything reconciles.",
+            "count": 36,
+            "share_of_errors": 0.03152364273204904
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.2925,
+        "jdi_skill": 0.0,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.27064033007621763
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.07508089113235474
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.27064033007621763
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-2fe9ec3132dbc924"
+      },
+      "laya": {},
+      "slices": {
+        "n_test": 400,
+        "n_cal": 100,
+        "n_pool": 1100,
+        "test_digest": "fnv1a64-287d5f73a11932cd",
+        "cal_digest": "fnv1a64-0b6e8426558b0d1e",
+        "pool_digest": "fnv1a64-a1679de56e9278b1",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.464,
+        "n_questions": 2000,
+        "n_keys": 80,
+        "n_fallback": 40,
+        "global_modal_share": 0.228,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "ag_news",
+      "n_cases": 400,
+      "n_questions": 400,
+      "cases_digest": "fnv1a64-07eff23c06505584",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 400,
+          "accuracy": 0.405,
+          "macro_f1": 0.3750065995228045,
+          "ece": 0.14648580871522424,
+          "brier": 0.743575994900718,
+          "nll": 1.3735067456935397,
+          "aurc": 0.5222674030081099,
+          "mean_confidence": 0.2585141912847757,
+          "acc_at_50_coverage": 0.475,
+          "acc_at_80_coverage": 0.421875
+        },
+        "readout_ece": 0.08123372241854669,
+        "readout_brier": 0.24415474778698748,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.2475,
+          "selective_accuracy": 0.4152823920265781,
+          "selective_n": 301
+        },
+        "abstain_causes": {
+          "score_gate": 0,
+          "distance_gate": 99,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.4045775996148587,
+        "readout_ece_calibrated": 0.08123372241854669,
+        "floor_ece": 0.22807213930348258,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.25,
+        "latency_p99_ms": 0.335,
+        "latency_tail_support": 5,
+        "latency_extremes": {
+          "first_ms": 0.303,
+          "max_ms": 0.389,
+          "argmax_case": 136
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.310302917,
+        "n_cases": 400,
+        "n_questions": 400,
+        "score_threshold": 0.43966067,
+        "distance_threshold": 0.355218,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.43966067,
+            "status": "fitted",
+            "targetAccuracy": 0.485,
+            "support": {
+              "n": 200,
+              "nPass": 200,
+              "nAbstain": 0
+            }
+          },
+          "distance": {
+            "threshold": 0.355218,
+            "status": "fitted",
+            "targetAccuracy": 0.4857143,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "route_census": {
+          "picks": 410,
+          "changes": 0,
+          "disagreements": 275,
+          "latch_armed": true
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "sci_tech",
+            "pred": "world",
+            "count": 59,
+            "share_of_errors": 0.24789915966386555
+          },
+          {
+            "gold": "sports",
+            "pred": "world",
+            "count": 58,
+            "share_of_errors": 0.24369747899159663
+          },
+          {
+            "gold": "business",
+            "pred": "world",
+            "count": 39,
+            "share_of_errors": 0.1638655462184874
+          },
+          {
+            "gold": "sports",
+            "pred": "sci_tech",
+            "count": 16,
+            "share_of_errors": 0.06722689075630252
+          },
+          {
+            "gold": "sci_tech",
+            "pred": "business",
+            "count": 15,
+            "share_of_errors": 0.06302521008403361
+          },
+          {
+            "gold": "world",
+            "pred": "sci_tech",
+            "count": 14,
+            "share_of_errors": 0.058823529411764705
+          },
+          {
+            "gold": "business",
+            "pred": "sci_tech",
+            "count": 11,
+            "share_of_errors": 0.046218487394957986
+          },
+          {
+            "gold": "business",
+            "pred": "sports",
+            "count": 7,
+            "share_of_errors": 0.029411764705882353
+          },
+          {
+            "gold": "sports",
+            "pred": "business",
+            "count": 6,
+            "share_of_errors": 0.025210084033613446
+          },
+          {
+            "gold": "world",
+            "pred": "business",
+            "count": 5,
+            "share_of_errors": 0.02100840336134454
+          },
+          {
+            "gold": "sci_tech",
+            "pred": "sports",
+            "count": 4,
+            "share_of_errors": 0.01680672268907563
+          },
+          {
+            "gold": "world",
+            "pred": "sports",
+            "count": 4,
+            "share_of_errors": 0.01680672268907563
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.3075,
+        "jdi_skill": 0.14079422382671483,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.4845446279644966
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.22621196150779727
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.4845446279644966
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-53b4ac1dd09f2472"
+      },
+      "laya": {},
+      "slices": {
+        "n_test": 400,
+        "n_cal": 200,
+        "n_pool": 19800,
+        "test_digest": "fnv1a64-238133933bb8d6fc",
+        "cal_digest": "fnv1a64-96c58e69e7c6048e",
+        "pool_digest": "fnv1a64-996876e41929dc33",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.2625,
+        "n_questions": 400,
+        "n_keys": 195,
+        "n_fallback": 398,
+        "global_modal_share": 0.25,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "emotion",
+      "n_cases": 400,
+      "n_questions": 400,
+      "cases_digest": "fnv1a64-6feefd1c947dd008",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 400,
+          "accuracy": 0.2725,
+          "macro_f1": 0.1295079093484416,
+          "ece": 0.10283192273229363,
+          "brier": 0.8322547849250844,
+          "nll": 1.7885193206256431,
+          "aurc": 0.7252765561410034,
+          "mean_confidence": 0.16966807726770639,
+          "acc_at_50_coverage": 0.3,
+          "acc_at_80_coverage": 0.28125
+        },
+        "readout_ece": 0.12224318068474532,
+        "readout_brier": 0.21318949006940713,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.3125,
+          "selective_accuracy": 0.28363636363636363,
+          "selective_n": 275
+        },
+        "abstain_causes": {
+          "score_gate": 0,
+          "distance_gate": 125,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.27244123429059985,
+        "readout_ece_calibrated": 0.12224318068474532,
+        "floor_ece": 0.2996890547263682,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.114,
+        "latency_p99_ms": 0.147,
+        "latency_tail_support": 5,
+        "latency_extremes": {
+          "first_ms": 0.126,
+          "max_ms": 0.151,
+          "argmax_case": 212
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.257991458,
+        "n_cases": 400,
+        "n_questions": 400,
+        "score_threshold": 0.15024821,
+        "distance_threshold": 0.42200845,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.15024821,
+            "status": "fitted",
+            "targetAccuracy": 0.15,
+            "support": {
+              "n": 200,
+              "nPass": 200,
+              "nAbstain": 0
+            }
+          },
+          "distance": {
+            "threshold": 0.42200845,
+            "status": "fitted",
+            "targetAccuracy": 0.15714286,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "route_census": {
+          "picks": 410,
+          "changes": 0,
+          "disagreements": 108,
+          "latch_armed": true
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "sadness",
+            "pred": "joy",
+            "count": 93,
+            "share_of_errors": 0.31958762886597936
+          },
+          {
+            "gold": "anger",
+            "pred": "joy",
+            "count": 48,
+            "share_of_errors": 0.16494845360824742
+          },
+          {
+            "gold": "fear",
+            "pred": "joy",
+            "count": 39,
+            "share_of_errors": 0.13402061855670103
+          },
+          {
+            "gold": "love",
+            "pred": "joy",
+            "count": 28,
+            "share_of_errors": 0.09621993127147767
+          },
+          {
+            "gold": "joy",
+            "pred": "love",
+            "count": 15,
+            "share_of_errors": 0.05154639175257732
+          },
+          {
+            "gold": "sadness",
+            "pred": "fear",
+            "count": 13,
+            "share_of_errors": 0.044673539518900345
+          },
+          {
+            "gold": "sadness",
+            "pred": "love",
+            "count": 10,
+            "share_of_errors": 0.03436426116838488
+          },
+          {
+            "gold": "anger",
+            "pred": "fear",
+            "count": 9,
+            "share_of_errors": 0.030927835051546393
+          },
+          {
+            "gold": "joy",
+            "pred": "fear",
+            "count": 7,
+            "share_of_errors": 0.024054982817869417
+          },
+          {
+            "gold": "anger",
+            "pred": "love",
+            "count": 6,
+            "share_of_errors": 0.020618556701030927
+          },
+          {
+            "gold": "surprise",
+            "pred": "joy",
+            "count": 6,
+            "share_of_errors": 0.020618556701030927
+          },
+          {
+            "gold": "surprise",
+            "pred": "fear",
+            "count": 4,
+            "share_of_errors": 0.013745704467353952
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.2975,
+        "jdi_skill": 0.0,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.14994623214006422
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.019543547630310076
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.14994623214006422
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-d4127db8eebd778e"
+      },
+      "laya": {},
+      "slices": {
+        "n_test": 400,
+        "n_cal": 200,
+        "n_pool": 15799,
+        "test_digest": "fnv1a64-36f3eb1067bed96a",
+        "cal_digest": "fnv1a64-f2ec48ed7070889c",
+        "pool_digest": "fnv1a64-8ef2b2af400721fd",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.3125,
+        "n_questions": 400,
+        "n_keys": 162,
+        "n_fallback": 267,
+        "global_modal_share": 0.17,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "sst5",
+      "n_cases": 600,
+      "n_questions": 600,
+      "cases_digest": "fnv1a64-ad64a6cb0039e916",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 600,
+          "accuracy": 0.195,
+          "macro_f1": 0.18383443504868335,
+          "ece": 0.015356123273571332,
+          "brier": 0.7987327294299627,
+          "nll": 1.606126576889768,
+          "aurc": 0.8162007324398712,
+          "mean_confidence": 0.21035612327357134,
+          "acc_at_50_coverage": 0.18333333333333332,
+          "acc_at_80_coverage": 0.18958333333333333
+        },
+        "readout_ece": 0.04346781668563684,
+        "readout_brier": 0.16090507005889676,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.645,
+          "selective_accuracy": 0.2112676056338028,
+          "selective_n": 213
+        },
+        "abstain_causes": {
+          "score_gate": 273,
+          "distance_gate": 114,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.19426085521777472,
+        "readout_ece_calibrated": 0.04346781668563684,
+        "floor_ece": 0.29350746268656724,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": 1.1781415872772534,
+        "within_1": 0.44333333333333336,
+        "latency_p50_ms": 0.095,
+        "latency_p99_ms": 0.141,
+        "latency_tail_support": 7,
+        "latency_extremes": {
+          "first_ms": 0.102,
+          "max_ms": 0.154,
+          "argmax_case": 169
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.189843208,
+        "n_cases": 600,
+        "n_questions": 600,
+        "score_threshold": 0.20696951,
+        "distance_threshold": 0.39228728,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.20696951,
+            "status": "fitted",
+            "targetAccuracy": 0.27142859,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          },
+          "distance": {
+            "threshold": 0.39228728,
+            "status": "fitted",
+            "targetAccuracy": 0.17730497,
+            "support": {
+              "n": 200,
+              "nPass": 141,
+              "nAbstain": 59
+            }
+          }
+        },
+        "route_census": {
+          "picks": 610,
+          "changes": 0,
+          "disagreements": 216,
+          "latch_armed": true
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "negative",
+            "pred": "neutral",
+            "count": 65,
+            "share_of_errors": 0.13457556935817805
+          },
+          {
+            "gold": "very positive",
+            "pred": "neutral",
+            "count": 49,
+            "share_of_errors": 0.10144927536231885
+          },
+          {
+            "gold": "positive",
+            "pred": "neutral",
+            "count": 44,
+            "share_of_errors": 0.09109730848861283
+          },
+          {
+            "gold": "negative",
+            "pred": "positive",
+            "count": 41,
+            "share_of_errors": 0.08488612836438923
+          },
+          {
+            "gold": "positive",
+            "pred": "very positive",
+            "count": 31,
+            "share_of_errors": 0.06418219461697723
+          },
+          {
+            "gold": "very negative",
+            "pred": "neutral",
+            "count": 31,
+            "share_of_errors": 0.06418219461697723
+          },
+          {
+            "gold": "very positive",
+            "pred": "positive",
+            "count": 30,
+            "share_of_errors": 0.062111801242236024
+          },
+          {
+            "gold": "negative",
+            "pred": "very negative",
+            "count": 25,
+            "share_of_errors": 0.051759834368530024
+          },
+          {
+            "gold": "positive",
+            "pred": "very negative",
+            "count": 24,
+            "share_of_errors": 0.049689440993788817
+          },
+          {
+            "gold": "very positive",
+            "pred": "very negative",
+            "count": 21,
+            "share_of_errors": 0.043478260869565216
+          },
+          {
+            "gold": "neutral",
+            "pred": "positive",
+            "count": 18,
+            "share_of_errors": 0.037267080745341616
+          },
+          {
+            "gold": "neutral",
+            "pred": "negative",
+            "count": 16,
+            "share_of_errors": 0.033126293995859216
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.2733333333333333,
+        "jdi_skill": 0.0,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.23409734964370726
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.023228951692581157
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.23409734964370726
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-0c648062c19b8c01"
+      },
+      "laya": {},
+      "slices": {
+        "n_test": 600,
+        "n_cal": 200,
+        "n_pool": 8333,
+        "test_digest": "fnv1a64-67fe9666fa0c3a6f",
+        "cal_digest": "fnv1a64-d210e7c6707c3d40",
+        "pool_digest": "fnv1a64-b46434b82644c53b",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.13833333333333334,
+        "n_questions": 600,
+        "n_keys": 188,
+        "n_fallback": 578,
+        "global_modal_share": 0.2,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "prompt_injections",
+      "n_cases": 116,
+      "n_questions": 116,
+      "cases_digest": "fnv1a64-5080803ec29f2423",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 116,
+          "accuracy": 0.4827586206896552,
+          "macro_f1": 0.32558139534883723,
+          "ece": 0.022866831257425446,
+          "brier": 0.5003501522925672,
+          "nll": 0.6934973261329647,
+          "aurc": 0.4000322477180581,
+          "mean_confidence": 0.5056254519470806,
+          "acc_at_50_coverage": 0.6551724137931034,
+          "acc_at_80_coverage": 0.5978260869565217
+        },
+        "readout_ece": 0.017249540008347608,
+        "readout_brier": 0.24999728234241608,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "abstain_causes": {
+          "score_gate": 116,
+          "distance_gate": 0,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.48266505784001845,
+        "readout_ece_calibrated": 0.017249540008347608,
+        "floor_ece": 0.48881870945715483,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.075,
+        "latency_p99_ms": 0.094,
+        "latency_tail_support": 2,
+        "latency_extremes": {
+          "first_ms": 0.075,
+          "max_ms": 0.101,
+          "argmax_case": 50
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.048559833,
+        "n_cases": 116,
+        "n_questions": 116,
+        "score_threshold": 0.5099852,
+        "distance_threshold": 0.4581357,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.5099852,
+            "status": "fitted",
+            "targetAccuracy": 0.51,
+            "support": {
+              "n": 100,
+              "nPass": 100,
+              "nAbstain": 0
+            }
+          },
+          "distance": {
+            "threshold": 0.4581357,
+            "status": "fitted",
+            "targetAccuracy": 0.54285717,
+            "support": {
+              "n": 100,
+              "nPass": 70,
+              "nAbstain": 30
+            }
+          }
+        },
+        "route_census": {
+          "picks": 126,
+          "changes": 0,
+          "disagreements": 31,
+          "latch_armed": true
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [],
+        "pair_head_ab": null,
+        "jdi_chance": 0.5172413793103449,
+        "jdi_skill": 0.0,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.4999141550064088
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.005427550077438337
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.4999141550064088
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-6693f8f5cbe1b3b3"
+      },
+      "laya": {},
+      "slices": {
+        "n_test": 116,
+        "n_cal": 100,
+        "n_pool": 446,
+        "test_digest": "fnv1a64-a6a375f0273e0bef",
+        "cal_digest": "fnv1a64-a45e6561b2a98ff1",
+        "pool_digest": "fnv1a64-8b32b961bbd47195",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.5344827586206896,
+        "n_questions": 116,
+        "n_keys": 84,
+        "n_fallback": 107,
+        "global_modal_share": 0.5,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "xnli_en",
+      "n_cases": 300,
+      "n_questions": 300,
+      "cases_digest": "fnv1a64-b136750e5af1d412",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 300,
+          "accuracy": 0.34,
+          "macro_f1": 0.20524722352398592,
+          "ece": 0.005744998157024339,
+          "brier": 0.6676534447275202,
+          "nll": 1.1000003307083204,
+          "aurc": 0.6951883618518003,
+          "mean_confidence": 0.34574499815702436,
+          "acc_at_50_coverage": 0.3333333333333333,
+          "acc_at_80_coverage": 0.32916666666666666
+        },
+        "readout_ece": 0.037237763404846205,
+        "readout_brier": 0.2280838303366655,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.45,
+          "selective_accuracy": 0.3696969696969697,
+          "selective_n": 165
+        },
+        "abstain_causes": {
+          "score_gate": 0,
+          "distance_gate": 135,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.3394473610321681,
+        "readout_ece_calibrated": 0.037237763404846205,
+        "floor_ece": 0.3055389718076285,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.089,
+        "latency_p99_ms": 0.137,
+        "latency_tail_support": 4,
+        "latency_extremes": {
+          "first_ms": 0.127,
+          "max_ms": 0.155,
+          "argmax_case": 145
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.125114666,
+        "n_cases": 300,
+        "n_questions": 300,
+        "score_threshold": 0.290065,
+        "distance_threshold": 0.52220815,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.290065,
+            "status": "fitted",
+            "targetAccuracy": 0.315,
+            "support": {
+              "n": 200,
+              "nPass": 200,
+              "nAbstain": 0
+            }
+          },
+          "distance": {
+            "threshold": 0.52220815,
+            "status": "fitted",
+            "targetAccuracy": 0.30714285,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "route_census": {
+          "picks": 310,
+          "changes": 0,
+          "disagreements": 148,
+          "latch_armed": true
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "contradiction",
+            "pred": "neutral",
+            "count": 95,
+            "share_of_errors": 0.4797979797979798
+          },
+          {
+            "gold": "entailment",
+            "pred": "neutral",
+            "count": 93,
+            "share_of_errors": 0.4696969696969697
+          },
+          {
+            "gold": "contradiction",
+            "pred": "entailment",
+            "count": 5,
+            "share_of_errors": 0.025252525252525252
+          },
+          {
+            "gold": "neutral",
+            "pred": "entailment",
+            "count": 5,
+            "share_of_errors": 0.025252525252525252
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.3333333333333333,
+        "jdi_skill": 0.010000000000000063,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.3146261551976204
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.02840872079133988
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.3146261551976204
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-452745661eb64ed0"
+      },
+      "laya": {},
+      "slices": {
+        "n_test": 300,
+        "n_cal": 200,
+        "n_pool": 19800,
+        "test_digest": "fnv1a64-614262484399affa",
+        "cal_digest": "fnv1a64-b8126a40673cc7c6",
+        "pool_digest": "fnv1a64-f3f8f200eba61985",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.3333333333333333,
+        "n_questions": 300,
+        "n_keys": 198,
+        "n_fallback": 288,
+        "global_modal_share": 0.335,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "massive_intent_en",
+      "n_cases": 300,
+      "n_questions": 300,
+      "cases_digest": "fnv1a64-49390c8b80475849",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 300,
+          "accuracy": 0.6,
+          "macro_f1": 0.5945878574407987,
+          "ece": 0.5354056482637921,
+          "brier": 0.9259545377322224,
+          "nll": 2.7767609959005477,
+          "aurc": 0.23469293548566825,
+          "mean_confidence": 0.0645943517362078,
+          "acc_at_50_coverage": 0.7666666666666667,
+          "acc_at_80_coverage": 0.6625
+        },
+        "readout_ece": 0.07364787345131237,
+        "readout_brier": 0.20933237737106253,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.41,
+          "selective_accuracy": 0.5706214689265536,
+          "selective_n": 177
+        },
+        "abstain_causes": {
+          "score_gate": 16,
+          "distance_gate": 107,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.5354056482637921,
+        "readout_ece_calibrated": 0.07364787345131237,
+        "floor_ece": 0.13681592039801,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.112,
+        "latency_p99_ms": 0.146,
+        "latency_tail_support": 4,
+        "latency_extremes": {
+          "first_ms": 0.126,
+          "max_ms": 0.157,
+          "argmax_case": 103
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.216080916,
+        "n_cases": 300,
+        "n_questions": 300,
+        "score_threshold": 0.23343448,
+        "distance_threshold": 0.5089167,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.23343448,
+            "status": "fitted",
+            "targetAccuracy": 0.53571427,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          },
+          "distance": {
+            "threshold": 0.5089167,
+            "status": "fitted",
+            "targetAccuracy": 0.37857142,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "route_census": {
+          "picks": 310,
+          "changes": 0,
+          "disagreements": 100,
+          "latch_armed": true
+        },
+        "corpus_cap": {
+          "effective": 48,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "iot_hue_lightoff",
+            "pred": "iot_wemo_off",
+            "count": 4,
+            "share_of_errors": 0.03333333333333333
+          },
+          {
+            "gold": "calendar_query",
+            "pred": "qa_maths",
+            "count": 2,
+            "share_of_errors": 0.016666666666666666
+          },
+          {
+            "gold": "datetime_query",
+            "pred": "iot_cleaning",
+            "count": 2,
+            "share_of_errors": 0.016666666666666666
+          },
+          {
+            "gold": "lists_createoradd",
+            "pred": "lists_query",
+            "count": 2,
+            "share_of_errors": 0.016666666666666666
+          },
+          {
+            "gold": "music_dislikeness",
+            "pred": "music_query",
+            "count": 2,
+            "share_of_errors": 0.016666666666666666
+          },
+          {
+            "gold": "music_dislikeness",
+            "pred": "play_music",
+            "count": 2,
+            "share_of_errors": 0.016666666666666666
+          },
+          {
+            "gold": "transport_traffic",
+            "pred": "qa_factoid",
+            "count": 2,
+            "share_of_errors": 0.016666666666666666
+          },
+          {
+            "gold": "alarm_query",
+            "pred": "alarm_remove",
+            "count": 1,
+            "share_of_errors": 0.008333333333333333
+          },
+          {
+            "gold": "alarm_query",
+            "pred": "alarm_set",
+            "count": 1,
+            "share_of_errors": 0.008333333333333333
+          },
+          {
+            "gold": "alarm_remove",
+            "pred": "alarm_set",
+            "count": 1,
+            "share_of_errors": 0.008333333333333333
+          },
+          {
+            "gold": "audio_volume_down",
+            "pred": "audio_volume_up",
+            "count": 1,
+            "share_of_errors": 0.008333333333333333
+          },
+          {
+            "gold": "audio_volume_down",
+            "pred": "iot_wemo_on",
+            "count": 1,
+            "share_of_errors": 0.008333333333333333
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.08666666666666667,
+        "jdi_skill": 0.5620437956204379,
+        "readout_report": {
+          "best_on_cal": "dispatch",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.3584569863975048
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.3584569863975048
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.4170487970113754
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-da4b04bcd9bb6c8b"
+      },
+      "laya": {},
+      "slices": {
+        "n_test": 300,
+        "n_cal": 200,
+        "n_pool": 11314,
+        "test_digest": "fnv1a64-328f111f90d7a0c1",
+        "cal_digest": "fnv1a64-74b76416cdd836d5",
+        "pool_digest": "fnv1a64-fb5a4f0d9147dc0d",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.11,
+        "n_questions": 300,
+        "n_keys": 175,
+        "n_fallback": 265,
+        "global_modal_share": 0.02,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "banking77",
+      "n_cases": 500,
+      "n_questions": 500,
+      "cases_digest": "fnv1a64-dd8ab35333abb82a",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 500,
+          "accuracy": 0.314,
+          "macro_f1": 0.29567678002558234,
+          "ece": 0.29805824073404075,
+          "brier": 0.9825583907623343,
+          "nll": 4.185219138152616,
+          "aurc": 0.5627709903861942,
+          "mean_confidence": 0.01594175926595926,
+          "acc_at_50_coverage": 0.428,
+          "acc_at_80_coverage": 0.3625
+        },
+        "readout_ece": 0.048815407454967485,
+        "readout_brier": 0.20052857982917666,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.58,
+          "selective_accuracy": 0.3142857142857143,
+          "selective_n": 210
+        },
+        "abstain_causes": {
+          "score_gate": 108,
+          "distance_gate": 182,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.29805824073404075,
+        "readout_ece_calibrated": 0.048815407454967485,
+        "floor_ece": 0.259771144278607,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.314,
+        "latency_p99_ms": 0.391,
+        "latency_tail_support": 6,
+        "latency_extremes": {
+          "first_ms": 0.302,
+          "max_ms": 0.408,
+          "argmax_case": 378
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.709984958,
+        "n_cases": 500,
+        "n_questions": 500,
+        "score_threshold": 0.23810422,
+        "distance_threshold": 0.26627105,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.23810422,
+            "status": "fitted",
+            "targetAccuracy": 0.3857143,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          },
+          "distance": {
+            "threshold": 0.26627105,
+            "status": "fitted",
+            "targetAccuracy": 0.25714287,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "route_census": {
+          "picks": 510,
+          "changes": 0,
+          "disagreements": 500,
+          "latch_armed": true
+        },
+        "corpus_cap": {
+          "effective": 40,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "card not working",
+            "pred": "activate my card",
+            "count": 6,
+            "share_of_errors": 0.01749271137026239
+          },
+          {
+            "gold": "card payment wrong exchange rate",
+            "pred": "exchange rate",
+            "count": 5,
+            "share_of_errors": 0.014577259475218658
+          },
+          {
+            "gold": "card swallowed",
+            "pred": "activate my card",
+            "count": 5,
+            "share_of_errors": 0.014577259475218658
+          },
+          {
+            "gold": "lost or stolen card",
+            "pred": "activate my card",
+            "count": 5,
+            "share_of_errors": 0.014577259475218658
+          },
+          {
+            "gold": "why verify identity",
+            "pred": "verify my identity",
+            "count": 5,
+            "share_of_errors": 0.014577259475218658
+          },
+          {
+            "gold": "card payment not recognised",
+            "pred": "card linking",
+            "count": 4,
+            "share_of_errors": 0.011661807580174927
+          },
+          {
+            "gold": "compromised card",
+            "pred": "activate my card",
+            "count": 4,
+            "share_of_errors": 0.011661807580174927
+          },
+          {
+            "gold": "exchange charge",
+            "pred": "exchange rate",
+            "count": 4,
+            "share_of_errors": 0.011661807580174927
+          },
+          {
+            "gold": "passcode forgotten",
+            "pred": "activate my card",
+            "count": 4,
+            "share_of_errors": 0.011661807580174927
+          },
+          {
+            "gold": "top up by cash or cheque",
+            "pred": "top up limits",
+            "count": 4,
+            "share_of_errors": 0.011661807580174927
+          },
+          {
+            "gold": "apple pay or google pay",
+            "pred": "verify top up",
+            "count": 3,
+            "share_of_errors": 0.008746355685131196
+          },
+          {
+            "gold": "card about to expire",
+            "pred": "activate my card",
+            "count": 3,
+            "share_of_errors": 0.008746355685131196
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.014,
+        "jdi_skill": 0.3042596348884381,
+        "readout_report": {
+          "best_on_cal": "dispatch",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.3092667538300157
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.3092667538300157
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.323450725376606
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-a8ba728d1bb79dd2"
+      },
+      "laya": {},
+      "slices": {
+        "n_test": 500,
+        "n_cal": 200,
+        "n_pool": 9793,
+        "test_digest": "fnv1a64-cb0b5cbcb0cdfcce",
+        "cal_digest": "fnv1a64-8f14f68a2e55799f",
+        "pool_digest": "fnv1a64-14a38d138e218d1b",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.046,
+        "n_questions": 500,
+        "n_keys": 148,
+        "n_fallback": 311,
+        "global_modal_share": 0.015,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    }
+  ]
+}

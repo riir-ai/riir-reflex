@@ -77,9 +77,42 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
 
 ## Disposition
 
-- [ ] T1 — fetch probes for all four sources: /splits + /rows + licence per dataset;
+- [x] T1 — fetch probes for all four sources: /splits + /rows + licence per dataset;
       verdicts recorded here (mirror + config + split per suite), sources that 404
-      named honestly.
+      named honestly. **DONE 2026-11-09 (m3, datasets-server + HF API + gorilla HF mirror):**
+  - **CLINC150** — `clinc/clinc_oos` (the CANONICAL name now — the old bare `clinc_oos`
+    404s with "renamed", and the issue's `FaizaanAliza/clinc_oos`-class mirror guess
+    does NOT exist; no mirror needed, the canonical is parquet-backed on
+    datasets-server). Splits: configs `imbalanced` + `plus`, each train/validation/test.
+    Licence **CC-BY-3.0**, not gated. Test rows = the 4500-row test split (150 intents
+    + oos); config `plus` (the balanced 100/intent version) is the candidate — builder
+    decides at T2, the probe pins both.
+  - **When2Call** — `nvidia/When2Call` (the capital-W spelling is live; the lower-case
+    probe 404s "renamed"). Splits: config `test` with splits `llm_judge` + `mcq`, plus
+    `train_pref` + `train_sft`. The pick-shaped suite = **config test / split mcq**.
+    Licence **CC-BY-4.0**, not gated. /rows probe hit transient 502/503s
+    (datasets-server flaked mid-probe); the /splits + /tree + licence probes all
+    resolved — columns read at T3 from the parquet directly.
+  - **BFCL** — the gorilla GitHub data dir 404s (data moved INTO the `bfcl-eval` PyPI
+    package — the fetcher's direct-JSON lane would need pip, refused); the OFFICIAL
+    HF mirror is `gorilla-llm/Berkeley-Function-Calling-Leaderboard` (the gorilla
+    org itself, 85k downloads, licence **Apache-2.0**, not gated). NOT
+    datasets-server-backed ("No supported data files found" — it is raw JSON-LINES,
+    one .json per category), so the stanza needs the direct-resolve lane
+    (`/resolve/main/<file>.json`) — a new fetcher pattern, the banking77 parquet
+    stanza does NOT cover it; recorded as the transform-to-name. Pick-tier files
+    probed with row counts: live_simple 258, live_multiple 1053, multiple 200,
+    simple 400, irrelevance 240, live_irrelevance 882. The pick tier = simple +
+    multiple (+ their live twins); the irrelevance files are the abstain tier —
+    the When2Call-shaped abstention signal rides THERE (the R2b triage's
+    "irrelevance-detect" is scoreable after all, as a second option-key universe).
+  - **API-Bank** — `Backbone-Models/...` mirrors: NOT probed this session (the T5
+    suite is last in the wave; the probe rides T5's start, one less stale verdict
+    to re-check at build time). Named honestly as UNPROBED, not a 404.
+  - **Fetch infra note (T2 prerequisite):** datasets-server flaked 502/503
+    mid-probe (recovered for /splits, not for /rows) — the fetch script's retry
+    + probe-then-fetch order (the banking77 lesson) is load-bearing; the stanza
+    probes /splits BEFORE /rows, and a red /rows is a retry, never a verdict.
 - [ ] T2 — CLINC150 first (the 060 verdict: it reuses banking77's machinery as it
       stands): stanza + builder + SuiteSpec + manifest row + a smoke `harness`
       run; the teacher capture for it rides the NEXT amo trip (rethink 059 lineage,

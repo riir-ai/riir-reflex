@@ -592,10 +592,13 @@ fn run_modelless_suite(
     errors: &mut Vec<String>,
 ) -> ModellessOutcome {
     if !spec.modelless_lane {
-        eprintln!(
-            "    modelless: SKIPPED — LLM-lane only (Issue 004 T3: no KV \
-             cache in the modelless lane)"
-        );
+        let why = if spec.synthetic.is_some() {
+            "LLM-lane only (Issue 004 T3: no KV cache in the modelless lane)"
+        } else {
+            "corpus-optional (issue 114 T3: no lawful train pool exists for the \
+             modelless lane; only the LLM lanes answer)"
+        };
+        eprintln!("    modelless: SKIPPED — {why}");
         return ModellessOutcome::NotApplicable;
     }
     #[cfg(feature = "mc_ensemble")]

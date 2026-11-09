@@ -354,10 +354,15 @@ pub fn render_markdown(out: &RunOutput, errors: &[String]) -> String {
                      modelless lane has no KV cache; compile with `--features laya-riir`).\n\n",
                 );
             } else {
+                // The corpus-optional posture (issue 114 T3) rides this branch
+                // too — a dataset suite with no lawful train pool: the skip
+                // reason names BOTH classes rather than the synthetic-only
+                // wording the branch carried before any dataset suite hit it.
                 s.push_str(
-                    "> modelless lane: SKIPPED — LLM-lane only (the modelless lane has no \
-                     KV cache, so it has no honest answer for this family); the laya lane \
-                     answered below.\n\n",
+                    "> modelless lane: SKIPPED — LLM-lane only (no honest modelless \
+                     answer: the synthetic families have no KV cache; a \
+                     corpus-optional dataset suite has no lawful train pool — \
+                     issue 114 T3); the LLM lanes answered below.\n\n",
                 );
             }
             if !suite.laya.is_empty()

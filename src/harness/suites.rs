@@ -246,6 +246,61 @@ pub fn build_banking77_mteb(rows_file: &Value, max_rows: usize) -> Suite {
     }
 }
 
+/// Issue 114 T2 — CLINC150 (`clinc/clinc_oos`, config `plus`): 151-way intent
+/// choice (150 intents + `oos` at its ClassLabel position, the board row's
+/// "150-intent (+ OOS)"). The class-label order is FIXED and pinned by
+/// [`CLINC150_KEYS`]; the builder VERIFY-AT-PORTS the fetched envelope's
+/// features (the ag_news law — a drifted ClassLabel order fails loud, never
+/// silently rebinds 151 corpora). The columns are the banking77 shape with
+/// the ClassLabel-names half present: `text` (string) + `intent` (ClassLabel).
+#[must_use]
+pub fn build_clinc150(rows_file: &Value, max_rows: usize) -> Suite {
+    let names = label_names(rows_file, "intent").unwrap_or_else(|| {
+        panic!(
+            "clinc150: envelope features carry no intent ClassLabel names — \
+             the /rows fetch must include the features block (verify-at-port)"
+        )
+    });
+    let spelled: Vec<String> = names.iter().map(|n| n.replace('_', " ")).collect();
+    assert_eq!(
+        spelled, CLINC150_KEYS,
+        "clinc150: the fetched ClassLabel order drifted from CLINC150_KEYS — \
+         the engine domains would silently rebind (the ag_news verify-at-port law)"
+    );
+    let keys = spelled;
+    let descs: Vec<Option<String>> = vec![None; keys.len()];
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(text), Some(intent)) = (row_str(row, "text"), row_i64(row, "intent")) else {
+            continue;
+        };
+        if intent < 0 || intent as usize >= keys.len() {
+            continue; // out-of-range label — fails the rule, the row drops
+        }
+        cases.push(SuiteCase {
+            id: format!("clinc150:{pos}"),
+            state: json!({ "message": text }),
+            questions: vec![choice_q(
+                "intent",
+                "Which intent does `message` express?",
+                &keys,
+                Some(descs.clone()),
+            )],
+            gold: vec![GoldAnswer {
+                idx: intent as usize,
+                soft: vec![0.0; keys.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    Suite {
+        name: "clinc150",
+        cases,
+        option_counts_note: "151 fixed options in ClassLabel order (150 intents + oos; underscores stripped)",
+    }
+}
+
 /// Issue 077: the fixed-criteria classification suites' option keys, as
 /// MODULE consts so the builders AND [`train_row_label`] share ONE
 /// spelling. `train_row_label` returning the KEY (not the integer class
@@ -260,6 +315,167 @@ pub(crate) const AG_NEWS_KEYS: [&str; 4] = ["world", "sports", "business", "sci_
 pub(crate) const EMOTION_KEYS: [&str; 6] = ["sadness", "joy", "love", "anger", "fear", "surprise"];
 pub(crate) const XNLI_KEYS: [&str; 3] = ["entailment", "neutral", "contradiction"];
 pub(crate) const WISESIGHT_KEYS: [&str; 4] = ["pos", "neu", "neg", "q"];
+
+/// Issue 114 T2 — the CLINC150 intent vocabulary (151: 150 intents + `oos`,
+/// ClassLabel order 0..=150, identical across every clinc/clinc_oos config —
+/// verified against the card's dataset_info blocks 2026-11-09; the builder
+/// re-verifies at port from the fetched envelope's features). Underscores
+/// stripped to the house option-key spelling (the ag_news law). `oos` rides
+/// at its ClassLabel position — the board row is "150-intent (+ OOS)", the
+/// abstention-flavoured gold is a REGULAR option here, never a wire special.
+pub(crate) const CLINC150_KEYS: [&str; 151] = [
+    "restaurant reviews",
+    "nutrition info",
+    "account blocked",
+    "oil change how",
+    "time",
+    "weather",
+    "redeem rewards",
+    "interest rate",
+    "gas type",
+    "accept reservations",
+    "smart home",
+    "user name",
+    "report lost card",
+    "repeat",
+    "whisper mode",
+    "what are your hobbies",
+    "order",
+    "jump start",
+    "schedule meeting",
+    "meeting schedule",
+    "freeze account",
+    "what song",
+    "meaning of life",
+    "restaurant reservation",
+    "traffic",
+    "make call",
+    "text",
+    "bill balance",
+    "improve credit score",
+    "change language",
+    "no",
+    "measurement conversion",
+    "timer",
+    "flip coin",
+    "do you have pets",
+    "balance",
+    "tell joke",
+    "last maintenance",
+    "exchange rate",
+    "uber",
+    "car rental",
+    "credit limit",
+    "oos",
+    "shopping list",
+    "expiration date",
+    "routing",
+    "meal suggestion",
+    "tire change",
+    "todo list",
+    "card declined",
+    "rewards balance",
+    "change accent",
+    "vaccines",
+    "reminder update",
+    "food last",
+    "change ai name",
+    "bill due",
+    "who do you work for",
+    "share location",
+    "international visa",
+    "calendar",
+    "translate",
+    "carry on",
+    "book flight",
+    "insurance change",
+    "todo list update",
+    "timezone",
+    "cancel reservation",
+    "transactions",
+    "credit score",
+    "report fraud",
+    "spending history",
+    "directions",
+    "spelling",
+    "insurance",
+    "what is your name",
+    "reminder",
+    "where are you from",
+    "distance",
+    "payday",
+    "flight status",
+    "find phone",
+    "greeting",
+    "alarm",
+    "order status",
+    "confirm reservation",
+    "cook time",
+    "damaged card",
+    "reset settings",
+    "pin change",
+    "replacement card duration",
+    "new card",
+    "roll dice",
+    "income",
+    "taxes",
+    "date",
+    "who made you",
+    "pto request",
+    "tire pressure",
+    "how old are you",
+    "rollover 401k",
+    "pto request status",
+    "how busy",
+    "application status",
+    "recipe",
+    "calendar update",
+    "play music",
+    "yes",
+    "direct deposit",
+    "credit limit change",
+    "gas",
+    "pay bill",
+    "ingredients list",
+    "lost luggage",
+    "goodbye",
+    "what can i ask you",
+    "book hotel",
+    "are you a bot",
+    "next song",
+    "change speed",
+    "plug type",
+    "maybe",
+    "w2",
+    "oil change when",
+    "thank you",
+    "shopping list update",
+    "pto balance",
+    "order checks",
+    "travel alert",
+    "fun fact",
+    "sync device",
+    "schedule maintenance",
+    "apr",
+    "transfer",
+    "ingredient substitution",
+    "calories",
+    "current location",
+    "international fees",
+    "calculator",
+    "definition",
+    "next holiday",
+    "update playlist",
+    "mpg",
+    "min payment",
+    "change user name",
+    "restaurant suggestion",
+    "travel notification",
+    "cancel",
+    "pto used",
+    "travel suggestion",
+    "change volume",
+];
 
 /// §3.8 AG News — choice, 4 FIXED options (never shuffled); the criteria
 /// key order IS the dataset ClassLabel order (VERIFY-AT-PORT in the fetch
@@ -420,10 +636,10 @@ fn build_sst5_as(name: &'static str, rows_file: &Value, max_rows: usize) -> Suit
 /// Extract `{"name": "label", "type": {"names": [...]}}` ClassLabel names
 /// from the envelope's features array. All-or-nothing: a non-string entry
 /// invalidates the whole list.
-fn label_names(file: &Value) -> Option<Vec<String>> {
+fn label_names(file: &Value, col: &str) -> Option<Vec<String>> {
     let features = file.get("features")?.as_array()?;
     for f in features {
-        if f.get("name").and_then(Value::as_str) != Some("label") {
+        if f.get("name").and_then(Value::as_str) != Some(col) {
             continue;
         }
         let names = f.get("type")?.get("names")?.as_array()?;
@@ -444,7 +660,7 @@ fn label_names(file: &Value) -> Option<Vec<String>> {
 /// When the envelope's `features` carry no `label` ClassLabel `names`.
 #[must_use]
 pub fn build_banking77(rows_file: &Value, max_rows: usize) -> Suite {
-    let names = label_names(rows_file).unwrap_or_else(|| {
+    let names = label_names(rows_file, "label").unwrap_or_else(|| {
         panic!(
             "banking77: envelope features carry no label ClassLabel names — \
              the /rows fetch must include {{\"name\":\"label\",\"type\":{{\"names\":[...]}}}}"
@@ -1448,6 +1664,13 @@ pub fn train_row_label(suite: &str, row: &Value) -> Option<String> {
             Some(t) => Some(t.replace('_', " ")),
             None => row_i64(row, "label").map(|l| l.to_string()),
         },
+        // Issue 114 T2: CLINC150's int ClassLabel maps through CLINC150_KEYS
+        // (the same content-binding law as ag_news/emotion — the label
+        // column is `intent`, and an out-of-range index fails the rule and
+        // the row drops, exactly like a malformed label).
+        "clinc150" => row_i64(row, "intent")
+            .and_then(|l| CLINC150_KEYS.get(l as usize))
+            .map(|k| (*k).to_string()),
         // Issue 077: the int-ClassLabel choice suites name their engine
         // domains by the OPTION KEY at the class index (content binding —
         // the doc comment on AG_NEWS_KEYS). The class index must be in
@@ -1543,7 +1766,8 @@ pub fn stratified_selection_slices(
         }
     }
     let picks = round_robin_picks(&by_label, budget);
-    let wrap = |idxs: &[usize]| wrap_rows(&rows, idxs);
+    let features = train_rows_file.get("features");
+    let wrap = |idxs: &[usize]| wrap_rows(&rows, idxs, features);
     let mut rest: Vec<usize> = (0..rows.len()).filter(|ri| !picks.contains(ri)).collect();
     let mut permuted_idx = picks.clone();
     permuted_idx.append(&mut rest);
@@ -1586,13 +1810,21 @@ fn round_robin_picks(by_label: &[Vec<usize>], budget: usize) -> Vec<usize> {
 
 /// Envelope re-wrap of picked row indices (row_idx re-enumerated 0..n —
 /// the builders read `.rows[i].row`, never the original index).
-fn wrap_rows(rows: &[&Value], idxs: &[usize]) -> Value {
+fn wrap_rows(rows: &[&Value], idxs: &[usize], features: Option<&Value>) -> Value {
     let wrapped: Vec<Value> = idxs
         .iter()
         .enumerate()
         .map(|(i, &ri)| serde_json::json!({ "row_idx": i, "row": rows[ri] }))
         .collect();
-    serde_json::json!({ "rows": wrapped })
+    // Issue 114 T2: thread the source envelope's features block through so
+    // builders that VERIFY-AT-PORT against ClassLabel names (build_clinc150,
+    // the PolyAI banking77 shape) can read them from a SPLIT envelope, not
+    // just the raw fetch page. Inert for every other consumer — rows_of
+    // reads `.rows`, and an absent features key means None here.
+    match features {
+        Some(f) => serde_json::json!({ "features": f, "rows": wrapped }),
+        None => serde_json::json!({ "rows": wrapped }),
+    }
 }
 
 /// A label-stratified split of a row envelope (Issue 039 T2).
@@ -1627,11 +1859,12 @@ pub struct StratSplit {
 #[must_use]
 pub fn stratified_split(rows_file: &Value, suite: &str, budget: usize) -> StratSplit {
     let rows = rows_of(rows_file);
+    let features = rows_file.get("features");
     if budget == 0 || rows.len() <= budget {
         let all: Vec<usize> = (0..rows.len()).collect();
         return StratSplit {
             n_picks: rows.len(),
-            front: wrap_rows(&rows, &all),
+            front: wrap_rows(&rows, &all, features),
             rest: serde_json::json!({ "rows": [] }),
         };
     }
@@ -1659,8 +1892,8 @@ pub fn stratified_split(rows_file: &Value, suite: &str, budget: usize) -> StratS
         let rest: Vec<usize> = (0..rows.len()).filter(|ri| !picks.contains(ri)).collect();
         return StratSplit {
             n_picks: picks.len(),
-            front: wrap_rows(&rows, &picks),
-            rest: wrap_rows(&rows, &rest),
+            front: wrap_rows(&rows, &picks, features),
+            rest: wrap_rows(&rows, &rest, features),
         };
     }
     // Bucket by the row's own label, first appearance = label order. Rows
@@ -1691,15 +1924,15 @@ pub fn stratified_split(rows_file: &Value, suite: &str, budget: usize) -> StratS
         let all: Vec<usize> = (0..rows.len()).collect();
         return StratSplit {
             n_picks: rows.len(),
-            front: wrap_rows(&rows, &all),
+            front: wrap_rows(&rows, &all, features),
             rest: serde_json::json!({ "rows": [] }),
         };
     }
     let rest: Vec<usize> = (0..rows.len()).filter(|ri| !picks.contains(ri)).collect();
     StratSplit {
         n_picks: picks.len(),
-        front: wrap_rows(&rows, &picks),
-        rest: wrap_rows(&rows, &rest),
+        front: wrap_rows(&rows, &picks, features),
+        rest: wrap_rows(&rows, &rest, features),
     }
 }
 
@@ -1788,6 +2021,19 @@ pub fn train_docs(train_rows_file: &Value, suite: &str) -> Vec<TrainDoc> {
             })
             .collect(),
         "massive_intent_en" => rows
+            .iter()
+            .filter_map(|r| {
+                Some(TrainDoc {
+                    label: train_row_label(suite, r)?,
+                    text: row_str(r, "text")?.to_string(),
+                })
+            })
+            .collect(),
+        // Issue 114 T2: the ladder's CLINC150 row — the banking77/massive
+        // shape (one `text` column; the label maps through CLINC150_KEYS in
+        // train_row_label, so the corpus domains carry the option-key
+        // spelling).
+        "clinc150" => rows
             .iter()
             .filter_map(|r| {
                 Some(TrainDoc {

@@ -538,6 +538,17 @@ main() {
         log "[probe] mmlupro_jdi /splits"
         probe_splits mmlupro_jdi "TIGER-Lab%2FMMLU-Pro"
     fi
+    # Issue 114 T2 (the JDI ladder wave 1): CLINC150 — the canonical
+    # clinc/clinc_oos is parquet-backed now (the old script-dataset 404 is
+    # gone; the bare `clinc_oos` name 404s with "renamed"). Config `plus`
+    # (the balanced 100/intent train variant — the corpus pool wants every
+    # intent represented; test is identical across configs).
+    if want_suite clinc150; then
+        log "[probe] clinc150 /splits"
+        probe_splits clinc150 "clinc%2Fclinc_oos"
+        log "[probe] clinc150 /size"
+        probe_size clinc150 "clinc%2Fclinc_oos"
+    fi
 
     # Licence probes (riir-rethink Issue 023 T1): one hub call per selected
     # suite — the drift tripwire beside the manifest's VERIFIED table.
@@ -589,6 +600,13 @@ main() {
     fi
     if want_suite mmlupro_jdi; then
         probe_license mmlupro_jdi "TIGER-Lab/MMLU-Pro"
+    fi
+    # Issue 114 T2: the hub-side licence tripwire for the ladder's CLINC150
+    # row (cc-by-3.0; the manifest row stays authoritative — the card's own
+    # prose Licensing section is an unfilled stub, resolved by the structured
+    # metadata + the canonical clinc org ownership, never guessed).
+    if want_suite clinc150; then
+        probe_license clinc150 "clinc/clinc_oos"
     fi
 
     # 1. typed_decisions — test: ALL rows; train: ALL 1200 rows (Issue 052:
@@ -769,6 +787,22 @@ main() {
         fetch_suite mmlupro_jdi "TIGER-Lab%2FMMLU-Pro" default test all
         log "[suite] mmlupro_jdi config=default split=validation cap=all (70 rows — no train split exists; stored AS the suite's train = the corpus/cal pool)"
         fetch_suite mmlupro_jdi "TIGER-Lab%2FMMLU-Pro" default validation all train
+    fi
+
+    # 16. clinc150 — Issue 114 T2 (the JDI ladder wave 1): clinc/clinc_oos
+    #     config=plus. test fetched WHOLE (5,500 rows = the option universe,
+    #     the banking77 posture — eval cap 500 lives in the harness, the
+    #     slice stratified over the 151 labels); train fetched WHOLE (15,250
+    #     rows — the plus split is intent-ORDERED, so a capped prefix would
+    #     orphan ~2/3 of the intents and the corpus guard would starve them;
+    #     corpus_cap_per_label 40 spans 151 labels with a remainder). oos
+    #     rides as the regular 151st option (the board row is 150+OOS).
+    if want_suite clinc150; then
+        log "[suite] clinc150 clinc/clinc_oos config=plus split=test cap=all (universe rows; eval cap lives in the harness)"
+        fetch_suite clinc150 "clinc%2Fclinc_oos" plus test all
+        log "[suite] clinc150 config=plus split=train cap=all (intent-ordered split — fetched whole so the corpus pool spans all 151 intents)"
+        fetch_suite clinc150 "clinc%2Fclinc_oos" plus train all
+        dedupe_train clinc150
     fi
 
     log ""

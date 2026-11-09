@@ -113,10 +113,28 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
     mid-probe (recovered for /splits, not for /rows) — the fetch script's retry
     + probe-then-fetch order (the banking77 lesson) is load-bearing; the stanza
     probes /splits BEFORE /rows, and a red /rows is a retry, never a verdict.
-- [ ] T2 — CLINC150 first (the 060 verdict: it reuses banking77's machinery as it
+- [x] T2 — CLINC150 first (the 060 verdict: it reuses banking77's machinery as it
       stands): stanza + builder + SuiteSpec + manifest row + a smoke `harness`
       run; the teacher capture for it rides the NEXT amo trip (rethink 059 lineage,
       owner-gated amo hours — book it with the R1b tools capture, one booking).
+      **DONE 2026-11-09 (m3, this session):** stanza (probe splits/size + licence +
+      test/train WHOLE — the plus split is intent-ordered, so the train pull is
+      uncapped or the corpus starves); `CLINC150_KEYS` (151, mechanical from the
+      FETCHED features — the card's YAML differs in TWO spellings: `no'`/`yes'`
+      card-typo vs the served `no`/`yes`; the verify-at-port caught it live);
+      `build_clinc150` + the `train_row_label`/`train_docs` arms + the 151 dispatch
+      arm + the expected-key pin + the 151-universe guard. **Two envelope root-fixes
+      rode the lane** (both additive): `wrap_rows` threads the source features
+      through split envelopes, and `load_rows` carries the first page's features
+      block (verify-at-port builders need them on BOTH envelopes — the PolyAI
+      banking77 shape has wanted this since its panic message was written).
+      Smoke: 500 cases / 151 domains, slice-integrity OK (test `fnv1a64-317d15fe`
+      · cal `fnv1a64-7dc66be9` · pool 15,050 `fnv1a64-705b33da`), modelless acc
+      **0.3520** at p50 0.567 ms (chance 0.0066 — 53× above random on the 151-way
+      task, zero-shot modelless). 560 lib tests + clippy `-D warnings` + rustfmt
+      clean; fetch self-test PASS. Manifest §18 + the licence row landed
+      (CC BY 3.0, card-stub caveat). Teacher capture: still rides the owner-gated
+      amo booking (unchanged).
 - [ ] T3 — When2Call second (the abstention-first shape is the wire's own; highest
       product-value of the three tools suites).
 - [ ] T4 — BFCL pick-tier third (the arg-filling tiers REFUSED wave 1 — recorded as

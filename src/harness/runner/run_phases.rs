@@ -685,6 +685,8 @@ fn run_modelless_suite(
         // labels; the dispatch is COUNT-keyed, the 59 arm misses it)
         59 => dispatch!(59),
         77 => dispatch!(77),
+        151 => dispatch!(151), // Issue 114 T2: clinc150 (150 intents + oos — the ladder's
+        // intent row; banking77's neighbour at twice the universe)
         842 => dispatch!(842), // Plan 010: s1mb_choice (the option-key union — the massive by-name posture at breadth)
         n => {
             errors.push(format!(

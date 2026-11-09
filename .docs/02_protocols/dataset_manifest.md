@@ -45,6 +45,7 @@ the mint surface (riir-rethink Issue 024 v1 — the Plan 007 P0 hosted lane;
 | xnli_en | `facebook/xnli` | **CC BY-NC 4.0** (facebookresearch/XNLI LICENSE) | Conneau et al., 2018 | ⛔ benchmark-only |
 | wanli_en | `alisawuffles/WANLI` (AI2) | **CC BY 4.0** (AI2's own page states "License: CC BY" — [allenai.org/data/wanli](https://allenai.org/data/wanli); HF tag `cc-by-4.0` — both read 2026-10-08). Open derivative question carried for the owner (verbatim from rethink Research 002): the corpus is GPT-3-generated with MultiNLI examples used as in-context SEEDS (never copied); MNLI's own terms are not stated at its primary page, so whether seed-influence reaches the generated text is an open derivative question carried on this row for the owner | Liu et al., 2022 (WANLI: Worker-and-AI Collaboration for Natural Language Inference Dataset Creation) | ✓ |
 | emotion_syn | first-party synthetic — `scripts/synth_suite.py` (plan 013) | **Apache-2.0 (ours)** — generated rows, no scraped or third-party text; the generators' outputs are unencumbered under their own Apache-2.0 grants (verified on the hub 2026-10-27: `prism-ml/Ternary-Bonsai-2-27B-mlx-2bit` apache-2.0, base `Qwen/Qwen3.8-27B` apache-2.0; `Qwen/Qwen3.5-4B` apache-2.0 — the `mlx-community` 4-bit conversion carries no separate tag, the upstream grant governs). Labels = intended latent label CONFIRMED by the other model's zero-shot read (dual-model agreement) | none required (ours) | ✓ |
+| clinc150 | `clinc/clinc_oos` (the canonical clinc org repo — source_datasets: original; issue 114 T1: the old bare `clinc_oos` name 404s "renamed", the issue's `FaizaanAliza` mirror guess does not exist and is not needed — the canonical is parquet-backed) | **CC BY 3.0** (hub tag + `cardData.license` both agree — probed 2026-11-09; ⚠ the card's own prose "Licensing Information" section is an unfilled stub — the grant reads through the structured metadata of the canonical owner, re-read before any paid lane) | Larson et al., 2016 (CLINC150: "I want to find out how to be awesome", the CLINC paper) | ✓ (probe-verified — card-stub caveat noted) |
 | sst5_syn | first-party synthetic — `scripts/synth_suite.py --suite sst5_syn` (plan 013 T1b) | **Apache-2.0 (ours)** — same posture as emotion_syn (generated rows, no scraped or third-party text; the same two Apache-2.0 generator grants verified 2026-10-27 govern). The five-level scale follows SST-5's label VOCABULARY only — no SST review text is copied (the sst5 row above stays ⛔ benchmark-only for the real corpus; this suite is the licence-clean re-entry) | none required (ours) | ✓ |
 | emotion | `dair-ai/emotion` | **research/educational only** (card §Licensing — not the hub's `license:other` tag alone) | Saravia et al., 2018 | ⛔ benchmark-only |
 | winogrande_jdi | `allenai/winogrande` | **none on the hub** (no licence tag, no `cardData.license` — probe 2026-10-13; the manifest law applies: resolved by the card/repo, never guessed — resolve before any paid lane) | Sakaguchi et al., 2021 (WinoGrande) | ⚠ resolve before any paid lane |
@@ -909,6 +910,33 @@ run high (very negative 0.9854). The floor: [Bench
 Harness slice digests at the bench posture: test 600
 `fnv1a64-2586b1ddf640f1ba` · cal 200 `fnv1a64-9e74e758cf98831d` · pool
 3,800 `fnv1a64-e500251313a4357d`.
+
+### 18. clinc150 — `clinc/clinc_oos` (config `plus`) — the JDI ladder wave 1 (issue 114 T2)
+
+The ladder's retrieval-adjacent intent row (rethink Issue 060: CLINC150 is
+banking77's nearest neighbour — 151-way intent choice, the 150 intents plus
+`oos` at its ClassLabel position). The old bare `clinc_oos` HF name 404s
+"renamed"; the canonical `clinc/clinc_oos` is parquet-backed now, so no
+mirror is needed (issue 114 T1 probes, 2026-11-09). The class-label order
+is identical across all three configs (card dataset_info blocks compared
+2026-11-09; the builder VERIFY-AT-PORTS the fetched envelope anyway — the
+ag_news law). Fetch shape: `test` WHOLE (5,500 rows — the option universe;
+the harness's eval cap is 500, stratified over the 151 labels by the
+Issue-039 law), `train` WHOLE (15,250 rows — the plus split is
+intent-ORDERED, so a capped prefix would orphan ~2/3 of the intents;
+corpus_cap_per_label 40 spans 151 labels with a remainder). SuiteSpec:
+named_only, test_cap 500, cal_cap 200 — banking77's parity posture.
+
+ClassLabel order (151): the card's `plus` block, underscores stripped at
+the key spelling (the ag_news/emotion consts law) — `CLINC150_KEYS` in
+`src/harness/suites.rs` carries the array and the builder asserts equality
+with the fetched features, so THIS list, the const, and the wire can never
+drift silently. `oos` sits at index 42.
+
+| split | rows | files |
+|---|---|---|
+| `test` | 5,500 | 55 (`test-000..054`) |
+| `train` | 15,250 | 153 (`train-000..152`) |
 
 ## ClassLabel orders (verified)
 

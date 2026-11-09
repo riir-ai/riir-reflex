@@ -58,8 +58,8 @@ use crate::harness::pair_heads::{
 #[cfg(feature = "option_cond")]
 use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
-    QKind, Suite, SuiteCase, SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi,
-    build_banking77_mteb, build_emotion, build_emotion_syn, build_hellaswag_jdi,
+    CLINC150_KEYS, QKind, Suite, SuiteCase, SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi,
+    build_banking77_mteb, build_clinc150, build_emotion, build_emotion_syn, build_hellaswag_jdi,
     build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_s1mb_choice,
     build_s1mb_noul, build_s1mb_score, build_sst5, build_sst5_syn, build_thai_sib200,
     build_thai_wisesight, build_typed_decisions, build_wanli_en, build_winogrande_jdi,
@@ -626,6 +626,29 @@ const SUITES: &[SuiteSpec] = &[
         named_only: false,
         coverage_audit: true,
         build: build_banking77_mteb,
+        synthetic: None,
+        modelless_lane: true,
+    },
+    // Issue 114 T2 — the JDI ladder wave-1 CLINC150 row: 151-way intent
+    // choice (+ OOS), banking77's nearest neighbour (the 060 verdict: it
+    // rides the machinery as it stands). `named_only` (the ladder suites
+    // are board rows — an opt-in via `--suites`, never a default-run
+    // member); test_cap 500 at the banking77 parity, the slice STRATIFIED
+    // over the 151 labels by the Issue-039 law; corpus pool = the WHOLE
+    // plus-train split (15,250 rows fetched whole — the plus split is
+    // intent-ordered, so a 4,000-row prefix would orphan ~2/3 of the
+    // intents; corpus_cap_per_label 40 spans 151 labels with a remainder,
+    // the banking77 shape).
+    SuiteSpec {
+        name: "clinc150",
+        dataset_dir: "clinc150",
+        test_cap: 500,
+        cal_cap: 200,
+        corpus_cap_per_label: 40,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: true,
+        build: build_clinc150,
         synthetic: None,
         modelless_lane: true,
     },
@@ -1845,29 +1868,41 @@ pub struct RunOutput {
 /// (no comma) and is unchanged.
 fn load_rows(dir: &Path, split: &str) -> Result<Value, String> {
     let mut rows: Vec<Value> = Vec::new();
+    let mut features: Option<Value> = None;
     if split.contains(',') {
         for part in split.split(',').map(str::trim).filter(|p| !p.is_empty()) {
             let component =
                 load_rows_split(dir, part).map_err(|e| format!("split list [{split}]: {e}"))?;
-            rows.extend(component);
+            rows.extend(component.0);
+            if features.is_none() {
+                features = component.1;
+            }
         }
     } else {
-        rows = load_rows_split(dir, split)?;
+        let (r, f) = load_rows_split(dir, split)?;
+        rows = r;
+        features = f;
     }
     // Re-wrap in the datasets-server ENVELOPE shape the suite builders
     // consume (`{"rows": [{"row_idx": N, "row": {...}}]}`) — the builders
-    // read `.rows[i].row`, never bare rows.
+    // read `.rows[i].row`, never bare rows. The FIRST page's `features`
+    // block rides along (identical across pages of one config) so builders
+    // that VERIFY-AT-PORT against ClassLabel names can read it — issue 114
+    // T2 (build_clinc150); inert for every suite that never reads it.
     let wrapped: Vec<Value> = rows
         .into_iter()
         .enumerate()
         .map(|(i, row)| serde_json::json!({ "row_idx": i, "row": row }))
         .collect();
-    Ok(serde_json::json!({ "rows": wrapped }))
+    match features {
+        Some(f) => Ok(serde_json::json!({ "features": f, "rows": wrapped })),
+        None => Ok(serde_json::json!({ "rows": wrapped })),
+    }
 }
 
 /// The per-split half of [`load_rows`]: every `{split}-*.json` page under
 /// `dir`, sorted, concatenated into bare rows.
-fn load_rows_split(dir: &Path, split: &str) -> Result<Vec<Value>, String> {
+fn load_rows_split(dir: &Path, split: &str) -> Result<(Vec<Value>, Option<Value>), String> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| format!("read_dir {}: {e}", dir.display()))?
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -1882,10 +1917,16 @@ fn load_rows_split(dir: &Path, split: &str) -> Result<Vec<Value>, String> {
         return Err(format!("no {split}-*.json files under {}", dir.display()));
     }
     let mut rows: Vec<Value> = Vec::new();
+    let mut features: Option<Value> = None;
     for f in &files {
         let text = std::fs::read_to_string(f).map_err(|e| format!("read {}: {e}", f.display()))?;
         let v: Value =
             serde_json::from_str(&text).map_err(|e| format!("parse {}: {e}", f.display()))?;
+        // The FIRST page carries the config's features block (identical
+        // across pages); the classes-datasets builders verify against it.
+        if features.is_none() {
+            features = v.get("features").cloned();
+        }
         let page = v
             .get("rows")
             .and_then(Value::as_array)
@@ -1896,7 +1937,7 @@ fn load_rows_split(dir: &Path, split: &str) -> Result<Vec<Value>, String> {
             }
         }
     }
-    Ok(rows)
+    Ok((rows, features))
 }
 
 // ── engine construction ─────────────────────────────────────────────────
@@ -4494,6 +4535,9 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             "winogrande_jdi" => Some(crate::harness::suites::WINOGRANDE_JDI_KEYS.to_vec()),
             "hellaswag_jdi" => Some(crate::harness::suites::HELLASWAG_JDI_KEYS.to_vec()),
             "thai_wisesight" => Some(crate::harness::suites::WISESIGHT_KEYS.to_vec()),
+            // Issue 114 T2: the ladder's CLINC150 row — the 151-key universe
+            // (150 intents + oos) pinned by the same exact-membership law.
+            "clinc150" => Some(CLINC150_KEYS.to_vec()),
             "prompt_injections" => Some(vec!["0", "1"]),
             _ => None,
         };
@@ -4538,6 +4582,18 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             7,
             "thai_sib200: the TEST suite presents {} option keys (need all 7 — \
              fetch the full test split)",
+            option_key_union.len()
+        );
+    }
+    // Issue 114 T2: the stratified 500-case slice must still present the
+    // FULL 151-key universe — a partial fetch would bind empty corpora to
+    // the missing domains (the banking77 guard, one suite over).
+    if spec.name == "clinc150" {
+        assert_eq!(
+            option_key_union.len(),
+            151,
+            "clinc150: the TEST suite presents {} option keys (need all 151 — \
+             fetch the full test split for the option universe)",
             option_key_union.len()
         );
     }

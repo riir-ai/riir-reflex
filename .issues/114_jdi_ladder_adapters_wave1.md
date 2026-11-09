@@ -1,6 +1,6 @@
 # Issue 114 — JDI ladder adapters, wave 1: the decision-shaped tools three (BFCL / When2Call / API-Bank) + CLINC150 (retrieval)
 
-**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a; adapters unbulleted, one suite at a time. **Wave state after the 2026-11-09 session (lease zed-464454b5):** T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md): suite live end to end, paired read recorded) · T3 When2Call wire CONFIRMED but **BLOCKED on a lawful corpus source** (three measured refusals + four re-open paths recorded) · T4/T5 same corpus wall (dispositions recorded) · T6 clinc150's reflex half DONE (the feed cells + rethink fold = the rethink-side booking). The wave now funnels to the CORPUS DECISIONS (owner/lane calls) — reflex-side work resumes the moment a corpus path is chosen (the adapter builds are minutes each).
+**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a; adapters unbulleted, one suite at a time. **Wave state after the 2026-11-09 second session (lease zed-464454b5):** T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md)) · **T3 when2call LANDED** ([Bench 101](../.benchmarks/101_when2call_suite_birth.md): the CORPUS-OPTIONAL posture chose re-open path (b) — the only self-serve path; the suite + the runner change landed, laya-only full-population read recorded, honestly below the majority floor) · T4/T5 UNBLOCKED by the same posture (adapter builds ride a follow-up lane; BFCL needs the direct-JSON fetch lane) · T6 clinc150+when2call reflex halves DONE; the rethink fold = the rethink-side booking. The wave's remaining DECISIONS are unchanged: the modelless corpus for T3 (paths (a)/(d) = owner/lane-gated spend or rethink-side synthesis) and the owner-gated amo booking.
 **Claimed:** zed-464454b5 (JDI ESC serve capture monitoring), 1794138600, expires 2026-11-10T00:00:00Z
 
 Rethink Issue 060 (the beat-the-JDI ladder) orders the areas most-use × quick-win first:
@@ -135,7 +135,7 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
       clean; fetch self-test PASS. Manifest §18 + the licence row landed
       (CC BY 3.0, card-stub caveat). Teacher capture: still rides the owner-gated
       amo booking (unchanged).
-- [ ] T3 — When2Call second (the abstention-first shape is the wire's own; highest
+- [x] T3 — When2Call second (the abstention-first shape is the wire's own; highest
       product-value of the three tools suites). **SHAPE + CORPUS DISPOSITION 2026-11-09
       (this session, one probe pass):** the wire is CONFIRMED scoreable — the repo
       README + the Artificial-Analysis read agree: MCQ = ONE choice among FOUR fixed
@@ -154,14 +154,27 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
      label poisons every corpus it feeds).
   3. The mcq rows' own `answers` objects are the only per-class labeled text —
      and they are TEST rows (grammar-not-answers: never a training pool).
-  **Re-open paths (owner/lane call needed):** (a) regenerate the RAW train data
-  via the repo's own `create_raw_train_data.py` (the generation script carries the
-  class labels pre-conversion — but it needs an OpenAI-compatible endpoint = spend
-  + vendor label fidelity); (b) a runner no-corpus posture for laya-only suites
-  (a runner change, not this lane); (c) demote When2Call to wave 2. The adapter's
-  BUILD (builder/keys/state) is unaffected by the block — it can land in minutes
-  once a corpus path is chosen; building it now would ship a suite the harness
-  correctly refuses.
+  **RESOLUTION 2026-11-09 (second session): re-open path (b) CHOSEN — the runner
+  no-corpus (corpus-optional) posture — because it is the only self-serve path:**
+  (a) is teacher spend (owner-gated), (d) is rethink-side synthesis (the ESC lane's
+  machinery, owner-gated amo hours), (c) demotes the wave's highest-value row to
+  nothing. The posture landed: `modelless_lane: false` on a dataset suite now
+  means corpus-optional (prepare skips train/cal/pool entirely; the modelless lane
+  skips loud; only the LLM lanes answer; the no-LLM-lane build refuses loud —
+  verified). **The suite LANDED**: fetch stanza (mcq WHOLE, 3,652 rows, stored as
+  `test`), the task-faithful builder (the official MCQ form: the row's own four
+  response candidates as the choices, gold = correct_answer's position in the
+  uniform answers-key order, pinned per row; state = query + tools AS STORED,
+  258 empty-tools rows kept verbatim), WHEN2CALL_KEYS + the expected-key pin, the
+  population/gold guards, manifest §19 + the CC-BY-4.0 licence row (commercial-use
+  declared). First read ([Bench 101](../.benchmarks/101_when2call_suite_birth.md)):
+  laya[english] 0.2757 on ALL 3,652 rows — BELOW the majority floor 0.3546, an
+  honest negative for the encoder on the response-pick rendering (the diagnosis
+  arms: state truncation over multi-KB tool schemas, response-length bias, or the
+  category-classification comparison rendering — the ESC lane's question).
+  **The modelless corpus REMAINS OPEN** — the recorded owner/lane decisions
+  (a)/(d) are unchanged; when a corpus lands, the corpus-optional flag flips
+  back and the train_row_label/train_docs arms + the modelless dispatch join.
 - [ ] T4 — BFCL pick-tier third (the arg-filling tiers REFUSED wave 1 — recorded as
       the R2b-class wire verdict, never forced). **CORPUS DISPOSITION 2026-11-09
       (same probe pass as T3):** the distribution is SINGLE-FILE-PER-CATEGORY
@@ -172,9 +185,15 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
       universe is PER-ROW (each row carries its own candidate list — the
       mmlupro/s1mb variable-breadth shape, `coverage_audit: false` posture), and
       the options carry their own descriptions in the criteria, so the corpus-less
-      scoring question is thinner than When2Call's — but the harness still refuses
-      a suite with no corpus docs (the prepare-path law), so the same three
-      re-open paths + the xlam path (d) below apply.
+      scoring question is thinner than When2Call's. **UPDATE 2026-11-09 (second
+      session): the T3 corpus-optional posture UNBLOCKS this build** — the same
+      `modelless_lane: false` posture applies (no train split exists → none is
+      lawful to invent). The remaining build work is the FETCH lane, not the
+      posture: the gorilla-llm mirror is raw JSON-LINES, not datasets-server-backed
+      — the stanza needs the direct-resolve pattern (`/resolve/main/<file>.json`),
+      a new fetcher shape (the banking77 parquet stanza does not cover it), plus
+      the per-row candidate-list builder (the mmlupro breadth machinery). Ride a
+      follow-up lane.
 - [ ] T5 — API-Bank which-API tier (multi-turn refused wave 1). **CORPUS
       DISPOSITION 2026-11-09:** not probed further this session (T5 is last in
       the wave); the T3/T4 corpus wall is structural to the tools rung — expect

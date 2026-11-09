@@ -46,6 +46,7 @@ the mint surface (riir-rethink Issue 024 v1 — the Plan 007 P0 hosted lane;
 | wanli_en | `alisawuffles/WANLI` (AI2) | **CC BY 4.0** (AI2's own page states "License: CC BY" — [allenai.org/data/wanli](https://allenai.org/data/wanli); HF tag `cc-by-4.0` — both read 2026-10-08). Open derivative question carried for the owner (verbatim from rethink Research 002): the corpus is GPT-3-generated with MultiNLI examples used as in-context SEEDS (never copied); MNLI's own terms are not stated at its primary page, so whether seed-influence reaches the generated text is an open derivative question carried on this row for the owner | Liu et al., 2022 (WANLI: Worker-and-AI Collaboration for Natural Language Inference Dataset Creation) | ✓ |
 | emotion_syn | first-party synthetic — `scripts/synth_suite.py` (plan 013) | **Apache-2.0 (ours)** — generated rows, no scraped or third-party text; the generators' outputs are unencumbered under their own Apache-2.0 grants (verified on the hub 2026-10-27: `prism-ml/Ternary-Bonsai-2-27B-mlx-2bit` apache-2.0, base `Qwen/Qwen3.8-27B` apache-2.0; `Qwen/Qwen3.5-4B` apache-2.0 — the `mlx-community` 4-bit conversion carries no separate tag, the upstream grant governs). Labels = intended latent label CONFIRMED by the other model's zero-shot read (dual-model agreement) | none required (ours) | ✓ |
 | clinc150 | `clinc/clinc_oos` (the canonical clinc org repo — source_datasets: original; issue 114 T1: the old bare `clinc_oos` name 404s "renamed", the issue's `FaizaanAliza` mirror guess does not exist and is not needed — the canonical is parquet-backed) | **CC BY 3.0** (hub tag + `cardData.license` both agree — probed 2026-11-09; ⚠ the card's own prose "Licensing Information" section is an unfilled stub — the grant reads through the structured metadata of the canonical owner, re-read before any paid lane) | Larson et al., 2016 (CLINC150: "I want to find out how to be awesome", the CLINC paper) | ✓ (probe-verified — card-stub caveat noted) |
+| when2call | `nvidia/When2Call` (the NVIDIA org repo; issue 114 T1/T3 — config `test`, split `mcq` only; NO train split is fetched, ever: the corpus-optional posture, see the suite row) | **CC BY 4.0** (the card's own §License/Terms of Use names it verbatim — "licensed under a Creative Commons Attribution 4.0 International License" — plus the hub tag `cc-by-4.0`, both read 2026-11-09; the card ALSO declares "This dataset is ready for commercial use" — the strongest grant language in the ledger) | Ross, Mahabaleshwarka, Suhara, "When2Call: When (not) to Call Tools", NAACL 2025 | ✓ |
 | sst5_syn | first-party synthetic — `scripts/synth_suite.py --suite sst5_syn` (plan 013 T1b) | **Apache-2.0 (ours)** — same posture as emotion_syn (generated rows, no scraped or third-party text; the same two Apache-2.0 generator grants verified 2026-10-27 govern). The five-level scale follows SST-5's label VOCABULARY only — no SST review text is copied (the sst5 row above stays ⛔ benchmark-only for the real corpus; this suite is the licence-clean re-entry) | none required (ours) | ✓ |
 | emotion | `dair-ai/emotion` | **research/educational only** (card §Licensing — not the hub's `license:other` tag alone) | Saravia et al., 2018 | ⛔ benchmark-only |
 | winogrande_jdi | `allenai/winogrande` | **none on the hub** (no licence tag, no `cardData.license` — probe 2026-10-13; the manifest law applies: resolved by the card/repo, never guessed — resolve before any paid lane) | Sakaguchi et al., 2021 (WinoGrande) | ⚠ resolve before any paid lane |
@@ -937,6 +938,99 @@ drift silently. `oos` sits at index 42.
 |---|---|---|
 | `test` | 5,500 | 55 (`test-000..054`) |
 | `train` | 15,250 | 153 (`train-000..152`) |
+
+### 19. when2call — `nvidia/When2Call` (config `test`, split `mcq`) — the JDI ladder wave 1 (issue 114 T3)
+
+The ladder's tools-rung row (rethink Issue 060: the abstention-first shape
+— the wire's own contract). NVIDIA's tool-calling decision benchmark:
+given a query + a tool-schema set, which response behavior is correct.
+**CORPUS-OPTIONAL suite — no train split is fetched, ever.** Three measured
+refusals (issue 114 T3): `test/llm_judge` (300 rows) is documented as "a
+subset of the MCQ evaluation data" (uuid overlap MEASURED 11/100 — the
+slice-integrity law refuses it as a pool); `train_pref`/`train_sft` carry
+no class label (the README marker covers tool_call only — deriving the
+other three classes is the no-silent-transforms refusal); the mcq rows'
+`answers` objects are the only per-class labeled text and they are TEST
+rows (grammar-not-answers). Re-open paths live in the issue; the xlam-60k
+synthesis route is the rethink ESC lane's corpus work, never a fetch
+stanza. SuiteSpec: `modelless_lane: false` (the corpus-optional posture —
+prepare skips the train/cal/pool machinery entirely; the modelless lane is
+skipped loud and only the LLM lanes answer), named_only, test_cap 0 = ALL
+rows (the board's population, the faithful posture; the population pin in
+`prepare` reds a drifted fetch).
+
+Rendering (task-faithful, the official lm-eval MCQ form): each row's four
+choices are the row's OWN response candidates — the `answers` object's
+values, keyed by the fixed category names in the object's (uniform)
+insertion order — and the gold is `correct_answer`'s position in that
+order (the official `get_choices_and_index` law; the builder pins the key
+order per row). Fixed option-KEY universe, per-row criteria VALUES
+(`WHEN2CALL_KEYS` = direct / tool_call / request_for_info / cannot_answer;
+`direct` is presented on every row but is NEVER gold in the mcq split —
+measured 0/3,652). The state is the row's own task input: query +
+tool-schema strings AS STORED; 258 rows carry an empty tools list (the
+benchmark's own no-tools tier, kept verbatim).
+
+Whole-split census (2026-11-09 fetch): 3,652 rows — cannot_answer 1,295 ·
+tool_call 1,295 · request_for_info 1,062 · direct 0 (majority-class floor
+0.3546; the official MCQ chance framing 1/4 = 0.25). Answers-key order
+uniform `('direct', 'tool_call', 'request_for_info', 'cannot_answer')` ×
+3,652; all response values non-null.
+
+| split | rows | files |
+|---|---|---|
+| `test` (the fetched `mcq` split, stored AS `test`) | 3,652 | 37 (`test-000..036`) |
+
+Per-file digests (blake3):
+
+| file | rows | blake3 | bytes |
+|---|---|---|---|
+| `splits.json` | — | `824835a0908281e2cc7375c434abb509ff2eef39dc825bf7c88cf4faa210ab4a` | 302 |
+| `size.json` | — | `4b02388d36172b3b79bc5871d7e18e9e76d70ae591e4834451e04d2a1695b5ef` | 1624 |
+| `license.json` | — | `83410c7bc5e5502ec4025e6b46993b931dc749537774059f1cff702d84eac594` | 2051 |
+| `test-000.json` | 100 | `ce503bc20e88609181d88a1bd4b0fb51e0965a66983919418083c0210fbeda55` | 691407 |
+| `test-001.json` | 100 | `c89a50772ee1d5742758b6f0b08ab2afd086cb4be6dc80a287a1db9170e54312` | 894465 |
+| `test-002.json` | 100 | `3da2ff7f38e9cecd50e0e8c52afac5ae2187cafb735b8051d123e3dd18b7c644` | 737543 |
+| `test-003.json` | 100 | `7ea247d82ce225f101472e3768e69d2cced21bbd548656af5d516f295e1551de` | 716691 |
+| `test-004.json` | 100 | `dd962e166dc83248468b407ea17b12b96cd09cb3e3fa367ffe9283a3cd036f83` | 924667 |
+| `test-005.json` | 100 | `ec79005a6ba33e3607c05eb1f7af2251df782d07e5d3039a36b2c0dac2586a03` | 746664 |
+| `test-006.json` | 100 | `bd32aa3c4efade4e1d24f959e48b1bc7655629569db89fbb1b3b594fe25646ad` | 849451 |
+| `test-007.json` | 100 | `cad7a2c7bf766d2b5e2656c6f650ea4b9314b08abc68622e15e44715c81a686a` | 710610 |
+| `test-008.json` | 100 | `8d4cc2ecab993ae779ba2294ce01c12e5d3d189b1cbfebc0cb3fe601674f35dd` | 819784 |
+| `test-009.json` | 100 | `99a4f179a8393ff44879ba503ed90e38c2f8b385c5f2296ffb3ef126de54a930` | 595162 |
+| `test-010.json` | 100 | `69fdb9ba30d5132c527143a9d351fb7aeabd1e4325f6bc8ff4d09a8f6ce53286` | 291201 |
+| `test-011.json` | 100 | `41dd4860ed41107b7d30399983591c5ed103db49afb59b5c3ce05f995d96eca3` | 200169 |
+| `test-012.json` | 100 | `a6c5f05b38d00ed4d6b87a7b0706917e5b5af0f21497834f624fbb59d5c37de4` | 187449 |
+| `test-013.json` | 100 | `fbb6355198001816a0f714b5f0e5409f27acda70de4b6ea57b9e1959202a9b2b` | 574236 |
+| `test-014.json` | 100 | `a27d953543ec5a81d789a25844e6894774a505876cb42b118512e28afe1b4385` | 633067 |
+| `test-015.json` | 100 | `eeae1eea8ec55c1e9c12e61e53a55d2e2b5254c577b50d645204f26a31e413cd` | 539341 |
+| `test-016.json` | 100 | `f035c5c7af9ae5bdbbf238941ade6e3f1d3b2579f313fc89621548bc205044cc` | 761826 |
+| `test-017.json` | 100 | `b5e6667fc3280381799c73434bbbb65d3e3e4d7a4fb17f73d04dd9f4334ba726` | 526798 |
+| `test-018.json` | 100 | `e127dbfc29e9cb14044761c9b005d01c3d510f284ba1aca8645dcfa9816ef49a` | 641102 |
+| `test-019.json` | 100 | `7fe891303db62d0e38bec0954cebefe087800df216ebd5674d7f678089ff7792` | 593745 |
+| `test-020.json` | 100 | `ea1f18c49aa0b9d3f070e8b892eb60be712e3429d0e257f74a270b74420d642f` | 564804 |
+| `test-021.json` | 100 | `236d8c63b0e6893ca2da0c387612110b5851b1d239043452307eb519ba857253` | 311944 |
+| `test-022.json` | 100 | `6ef039bffc664350d1ae598ffaee2a3ca011c9728046fe0d4a2593df970d37d3` | 285335 |
+| `test-023.json` | 100 | `76a26df8520e657280d958142b898e27fb6a8f1497dc7896bb88f811678448fa` | 374057 |
+| `test-024.json` | 100 | `5fd1243c5328af03faca96a6d401534e59f7ea1ebc2369f50f0ff5cbd711f7ad` | 571469 |
+| `test-025.json` | 100 | `0ae415033bf5b28146d9cb01fa9921dbe5b918a07e9db0282cae8d2a68064f6e` | 613186 |
+| `test-026.json` | 100 | `382ab8d122face0852f2fdf64300b70ef56484b2ad069b4d00210e200d948f65` | 552245 |
+| `test-027.json` | 100 | `1dc3bd3ccb345d18716f6728804acf5680d5fa2e104b4306c686569a72ca9e3d` | 524599 |
+| `test-028.json` | 100 | `2dd52ee9159b28713c734057a00643421cb9f6cfaea999cc5f8ab98c4fa050db` | 692714 |
+| `test-029.json` | 100 | `5d34cd53590c80f6be824111f7114c0a2ca9fa4494bbd6abf351afc4a2f802e1` | 522068 |
+| `test-030.json` | 100 | `80cb2552c343ed4ac6205e84758141a82f6cc86bea380609caa0be8d6ec45006` | 627654 |
+| `test-031.json` | 100 | `226527af18de1854ff510515bb79047e57dfccbedfc3e27af9927fca19a84497` | 529805 |
+| `test-032.json` | 100 | `2944e16b937fec038d0dbce67ac5df327e0bbe595deb64a25677a12fdd6e8604` | 711612 |
+| `test-033.json` | 100 | `08788dad73cdf366d960614498d46b7c5669db92d5ce72ac635c7d2498dc8d1f` | 475988 |
+| `test-034.json` | 100 | `37963c6e438850cadf9c11e9b77e9d94a58c3b548fb1f455e31243043c37d484` | 283466 |
+| `test-035.json` | 100 | `5627dd148788138c4ef1fff27cd1f5005a06ad227991c71d9c558b8c2482051b` | 274245 |
+| `test-036.json` | 52 | `7da5d81aea0554c80f7af6e55455fbc7a9d48fee2b5911f30c3a53bd17c6fbf7` | 132771 |
+
+When2Call's features carry NO ClassLabel (`correct_answer` is a plain
+`string` column) — the universe is pinned by `WHEN2CALL_KEYS` + the
+per-row answers-key verify-at-port in the builder (the §ClassLabel-orders
+law's "no ClassLabel" half, semantics verified against the official
+eval's `get_choices_and_index`).
 
 ## ClassLabel orders (verified)
 

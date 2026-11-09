@@ -62,8 +62,9 @@ use crate::harness::suites::{
     build_banking77_mteb, build_clinc150, build_emotion, build_emotion_syn, build_hellaswag_jdi,
     build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_s1mb_choice,
     build_s1mb_noul, build_s1mb_score, build_sst5, build_sst5_syn, build_thai_sib200,
-    build_thai_wisesight, build_typed_decisions, build_wanli_en, build_winogrande_jdi,
-    build_xnli_en, stratified_selection_slices, stratified_split, train_docs, train_row_label,
+    build_thai_wisesight, build_typed_decisions, build_wanli_en, build_when2call,
+    build_winogrande_jdi, build_xnli_en, stratified_selection_slices, stratified_split, train_docs,
+    train_row_label,
 };
 use crate::pyjson::serialize_state;
 use crate::readout::ReadoutMode;
@@ -314,9 +315,18 @@ struct SuiteSpec {
     synthetic: Option<fn() -> SynthData>,
     /// false = the modelless lane has no honest answer for the suite —
     /// the runner skips it LOUDLY (an absence line, never a silent zero)
-    /// when no LLM lane is compiled. All six harness families are true
-    /// since Issue 045; the flag stays as the declared-inability
-    /// machinery for any future suite that needs it.
+    /// and only the LLM lanes answer. Two classes:
+    /// - synthetic suites: the modelless lane has no KV cache, so a
+    ///   modelless answer would be a fake task (Issue 004 T3).
+    /// - dataset suites (the CORPUS-OPTIONAL posture, issue 114 T3): no
+    ///   lawful train pool exists — `prepare` skips the train/cal/pool
+    ///   load entirely (the slice audit is vacuous without a pool) and
+    ///   the suite answers on its eval surface only, LLM lanes only.
+    ///   A corpus arrives only through the suite's recorded re-open lane;
+    ///   the flag flips back then, never silently.
+    ///
+    /// All six harness families are true since Issue 045; the flag stays
+    /// as the declared-inability machinery.
     modelless_lane: bool,
 }
 
@@ -652,6 +662,35 @@ const SUITES: &[SuiteSpec] = &[
         synthetic: None,
         modelless_lane: true,
     },
+    // Issue 114 T3 — the JDI ladder wave-1 When2Call row: the tool-calling
+    // decision benchmark's MCQ surface (the abstention-first shape — the
+    // wire's own contract). CORPUS-OPTIONAL (`modelless_lane: false`): no
+    // lawful train pool exists — the llm_judge split is a documented subset
+    // of the mcq eval data (uuid overlap measured 11/100, the slice-integrity
+    // law refuses it), train_pref/train_sft carry no class label (the marker
+    // covers tool_call only), and the mcq rows' answers objects are test rows
+    // (grammar-not-answers). Only the LLM lanes answer; a corpus arrives only
+    // through the issue's re-open paths (the xlam-60k synthesis route = the
+    // rethink ESC lane), and the flag flips back then, never silently.
+    // test_cap 0 = ALL 3,652 rows (the board's population, the faithful
+    // posture — the population pin in `prepare` is the drift guard).
+    // coverage_audit false: `direct` is presented as an option on every row
+    // but is never gold in the mcq split (measured 0/3,652) — the universe
+    // deliberately exceeds the gold space, the s1mb posture (the flag is
+    // belt-and-braces here: the corpus-optional path carries no slice audit).
+    SuiteSpec {
+        name: "when2call",
+        dataset_dir: "when2call",
+        test_cap: 0,
+        cal_cap: 0, // corpus-optional: no train split is fetched (asserted in prepare)
+        corpus_cap_per_label: 0,
+        eval_split: "test", // the fetched mcq split, stored AS `test` (the as-split law)
+        named_only: true,
+        coverage_audit: false,
+        build: build_when2call,
+        synthetic: None,
+        modelless_lane: false,
+    },
     // ── RETIRED (owner call, 2026-10-02): the six Issue-004 harness
     // decision-point families (`harness_visibility` · `harness_permissions`
     // · `harness_tool_fit` · `harness_routing` · `harness_sensitivity` ·
@@ -746,6 +785,16 @@ pub fn load_suite_envelope(
         return Err(format!(
             "suite {suite_name} is compiled-in (synthetic), not a dataset corpus — \
              nothing to store"
+        ));
+    }
+    if !spec.modelless_lane {
+        // Issue 114 T3: the corpus-optional posture — no train split exists
+        // (and none may be invented; the re-open paths live in the issue),
+        // so there is no corpus to store.
+        return Err(format!(
+            "suite {suite_name} is corpus-optional (LLM-lane only, modelless_lane: \
+             false) — no lawful train corpus exists to store; see the suite's \
+             re-open paths in its filing issue"
         ));
     }
     let suite_dir = datasets_dir.join(spec.dataset_dir);
@@ -4421,23 +4470,6 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
     // never move.
     let eval_split = stratified_split(&eval_rows, spec.name, spec.test_cap);
     let suite = (spec.build)(&eval_split.front, 0);
-    let train_rows =
-        load_rows(&suite_dir, "train").map_err(|e| format!("suite {}: {e}", spec.name))?;
-    // The cal slice is stratified by the SAME law, and the corpus pool is
-    // the split's REST (cal rows excluded by construction, not position —
-    // the positional `train[cal_cap..]` cut was only correct while the cal
-    // slice was the first-N prefix; on a label-clustered train mirror it
-    // also ORPHANED every label whose whole block sat inside the prefix).
-    let cal_split = stratified_split(&train_rows, spec.name, spec.cal_cap);
-    let train = train_docs(&cal_split.rest, spec.name);
-    if train.is_empty() {
-        return Err(format!(
-            "suite {}: the train split produced no corpus docs — the modelless \
-             lane cannot be built honestly without its corpus; fetch train rows \
-             first (scripts/fetch_datasets.sh)",
-            spec.name
-        ));
-    }
 
     // Engine domain labels. These must equal the TRAIN-DOC labels so the
     // per-domain corpora bind (routing routes over these domains; corpora
@@ -4538,6 +4570,10 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             // Issue 114 T2: the ladder's CLINC150 row — the 151-key universe
             // (150 intents + oos) pinned by the same exact-membership law.
             "clinc150" => Some(CLINC150_KEYS.to_vec()),
+            // Issue 114 T3: the ladder's When2Call row — the four fixed
+            // category names in the answers-object key order (the gold-index
+            // order; the verify-at-port in the builder pins it per row).
+            "when2call" => Some(crate::harness::suites::WHEN2CALL_KEYS.to_vec()),
             "prompt_injections" => Some(vec!["0", "1"]),
             _ => None,
         };
@@ -4596,6 +4632,98 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
              fetch the full test split for the option universe)",
             option_key_union.len()
         );
+    }
+    // Issue 114 T3: the When2Call population + gold pins. The population IS
+    // the board row (3,652 — fetched whole, the identity split); a drifted
+    // or partial fetch fails loud here instead of shipping a shrunken board
+    // row. The gold classes ride the verified key order; `direct` is never
+    // gold in the mcq split (measured 0/3,652) and is deliberately absent
+    // from the coverage pin.
+    if spec.name == "when2call" {
+        assert_eq!(
+            suite.cases.len(),
+            3652,
+            "when2call: the fetched mcq split drifted from the board population \
+             (3,652 rows) — a partial or revised fetch; refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+        let mut gold_classes: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        for case in &suite.cases {
+            if let Some(g) = case.gold.first()
+                && let Some(k) = labels.get(g.idx)
+            {
+                gold_classes.insert(k.as_str());
+            }
+        }
+        for required in ["tool_call", "request_for_info", "cannot_answer"] {
+            assert!(
+                gold_classes.contains(required),
+                "when2call: gold class {required:?} absent from the fetched split \
+                 (gold classes: {gold_classes:?}) — the board row would misreport"
+            );
+        }
+    }
+
+    // Issue 114 T3 — the CORPUS-OPTIONAL path (`modelless_lane: false` on a
+    // dataset suite): no lawful train pool exists, so the train/cal/pool
+    // machinery is skipped ENTIRELY (the slice audit is vacuous without a
+    // pool) and the suite answers on its eval surface only. The loud skip
+    // when no LLM lane is compiled is the declared-inability law — an
+    // absence line, never a silent zero, and never a corpus-less modelless
+    // lane pretending to run.
+    if !spec.modelless_lane {
+        if !cfg!(feature = "laya-riir") && !cfg!(feature = "clm-lane") {
+            return Err(format!(
+                "{}: SKIPPED — corpus-optional LLM-lane only (issue 114 T3): no lawful \
+                 train pool exists for the modelless lane; compile with \
+                 --features laya-riir (or clm-lane) to run this suite",
+                spec.name
+            ));
+        }
+        assert_eq!(
+            spec.cal_cap, 0,
+            "suite {}: a corpus-optional suite must carry cal_cap 0 — there is no \
+             train split to derive a cal slice from",
+            spec.name
+        );
+        eprintln!(
+            "    {} (corpus-optional): no train pool — LLM lanes only; the \
+             modelless lane and the corpus-consuming probes have no corpus",
+            spec.name
+        );
+        let state_strs = suite
+            .cases
+            .iter()
+            .map(|c| serialize_state(&c.state))
+            .collect();
+        return Ok(Prepared {
+            suite,
+            train: Vec::new(),
+            state_strs,
+            cal_cases: Vec::new(),
+            cal_state_strs: Vec::new(),
+            labels,
+            pool_rows: Value::Null,
+            slices: None,
+        });
+    }
+
+    let train_rows =
+        load_rows(&suite_dir, "train").map_err(|e| format!("suite {}: {e}", spec.name))?;
+    // The cal slice is stratified by the SAME law, and the corpus pool is
+    // the split's REST (cal rows excluded by construction, not position —
+    // the positional `train[cal_cap..]` cut was only correct while the cal
+    // slice was the first-N prefix; on a label-clustered train mirror it
+    // also ORPHANED every label whose whole block sat inside the prefix).
+    let cal_split = stratified_split(&train_rows, spec.name, spec.cal_cap);
+    let train = train_docs(&cal_split.rest, spec.name);
+    if train.is_empty() {
+        return Err(format!(
+            "suite {}: the train split produced no corpus docs — the modelless \
+             lane cannot be built honestly without its corpus; fetch train rows \
+             first (scripts/fetch_datasets.sh)",
+            spec.name
+        ));
     }
 
     // Calibration cases: the SAME builder over the stratified cal front

@@ -608,6 +608,12 @@ main() {
     if want_suite clinc150; then
         probe_license clinc150 "clinc/clinc_oos"
     fi
+    # Issue 114 T3: the hub-side licence tripwire for the ladder's When2Call
+    # row (cc-by-4.0, the card's Licensing section named verbatim — NVIDIA,
+    # commercial-use declared; the manifest row stays authoritative).
+    if want_suite when2call; then
+        probe_license when2call "nvidia/When2Call"
+    fi
 
     # 1. typed_decisions — test: ALL rows; train: ALL 1200 rows (Issue 052:
     #    the birth cap 800 stopped inside the security_incidents train block
@@ -803,6 +809,29 @@ main() {
         log "[suite] clinc150 config=plus split=train cap=all (intent-ordered split — fetched whole so the corpus pool spans all 151 intents)"
         fetch_suite clinc150 "clinc%2Fclinc_oos" plus train all
         dedupe_train clinc150
+    fi
+
+    # 17. when2call — Issue 114 T3 (the JDI ladder wave 1): nvidia/When2Call
+    #     config=test, split=mcq (3,652 rows — the board's population, fetched
+    #     WHOLE; stored AS the suite's `test` — the mmlupro as-split precedent,
+    #     reversed: the fetched mcq split IS the eval surface). CORPUS-OPTIONAL
+    #     suite: NO train split is fetched, ever — the llm_judge split is a
+    #     documented subset of the mcq eval data (uuid overlap measured 11/100;
+    #     the slice-integrity law refuses it as a pool), train_pref/train_sft
+    #     carry no class label (the marker covers tool_call only — deriving the
+    #     other three classes is the no-silent-transforms refusal), and the mcq
+    #     rows' answers objects are TEST rows (grammar-not-answers). The corpus
+    #     re-open paths (incl. the xlam-60k synthesis route) live in the issue;
+    #     this stanza fetches the eval surface only.
+    if want_suite when2call; then
+        log "[probe] when2call /splits"
+        probe_splits when2call "nvidia%2FWhen2Call"
+        log "[probe] when2call /size"
+        probe_size when2call "nvidia%2FWhen2Call"
+    fi
+    if want_suite when2call; then
+        log "[suite] when2call nvidia/When2Call config=test split=mcq cap=all (the board population; stored as the suite's test split)"
+        fetch_suite when2call "nvidia%2FWhen2Call" test mcq all test
     fi
 
     log ""

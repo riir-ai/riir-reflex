@@ -311,10 +311,108 @@ pub fn build_clinc150(rows_file: &Value, max_rows: usize) -> Suite {
 /// order (the Bench-128 finding). Canonical-order outputs are
 /// byte-identical (union[i] ≡ old domain i by the parity assert the
 /// prepare path kept since the fetch law).
+///
+/// Issue 114 T3: the When2Call category universe rides the same law — the
+/// four fixed category names, in the `answers` object's key order (uniform
+/// across the split, verified at port), which is ALSO the gold-index order
+/// (the official eval's `answer_names.index(correct_answer)` law).
 pub(crate) const AG_NEWS_KEYS: [&str; 4] = ["world", "sports", "business", "sci_tech"];
 pub(crate) const EMOTION_KEYS: [&str; 6] = ["sadness", "joy", "love", "anger", "fear", "surprise"];
 pub(crate) const XNLI_KEYS: [&str; 3] = ["entailment", "neutral", "contradiction"];
 pub(crate) const WISESIGHT_KEYS: [&str; 4] = ["pos", "neu", "neg", "q"];
+
+/// Issue 114 T3 — the When2Call category universe: the four fixed category
+/// names, in the `answers` object's key order (uniform across the whole mcq
+/// split — verified at port; this order is ALSO the gold-index order, the
+/// official eval's `answer_names.index(correct_answer)` law). `direct` is
+/// presented as an option on every row but is NEVER gold in the mcq split
+/// (measured 0/3,652) — the option universe deliberately exceeds the gold
+/// space, the s1mb coverage posture (`coverage_audit: false`).
+pub(crate) const WHEN2CALL_KEYS: [&str; 4] =
+    ["direct", "tool_call", "request_for_info", "cannot_answer"];
+
+/// Issue 114 T3 — When2Call (`nvidia/When2Call`, config `test`, split `mcq`):
+/// the tool-calling decision benchmark's MCQ surface, the JDI ladder's
+/// tools-rung row (the abstention-first shape — the wire's own contract).
+/// TASK-FAITHFUL rendering, the official lm-eval MCQ form: each row's four
+/// CHOICES are the row's own response candidates — the `answers` object's
+/// values, keyed by the fixed category names in the object's (uniform)
+/// insertion order — and the gold is `correct_answer`'s position in that
+/// order, exactly the official `get_choices_and_index`. Fixed option-KEY
+/// universe, per-row criteria VALUES (the mmlupro breadth shape at fixed
+/// width 4). The state is the row's own task input: the query + the
+/// tool-schema strings AS STORED (the no-silent-transforms gate; 258 rows
+/// carry an empty tools list — the benchmark's own no-tools tier, kept
+/// verbatim).
+///
+/// CORPUS-OPTIONAL: no lawful train pool exists (issue 114 T3's three
+/// measured refusals — llm_judge is a documented mcq subset, train splits
+/// carry no class label, the answers objects are test rows) — the modelless
+/// lane is skipped loud and only the LLM lanes answer
+/// (`modelless_lane: false` in the registry).
+#[must_use]
+pub fn build_when2call(rows_file: &Value, max_rows: usize) -> Suite {
+    let all = rows_of(rows_file);
+    let keys: Vec<String> = WHEN2CALL_KEYS.iter().map(|k| (*k).to_string()).collect();
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(question), Some(answers), Some(correct)) = (
+            row_str(row, "question"),
+            row.get("answers").and_then(Value::as_object),
+            row_str(row, "correct_answer"),
+        ) else {
+            continue; // malformed row — fails the rule, the row drops
+        };
+        // Verify-at-port: the answers object's key order IS the option order
+        // (uniform [direct, tool_call, request_for_info, cannot_answer]). A
+        // drifted order would silently rebind every gold index (the gold is
+        // the POSITION in this order), so the order is pinned per row — the
+        // clinc150 ClassLabel law at the answers-object level.
+        let key_spellings: Vec<&str> = answers.keys().map(String::as_str).collect();
+        assert_eq!(
+            key_spellings, WHEN2CALL_KEYS,
+            "when2call: the answers-object key order drifted from WHEN2CALL_KEYS — \
+             the gold index is the position in this order, so a reorder would \
+             silently rebind every row"
+        );
+        let gold_idx = key_spellings
+            .iter()
+            .position(|k| *k == correct)
+            .unwrap_or_else(|| {
+                panic!("when2call: correct_answer {correct:?} not in the answers key set")
+            });
+        let descs: Vec<Option<String>> = WHEN2CALL_KEYS
+            .iter()
+            .map(|k| answers.get(*k).and_then(Value::as_str).map(str::to_string))
+            .collect();
+        let tools = row
+            .get("tools")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        cases.push(SuiteCase {
+            id: format!("when2call:{pos}"),
+            state: json!({ "query": question, "tools": tools }),
+            questions: vec![choice_q(
+                "response",
+                "Which of the four candidate responses is the correct one for `query`, \
+                 given the available `tools`?",
+                &keys,
+                Some(descs),
+            )],
+            gold: vec![GoldAnswer {
+                idx: gold_idx,
+                soft: vec![0.0; WHEN2CALL_KEYS.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    Suite {
+        name: "when2call",
+        cases,
+        option_counts_note: "4 options per row: the row's own response candidates keyed by the fixed category names (the official MCQ form)",
+    }
+}
 
 /// Issue 114 T2 — the CLINC150 intent vocabulary (151: 150 intents + `oos`,
 /// ClassLabel order 0..=150, identical across every clinc/clinc_oos config —
@@ -2761,5 +2859,102 @@ mod thai_builder_tests {
         let docs2 = train_docs(&env2, "s1mb_choice");
         assert_eq!(docs2[0].label, "B");
         assert_eq!(docs2[0].text, "{\"prompt\": \"x\"}");
+    }
+}
+
+// Issue 114 T3: the When2Call builder — the official MCQ form rendering.
+#[cfg(test)]
+mod when2call_builder_tests {
+    use super::{WHEN2CALL_KEYS, build_when2call};
+
+    /// A row in the fetched shape: `answers` keyed by the fixed category
+    /// order, `tools` a list of schema strings, gold naming the category.
+    fn row(correct: &str, tools: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "uuid": "u-1",
+            "question": "book a table for six",
+            "correct_answer": correct,
+            "answers": {
+                "direct": "Your table is booked.",
+                "tool_call": "{\"name\": \"book_table\", \"arguments\": {\"size\": 6}}",
+                "request_for_info": "How many people should I book for?",
+                "cannot_answer": "I cannot help with that."
+            },
+            "tools": tools,
+        })
+    }
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    #[test]
+    fn when2call_builder_renders_the_official_mcq_form() {
+        let env = envelope(vec![row(
+            "tool_call",
+            serde_json::json!(["{\"name\": \"book_table\"}"]),
+        )]);
+        let s = build_when2call(&env, 0);
+        assert_eq!(s.name, "when2call");
+        assert_eq!(s.cases.len(), 1);
+        let c = &s.cases[0];
+        // Option keys = the fixed category universe in answers-key order.
+        let keys: Vec<_> = c.questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, WHEN2CALL_KEYS);
+        // Criteria VALUES = the row's own response candidates (the official
+        // MCQ choices), carried per option.
+        let crit = c.questions[0].criteria.as_object().unwrap();
+        assert_eq!(crit["direct"], "Your table is booked.");
+        assert_eq!(
+            crit["tool_call"],
+            "{\"name\": \"book_table\", \"arguments\": {\"size\": 6}}"
+        );
+        // Gold = the category's position in the answers-key order (the
+        // official eval's answer_names.index law).
+        assert_eq!(c.gold[0].idx, 1);
+        // State = query + the tool-schema strings AS STORED.
+        assert_eq!(c.state["query"], "book a table for six");
+        assert_eq!(
+            c.state["tools"],
+            serde_json::json!(["{\"name\": \"book_table\"}"])
+        );
+    }
+
+    #[test]
+    fn when2call_builder_keeps_the_empty_tools_tier_and_the_cannot_answer_gold() {
+        // The 258-row no-tools tier (BFCL Live Simple cannot_answer rows):
+        // the empty tools list rides verbatim — never filled.
+        let env = envelope(vec![row("cannot_answer", serde_json::json!([]))]);
+        let s = build_when2call(&env, 0);
+        let c = &s.cases[0];
+        assert_eq!(c.state["tools"], serde_json::json!([]));
+        assert_eq!(c.gold[0].idx, 3); // cannot_answer's answers-key position
+    }
+
+    #[test]
+    #[should_panic(expected = "answers-object key order drifted")]
+    fn when2call_builder_refuses_a_drifted_answers_key_order() {
+        // The gold index is the POSITION in the answers-key order — a
+        // reordered object would silently rebind every row, so the order is
+        // pinned per row (the clinc150 ClassLabel law).
+        let env = envelope(vec![serde_json::json!({
+            "uuid": "u-1",
+            "question": "q",
+            "correct_answer": "tool_call",
+            "answers": {
+                "tool_call": "a",
+                "direct": "b",
+                "request_for_info": "c",
+                "cannot_answer": "d"
+            },
+            "tools": ["t"]
+        })]);
+        let _ = build_when2call(&env, 0);
     }
 }

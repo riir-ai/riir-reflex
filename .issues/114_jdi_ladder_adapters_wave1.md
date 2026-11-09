@@ -198,7 +198,22 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
       DISPOSITION 2026-11-09:** not probed further this session (T5 is last in
       the wave); the T3/T4 corpus wall is structural to the tools rung — expect
       the same disposition; probe its splits + corpus posture when its build
-      lane opens.
+      lane opens. **PROBE + DISPOSITION 2026-11-09 (second session — the build
+      lane opened via T3's corpus-optional posture):** the canonical mirror is
+      `liminghao1630/API-Bank` (4,720 downloads, **MIT**, the original authors'
+      org; configs default/{train,test}). ⛔ NOT datasets-server-servable: the
+      raw JSON files have inconsistent columns across files — the /rows call
+      dies with `DatasetGenerationCastError` (some files carry
+      `id/file/expected_output`, others `output`), so the banking77 parquet
+      stanza cannot fetch it. **T4+T5 are now ONE shared work item:** the
+      direct-JSON fetch lane (the `/resolve/main/<file>.json` pattern BFCL
+      also needs) + per-suite builders. The corpus posture rides the same
+      T3 decision tree — the which-API tier's candidate functions are the
+      test rows' content (grammar-not-answers), so a corpus for the modelless
+      lane needs synthesis (the rethink-side routes) or the suite ships
+      corpus-optional like when2call. Wave-1 reflex-side work ends here;
+      the remaining builds are the follow-up lane's (the direct-JSON fetcher
+      + the BFCL/API-Bank builders), filed as this issue's T4/T5 residuals.
   **Wave-level corpus note (path (d), NEW this session):** the When2Call train
   data derives from **Salesforce/xlam-function-calling-60k (Apache-2.0)** — a
   DIFFERENT dataset from the test surface (the README's synthetic-data-gen

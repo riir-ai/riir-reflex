@@ -71,6 +71,42 @@ use katgpt_core::gmm_support::{SupportGate, fit_diag_gmm};
 use katgpt_core::sigmoid_calibration::SigmoidGateCalibrator;
 use katgpt_core::variable_rank_domain_expert::pick_domain;
 
+/// The route seat's pre-argmax score fold (issue 116): the EXACT
+/// sequential f32 fold `pick_domain` runs — same order, same adds — so
+/// the latch-armed seat defends a hold on bit-identical scores and a cold
+/// latch seats exactly what the bare argmax seats. Public as the G1
+/// parity gate's surface (`tests/pick_latch_gates.rs` replays score
+/// vectors through the real fold + the real [`katgpt_core::PickLatch`]);
+/// the measurement-side twin lives in the routing-state probe, which
+/// pins the same shape independently.
+pub fn router_scores<const N: usize, const D: usize>(
+    q: &[f32; D],
+    dirs: &[[f32; D]; N],
+) -> [f32; N] {
+    let mut scores = [0.0f32; N];
+    for (d, dir) in dirs.iter().enumerate() {
+        let mut s = 0.0f32;
+        for i in 0..D {
+            s += q[i] * dir[i];
+        }
+        scores[d] = s;
+    }
+    scores
+}
+
+/// Issue 116 (`pick_latch` feature): the producer's default gate values
+/// (`PickLatch::new`'s temperature + threshold) under one name, so every
+/// arming site (the harness flag, the serve env) cites ONE source instead
+/// of duplicating literals that can drift from katgpt-core.
+#[cfg(feature = "pick_latch")]
+#[must_use]
+pub fn pick_latch_defaults() -> (f32, f32) {
+    (
+        katgpt_core::pick_latch::DEFAULT_LATCH_TEMPERATURE,
+        katgpt_core::pick_latch::DEFAULT_LATCH_THRESHOLD,
+    )
+}
+
 /// The threshold-recommendation surface (Issue 009 — the jimothy steal:
 /// per-task abstention cutoffs as fit-time engine metadata, null on thin
 /// support, support-disclosed, posture-cited).
@@ -463,6 +499,21 @@ pub struct EngineConfig {
     /// Default 0.5 (the S1 fixture center).
     #[cfg(feature = "set_refine")]
     pub set_refine_tau: f32,
+    /// Issue 116 (`pick_latch` feature): the route-selection hysteresis
+    /// latch over the `pick_domain` seat. `None` = OFF — byte-identical
+    /// to the pre-116 posture (the seat compiles to the bare argmax).
+    /// `Some((temperature, threshold))` arms the latch: the held domain
+    /// survives a challenger unless
+    /// `exact_sigmoid((challenger − held) / temperature) ≥ threshold`
+    /// (katgpt-core `PickLatch`'s committed-value-path gate; its defaults
+    /// are temperature 1.0 / threshold 0.75 — a margin of
+    /// `temperature·lnit(threshold)` score units — ln(3) ≈ 1.099 at the
+    /// defaults: a challenger needs +1.099 to take the hold).
+    /// The score fold is [`router_scores`] — the SAME sequential order the
+    /// bare argmax runs — so a cold latch seats exactly what the bare
+    /// `pick_domain` seats (the G1 purity pin).
+    #[cfg(feature = "pick_latch")]
+    pub route_latch_gate: Option<(f32, f32)>,
 }
 
 /// The [`EngineConfig::drafter_fix`] candidates (Issue 036 T2). All are
@@ -558,6 +609,8 @@ impl Default for EngineConfig {
             set_refine_gamma: 0.0,
             #[cfg(feature = "set_refine")]
             set_refine_tau: 0.5,
+            #[cfg(feature = "pick_latch")]
+            route_latch_gate: None,
         }
     }
 }
@@ -1052,6 +1105,14 @@ pub struct DecisionEngine<const N: usize, const D: usize> {
     /// The kernel config snapshot (d = D at build; tau/gamma from cfg).
     #[cfg(feature = "set_refine")]
     sr_cfg: katgpt_core::set_refine::SetRefineConfig,
+    /// Issue 116 (`pick_latch` feature): the route-latch state —
+    /// constructed exactly when [`EngineConfig::route_latch_gate`] is
+    /// armed; `None` = the byte-identical posture. Engine-owned mutable
+    /// state, exactly like the calibrator: `decide(&mut self)` already
+    /// serializes every caller, and each suite's harness run builds a
+    /// fresh engine, so a hold never crosses suites.
+    #[cfg(feature = "pick_latch")]
+    route_latch: Option<katgpt_core::PickLatch>,
 }
 
 impl<const N: usize, const D: usize> DecisionEngine<N, D> {
@@ -1116,6 +1177,12 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
             cfg.set_refine_gamma,
             D,
         );
+        // Issue 116 (`pick_latch` feature): snapshot the latch BEFORE `cfg`
+        // moves into the engine struct — armed exactly when the config asked.
+        #[cfg(feature = "pick_latch")]
+        let route_latch = cfg.route_latch_gate.map(|(temperature, threshold)| {
+            katgpt_core::PickLatch::with_gate(temperature, threshold)
+        });
         let calibrator = SigmoidGateCalibrator::new(cfg.cal_capacity, cfg.cal_min_obs);
         Ok(Self {
             experts,
@@ -1138,6 +1205,8 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
             sr_keys: Vec::with_capacity(N * D),
             #[cfg(feature = "set_refine")]
             sr_cfg,
+            #[cfg(feature = "pick_latch")]
+            route_latch,
         })
     }
 
@@ -1497,13 +1566,13 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
             // Route to the corpus expert. The diagnostic override (Issue
             // 969 T3 control) replaces the routed domain per question when
             // armed; `None` entries and a disarmed scratch fall through to
-            // the same `pick_domain` call — byte-identical on every
-            // production path (one predictable branch).
+            // the same route seat — byte-identical on every production
+            // path (one predictable branch).
             let di = sc
                 .forced_domain
                 .as_ref()
                 .and_then(|f| f.get(qi).and_then(|d| *d))
-                .unwrap_or_else(|| pick_domain::<N, D>(&sc.q, &dirs));
+                .unwrap_or_else(|| self.route_pick(&sc.q, &dirs));
 
             // Score every candidate against the corpus.
             let k = match q.kind {
@@ -2132,6 +2201,67 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
         let mut q = [0.0f32; D];
         self.embedder.embed_into(text.as_bytes(), &mut q);
         pick_domain::<N, D>(&q, &dirs)
+    }
+
+    /// The route seat the decide path routes through (issue 116).
+    ///
+    /// Feature-off (or latch unarmed): the bare `pick_domain` argmax —
+    /// byte-identical to the pre-116 posture. Feature-on with the latch
+    /// armed: the pre-argmax score vector is folded EXACTLY as
+    /// `pick_domain` folds it (same order, same adds — [`router_scores`]),
+    /// then the held pick defends itself through the producer's sigmoid
+    /// gate; a cold latch seats the argmax, so the first pick of any
+    /// stream is what the bare argmax would have picked (the G1 purity
+    /// pin, `tests/pick_latch_gates.rs`).
+    #[cfg(not(feature = "pick_latch"))]
+    fn route_pick(&self, q: &[f32; D], dirs: &[[f32; D]; N]) -> usize {
+        pick_domain::<N, D>(q, dirs)
+    }
+
+    /// The latch-armed seat (see [`Self::route_pick`]). The fallback
+    /// arm is unreachable with a non-empty score table (`N ≥ 1` by the
+    /// domain-count build check) and stays panic-free by construction.
+    #[cfg(feature = "pick_latch")]
+    fn route_pick(&mut self, q: &[f32; D], dirs: &[[f32; D]; N]) -> usize {
+        match self.route_latch.as_mut() {
+            None => pick_domain::<N, D>(q, dirs),
+            Some(latch) => {
+                let scores = router_scores::<N, D>(q, dirs);
+                latch
+                    .decide(Some(&scores))
+                    .pick()
+                    .unwrap_or_else(|| pick_domain::<N, D>(q, dirs))
+            }
+        }
+    }
+
+    /// Issue 116 (`pick_latch` feature): clear the route latch's hold —
+    /// the next routed question seats fresh from the bare argmax. The
+    /// harness's per-suite engines are fresh by construction; this is the
+    /// explicit reset surface for long-lived serving engines that switch
+    /// corpora (or tests that need a known-cold seat).
+    #[cfg(feature = "pick_latch")]
+    pub fn reset_route_latch(&mut self) {
+        if let Some(latch) = self.route_latch.as_mut() {
+            latch.reset();
+        }
+    }
+
+    /// Issue 116 (measurement surface): the seat's route for one text —
+    /// embeds, folds, and runs the SAME [`Self::route_pick`] the decide
+    /// path runs. The latch state ADVANCES (this is a probe, not a
+    /// read-only view): the G3 flip-rate cell probes the same state texts
+    /// the eval drives so the measured stream is the seat's real stream.
+    #[cfg(feature = "pick_latch")]
+    #[doc(hidden)]
+    pub fn route_probe(&mut self, text: &str) -> usize {
+        let mut dirs = [[0.0f32; D]; N];
+        for (o, e) in dirs.iter_mut().zip(self.experts.iter()) {
+            *o = e.direction;
+        }
+        let mut q = [0.0f32; D];
+        self.embedder.embed_into(text.as_bytes(), &mut q);
+        self.route_pick(&q, &dirs)
     }
 
     /// Read-only gate access (harness calibration — thresholds from

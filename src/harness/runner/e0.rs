@@ -227,6 +227,9 @@ fn e0_suite(spec: &SuiteSpec, dir: &Path, kn_route: bool) -> Result<E0Suite, Str
         // every modelless engine build.
         kn_route,
         drafter_fix: crate::engine::DrafterFix::Off,
+        // Issue 116: the measurement probes ride the BARE argmax — the
+        // latch would confound what they measure.
+        pick_latch: None,
         suite: &prepared.suite,
         train: &prepared.train,
         state_strs: &prepared.state_strs,

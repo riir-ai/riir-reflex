@@ -2767,6 +2767,12 @@ struct ModellessInput<'a> {
     /// (issue 036 T2) so the content-bound posture is measured TUNED,
     /// not at an arbitrary drafter posture.
     pub drafter_fix: crate::engine::DrafterFix,
+    /// Issue 116 (`pick_latch` feature): the route hysteresis latch's
+    /// gate, flowed onto the MAIN lane engine only — the selection
+    /// engines (cap/head/nb probes) stay latch-off so a selection compares
+    /// scales, never latch posture. `None` = off, byte-identical.
+    #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
+    pub pick_latch: Option<(f32, f32)>,
 }
 
 /// The cal-slice cap-selection measurement (Issue 013 lever-1 protocol
@@ -3398,6 +3404,13 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
         drafter_fix: inp.drafter_fix,
         ..EngineConfig::default()
     };
+    // Issue 116 (`pick_latch` feature): the route hysteresis latch arms on
+    // the MAIN lane engine only — the selection probes above build their
+    // own configs and stay latch-off.
+    #[cfg(feature = "pick_latch")]
+    if let Some(gate) = inp.pick_latch {
+        default_cfg.route_latch_gate = Some(gate);
+    }
     #[cfg(feature = "nb_scope")]
     if let Some(sel) = &nb_selected {
         default_cfg.nb_scale = sel.selected_scale;
@@ -5077,6 +5090,9 @@ pub mod seat {
             // default) keeps every other caller byte-identical.
             kn_route: true,
             drafter_fix: knobs.drafter_fix,
+            // Issue 116: the seat never arms the route latch (the arena's
+            // published face is the manifest's posture, not a CLI lever).
+            pick_latch: None,
             suite: &s.suite,
             train: &s.train,
             state_strs: &s.state_strs,
@@ -5484,6 +5500,14 @@ pub struct RunOptions {
     /// Issue 079: the drafter-only correction mode (see
     /// [`ModellessInput::drafter_fix`]). Default `Off`.
     pub drafter_fix: crate::engine::DrafterFix,
+    /// Issue 116 (`pick_latch` feature): arm the route-selection
+    /// hysteresis latch on the modelless lane's main engine. `None` =
+    /// off, byte-identical; `--pick-latch` arms the producer defaults
+    /// (temperature 1.0, threshold 0.75). `#[cfg_attr]` dead-code-allowed
+    /// when the feature is compiled out — the flag still refuses loud in
+    /// the bin parser (the flag-does-nothing guard).
+    #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
+    pub pick_latch: Option<(f32, f32)>,
     /// Also run the laya-PYTHON lane — the ORIGINAL torch reference as a
     /// subprocess oracle (measurement-only; opt-in, off by default).
     pub laya_python: bool,
@@ -5849,6 +5873,9 @@ impl RunOptions {
             // shipped scores, byte-identical); `--drafter-fix <mode>` arms one
             // for the content-bound posture's tuning axis.
             drafter_fix: crate::engine::DrafterFix::Off,
+            // Issue 116 — the route hysteresis latch is OFF by default
+            // (byte-identical; `--pick-latch` arms the producer defaults).
+            pick_latch: None,
             laya_python: false,
             clm: false,
             gliner: false,

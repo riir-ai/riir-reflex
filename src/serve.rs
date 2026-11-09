@@ -928,6 +928,69 @@ fn serve_boot(
             ridge_scale_val.is_some(),
             nb_pair_val.is_some(),
         );
+        // Issue 116 (`pick_latch` feature): the route hysteresis latch's
+        // SERVE arming — `RIIR_REFLEX_PICK_LATCH` truthy arms the producer
+        // defaults; the optional `RIIR_REFLEX_PICK_LATCH_TEMP` /
+        // `_THRESH` override the two gate values (both-or-none, junk
+        // refuses the boot). PROMOTE-ONLY literals until the issue's G3
+        // GOAT; a build without the feature refuses loud (the
+        // flag-does-nothing guard).
+        let latch_armed = std::env::var("RIIR_REFLEX_PICK_LATCH").ok().map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        });
+        let latch_temp = std::env::var("RIIR_REFLEX_PICK_LATCH_TEMP").ok();
+        let latch_thresh = std::env::var("RIIR_REFLEX_PICK_LATCH_THRESH").ok();
+        if latch_armed == Some(false) && (latch_temp.is_some() || latch_thresh.is_some()) {
+            eprintln!(
+                "[riir-reflex] RIIR_REFLEX_PICK_LATCH_TEMP/_THRESH set but \
+                 RIIR_REFLEX_PICK_LATCH is not truthy — refusing"
+            );
+            std::process::exit(2);
+        }
+        #[cfg(feature = "pick_latch")]
+        if latch_armed == Some(true) {
+            let (mut t, mut th) = crate::engine::pick_latch_defaults();
+            match (latch_temp.as_deref(), latch_thresh.as_deref()) {
+                (None, None) => {}
+                (Some(ts), Some(ths)) => {
+                    t = ts.parse().unwrap_or_else(|_| {
+                        eprintln!(
+                            "[riir-reflex] RIIR_REFLEX_PICK_LATCH_TEMP not a number — refusing"
+                        );
+                        std::process::exit(2);
+                    });
+                    th = ths.parse().unwrap_or_else(|_| {
+                        eprintln!(
+                            "[riir-reflex] RIIR_REFLEX_PICK_LATCH_THRESH not a number — refusing"
+                        );
+                        std::process::exit(2);
+                    });
+                }
+                _ => {
+                    eprintln!(
+                        "[riir-reflex] RIIR_REFLEX_PICK_LATCH_TEMP/_THRESH are \
+                         both-or-none — refusing"
+                    );
+                    std::process::exit(2);
+                }
+            }
+            cfg.route_latch_gate = Some((t, th));
+            eprintln!(
+                "[riir-reflex] route pick_latch armed: temperature={t} threshold={th} \
+                 (RIIR_REFLEX_PICK_LATCH)"
+            );
+        }
+        #[cfg(not(feature = "pick_latch"))]
+        if latch_armed.is_some() || latch_temp.is_some() || latch_thresh.is_some() {
+            eprintln!(
+                "[riir-reflex] RIIR_REFLEX_PICK_LATCH* set but this build compiles without \
+                 the pick_latch feature — rebuild with --features pick_latch or unset the knob"
+            );
+            std::process::exit(2);
+        }
         cfg
     };
     macro_rules! boot {

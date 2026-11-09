@@ -457,6 +457,62 @@ fn harness_main() {
                 opts.gate_risk_target = Some(alpha);
             }
             "--no-kn-route" => opts.kn_route = false,
+            "--pick-latch" => {
+                // Issue 116: arm the route hysteresis latch at the
+                // producer defaults (temperature 1.0, threshold 0.75 —
+                // a ≈0.288 score-unit margin). Explicit gate values ride
+                // the two follow-up flags; a build without the feature
+                // refuses loud (the flag-does-nothing guard).
+                #[cfg(feature = "pick_latch")]
+                {
+                    opts.pick_latch = Some(riir_reflex::engine::pick_latch_defaults());
+                }
+                #[cfg(not(feature = "pick_latch"))]
+                {
+                    die(
+                        "--pick-latch set but this build compiles without the pick_latch \
+                         feature — rebuild with --features pick_latch or drop the flag",
+                    );
+                }
+            }
+            "--pick-latch-temp" => {
+                #[cfg(not(feature = "pick_latch"))]
+                die(
+                    "--pick-latch-temp set but this build compiles without the pick_latch \
+                     feature — rebuild with --features pick_latch or drop the flag",
+                );
+                #[cfg(feature = "pick_latch")]
+                {
+                    i += 1;
+                    let t: f32 = args
+                        .get(i)
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or_else(|| die("--pick-latch-temp needs a number"));
+                    let (_, th) = opts.pick_latch.take().unwrap_or_else(|| {
+                        die("--pick-latch-temp needs --pick-latch armed first (flag order matters)")
+                    });
+                    opts.pick_latch = Some((t, th));
+                }
+            }
+            "--pick-latch-thresh" => {
+                #[cfg(not(feature = "pick_latch"))]
+                die(
+                    "--pick-latch-thresh set but this build compiles without the pick_latch \
+                     feature — rebuild with --features pick_latch or drop the flag",
+                );
+                #[cfg(feature = "pick_latch")]
+                {
+                    i += 1;
+                    let th: f32 = args
+                        .get(i)
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or_else(|| die("--pick-latch-thresh needs a number"));
+                    let (t, _) = opts.pick_latch.take().unwrap_or_else(|| {
+                        die("--pick-latch-thresh needs --pick-latch armed first (flag order matters)")
+                    });
+                    opts.pick_latch = Some((t, th));
+                }
+            }
             "--drafter-fix" => {
                 i += 1;
                 let mode = args

@@ -19,10 +19,10 @@ The `pick_domain` corpus-routing seat: hold the last domain pick unless the chal
 
 ## Tasks
 
-- [ ] T0 claim + seam read (locate the `pick_domain` dispatch seat in `src/`; name the config home for temperature/threshold; verify the producer fixture surface imports consumer-side)
-- [ ] T1 wiring behind opt-in `pick_latch` (forward the katgpt-core feature, never fork — the consumption precedent; `--no-default-features` stays the tested flag-OFF posture)
-- [ ] T2 G1 + G2 gates
-- [ ] T3 G3 GOAT on the real harness stream; honest negative allowed → close with the verdict either way
+- [x] T0 claim + seam read (locate the `pick_domain` dispatch seat in `src/`; name the config home for temperature/threshold; verify the producer fixture surface imports consumer-side) — seat = `engine.rs` solve path's `route_pick` (was the bare `pick_domain` call); config home = `EngineConfig.route_latch_gate` (+ the harness flag / the serve env for arming); producer import = `katgpt_core::pick_latch::{PickLatch, LatchDecision}`; score fold = `router_scores` (the `routing_state_probe::router_scores_of` pinned-fold shape, pub as the G1 parity surface)
+- [x] T1 wiring behind opt-in `pick_latch` (forward the katgpt-core feature, never fork — the consumption precedent; `--no-default-features` stays the tested flag-OFF posture) — landed `1540a07`: feature forward, the seat twins, the config knob, engine-owned latch state, reset + route_probe surfaces, the harness `--pick-latch` family (main lane ONLY — the 7 measurement probes + the selection engines stay latch-off, loud refusal without the feature), the serve env family (promote-only literals, both-or-none gate values, knob-does-nothing refusals)
+- [x] T2 G1 + G2 gates — `tests/pick_latch_gates.rs` 7/7 armed: G1 fold parity (512-case seeded battery incl. exact ties vs `pick_domain`) + cold-seat byte-identity; G2 unarmed byte-identity + reset-restore; gate-mechanics replay through the real fold (margin = ln(3) ≈ 1.099 at the defaults, NaN-hold, abstain-reuse, first-index ties); seat-level hysteresis (armed flips ≤ bare flips over a 96-row near-tie stream). clippy clean ×3 postures; lib 563/563 both postures; engine_gates 9/9 armed; `--no-default-features` clean
+- [ ] T3 G3 GOAT on the real harness stream; honest negative allowed → close with the verdict either way — PENDING the box: `bench_332_karc_goat` holds m3 at ~199% CPU (the Plan-337 posture; the release build + harness cell defer). Cell design when it fires: the modelless suites, paired `--pick-latch` on/off runs (paired LB95 ≥ 0 per suite) + the flip-rate read through `route_probe` over the same state texts + the G2-bar latency lane unchanged. The lease stays live until the cell lands.
 
 ## Refs
 

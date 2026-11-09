@@ -514,6 +514,15 @@ pub struct EngineConfig {
     /// `pick_domain` seats (the G1 purity pin).
     #[cfg(feature = "pick_latch")]
     pub route_latch_gate: Option<(f32, f32)>,
+    /// Issue 116 (`pick_latch` feature, measurement-only): arm the
+    /// route-seat flip census — counts picks / emitted-route changes /
+    /// (latch-armed) disagreements vs the bare argmax over whatever
+    /// stream drives the engine. REPORT-ONLY: the census observes the
+    /// seat, never changes a decision (the unarmed posture stays
+    /// byte-identical with the census on). Default off — the unarmed
+    /// posture pays nothing. The harness's `--route-census` arms it.
+    #[cfg(feature = "pick_latch")]
+    pub route_latch_census: bool,
 }
 
 /// The [`EngineConfig::drafter_fix`] candidates (Issue 036 T2). All are
@@ -611,10 +620,65 @@ impl Default for EngineConfig {
             set_refine_tau: 0.5,
             #[cfg(feature = "pick_latch")]
             route_latch_gate: None,
+            #[cfg(feature = "pick_latch")]
+            route_latch_census: false,
         }
     }
 }
 
+/// Issue 116 (`pick_latch` feature, measurement-only): the route-seat
+/// flip census. Counts what [`DecisionEngine::route_pick`] did over the
+/// stream that drove it — picks (route calls), changes (the emitted
+/// route differed from the previous emitted route), disagreements (the
+/// emitted route differed from the bare argmax — always 0 on a
+/// latch-off engine, whose seat IS the argmax). `Copy` so the harness
+/// can snapshot mid-lane; the engine owns the live copy.
+#[cfg(feature = "pick_latch")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RouteCensus {
+    picks: u64,
+    changes: u64,
+    disagreements: u64,
+    last_route: Option<usize>,
+}
+
+#[cfg(feature = "pick_latch")]
+impl RouteCensus {
+    /// One `route_pick`: `emitted` is what the seat answered, `bare`
+    /// what the bare argmax would have answered (`== emitted` on a
+    /// latch-off engine — the census then owes no recompute).
+    fn observe(&mut self, emitted: usize, bare: usize) {
+        self.picks += 1;
+        if self.last_route.is_some_and(|last| last != emitted) {
+            self.changes += 1;
+        }
+        self.last_route = Some(emitted);
+        if emitted != bare {
+            self.disagreements += 1;
+        }
+    }
+
+    /// Route-seat calls observed so far.
+    #[must_use]
+    pub fn picks(&self) -> u64 {
+        self.picks
+    }
+
+    /// Times the emitted route differed from the previous emitted route.
+    #[must_use]
+    pub fn changes(&self) -> u64 {
+        self.changes
+    }
+
+    /// Times the emitted route differed from the bare argmax (0 on a
+    /// latch-off engine by construction).
+    #[must_use]
+    pub fn disagreements(&self) -> u64 {
+        self.disagreements
+    }
+}
+
+/// The [`EngineConfig::drafter_fix`] candidates
 /// Issue 066 (`density_gate` feature): fit the density half's gate family
 /// — one shared JL projector, one shared NEGATIVE GMM over the POOLED
 /// projected rows (every domain: distribution WIDTH, not identity — the
@@ -1113,6 +1177,11 @@ pub struct DecisionEngine<const N: usize, const D: usize> {
     /// fresh engine, so a hold never crosses suites.
     #[cfg(feature = "pick_latch")]
     route_latch: Option<katgpt_core::PickLatch>,
+    /// Issue 116 (`pick_latch` feature, measurement-only): the flip
+    /// census — `Some` exactly when [`EngineConfig::route_latch_census`]
+    /// armed it; `None` = the default posture, no counters paid.
+    #[cfg(feature = "pick_latch")]
+    route_census: Option<RouteCensus>,
 }
 
 impl<const N: usize, const D: usize> DecisionEngine<N, D> {
@@ -1183,6 +1252,10 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
         let route_latch = cfg.route_latch_gate.map(|(temperature, threshold)| {
             katgpt_core::PickLatch::with_gate(temperature, threshold)
         });
+        // Issue 116 (`pick_latch` feature): the census arms only when the
+        // config asked — the default posture pays nothing.
+        #[cfg(feature = "pick_latch")]
+        let route_census = cfg.route_latch_census.then(RouteCensus::default);
         let calibrator = SigmoidGateCalibrator::new(cfg.cal_capacity, cfg.cal_min_obs);
         Ok(Self {
             experts,
@@ -1207,6 +1280,8 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
             sr_cfg,
             #[cfg(feature = "pick_latch")]
             route_latch,
+            #[cfg(feature = "pick_latch")]
+            route_census,
         })
     }
 
@@ -2223,7 +2298,7 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
     /// domain-count build check) and stays panic-free by construction.
     #[cfg(feature = "pick_latch")]
     fn route_pick(&mut self, q: &[f32; D], dirs: &[[f32; D]; N]) -> usize {
-        match self.route_latch.as_mut() {
+        let pick = match self.route_latch.as_mut() {
             None => pick_domain::<N, D>(q, dirs),
             Some(latch) => {
                 let scores = router_scores::<N, D>(q, dirs);
@@ -2232,7 +2307,20 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
                     .pick()
                     .unwrap_or_else(|| pick_domain::<N, D>(q, dirs))
             }
+        };
+        #[cfg(feature = "pick_latch")]
+        if let Some(census) = self.route_census.as_mut() {
+            // The bare pick: on a latch-off engine the emitted pick IS the
+            // argmax (no recompute owed); on a latch-armed engine recompute
+            // it — measurement-only cost, census-armed builds only.
+            let bare = if self.route_latch.is_some() {
+                pick_domain::<N, D>(q, dirs)
+            } else {
+                pick
+            };
+            census.observe(pick, bare);
         }
+        pick
     }
 
     /// Issue 116 (`pick_latch` feature): clear the route latch's hold —
@@ -2245,6 +2333,15 @@ impl<const N: usize, const D: usize> DecisionEngine<N, D> {
         if let Some(latch) = self.route_latch.as_mut() {
             latch.reset();
         }
+    }
+
+    /// Issue 116 (measurement surface): the route-seat flip census
+    /// snapshot — `None` unless [`EngineConfig::route_latch_census`]
+    /// armed it. Read-only; the census keeps counting after the read.
+    #[cfg(feature = "pick_latch")]
+    #[must_use]
+    pub fn route_flip_census(&self) -> Option<RouteCensus> {
+        self.route_census
     }
 
     /// Issue 116 (measurement surface): the seat's route for one text —

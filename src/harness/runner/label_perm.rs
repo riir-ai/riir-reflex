@@ -307,6 +307,8 @@ fn label_perm_modelless<const N: usize>(
         // Issue 116: the measurement probes ride the BARE argmax — the
         // latch would confound what they measure.
         pick_latch: None,
+        // the probes stay census-off (the measurement lane is the main lane)
+        route_census: false,
         suite: &prepared.suite,
         train: &prepared.train,
         state_strs: &prepared.state_strs,

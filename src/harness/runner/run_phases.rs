@@ -647,6 +647,7 @@ fn run_modelless_suite(
         kn_route: opts.kn_route,
         drafter_fix: opts.drafter_fix,
         pick_latch: opts.pick_latch,
+        route_census: opts.route_census,
         set_refine: {
             #[cfg(feature = "set_refine")]
             {

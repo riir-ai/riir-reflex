@@ -37,6 +37,11 @@
 //!                                       writes risk_target.json + RISK_TARGET.md)
 //!                                      [--no-gate-fit-calibrated] [--no-kn-route]
 //!                                      [--drafter-fix <off|per_byte|ncd|shared_prefix|key_only>]
+//!                                      [--pick-latch] [--pick-latch-temp T] [--pick-latch-thresh TH]
+//!                                       (Issue 116 — the route hysteresis latch, opt-in
+//!                                        `pick_latch`; producer defaults = (1.0, 0.75))
+//!                                      [--route-census] (Issue 116 — the route-seat flip
+//!                                        census, report-only; works bare + armed)
 //!                                      [--synth-rescue-prefilter] (synth modes: the FlyBy
 //!                                       b0 pre-filter — local modelless leg ahead of
 //!                                       the teacher veto; the veto stays the authority)
@@ -511,6 +516,17 @@ fn harness_main() {
                         die("--pick-latch-thresh needs --pick-latch armed first (flag order matters)")
                     });
                     opts.pick_latch = Some((t, th));
+                }
+            }
+            "--route-census" => {
+                #[cfg(not(feature = "pick_latch"))]
+                die(
+                    "--route-census set but this build compiles without the pick_latch \
+                     feature — rebuild with --features pick_latch or drop the flag",
+                );
+                #[cfg(feature = "pick_latch")]
+                {
+                    opts.route_census = true;
                 }
             }
             "--drafter-fix" => {

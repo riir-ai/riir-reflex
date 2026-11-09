@@ -567,6 +567,10 @@ pub(super) fn assemble_laya_lane_result(
         // Issue 112 T4: the certified-abstention record is a modelless-gate
         // surface — the wire lanes carry the honest absence.
         risk_target: None,
+        // Issue 116: the flip census is a modelless-lane surface — the
+        // wire lanes carry the honest absence.
+        #[cfg(feature = "pick_latch")]
+        route_census: None,
         corpus_cap: None,     // the laya lanes have no corpus
         head_selection: None, // no fitted heads on the laya lanes
         nb_selection: None,

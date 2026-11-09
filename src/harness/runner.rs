@@ -847,6 +847,19 @@ fn is_zero(n: &usize) -> bool {
     *n == 0
 }
 
+/// Issue 116 (`--route-census`, measurement-only): the serialized flip
+/// census row — the engine [`riir_reflex::engine::RouteCensus`] getters
+/// plus the latch posture the counts were taken under (the bare arm's
+/// `disagreements` is 0 by construction; compare `changes` across arms).
+#[cfg(feature = "pick_latch")]
+#[derive(Debug, Clone, Serialize)]
+pub struct RouteCensusRow {
+    pub picks: u64,
+    pub changes: u64,
+    pub disagreements: u64,
+    pub latch_armed: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct LaneResult {
     pub lane: &'static str,
@@ -934,6 +947,14 @@ pub struct LaneResult {
     /// lever-off run serializes nothing (the additive-wire law).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub risk_target: Option<risk_target::RiskTargetSuiteRecord>,
+    /// Issue 116 (`--route-census`, measurement-only): the route-seat
+    /// flip census over the main eval stream (the ≤10 determinism reruns
+    /// are inside the count — the picks number discloses them). `None`
+    /// unless the census armed — a census-off run serializes nothing
+    /// (the additive-wire law).
+    #[cfg(feature = "pick_latch")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route_census: Option<RouteCensusRow>,
     /// The modelless lane's effective per-label corpus cap and how it was
     /// chosen — always disclosed so a table never reads against an unknown
     /// corpus posture (None = the lane has no corpus: the laya lanes).
@@ -2773,6 +2794,13 @@ struct ModellessInput<'a> {
     /// scales, never latch posture. `None` = off, byte-identical.
     #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
     pub pick_latch: Option<(f32, f32)>,
+    /// Issue 116 (`pick_latch` feature): arm the route-seat flip census
+    /// on the main lane engine (`--route-census`) — REPORT-ONLY; the
+    /// row lands on the lane result + stdout. The BARE arm counts too:
+    /// the census observes the seat whatever the latch posture (its
+    /// disagreements stay 0 there by construction).
+    #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
+    pub route_census: bool,
 }
 
 /// The cal-slice cap-selection measurement (Issue 013 lever-1 protocol
@@ -3411,6 +3439,13 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
     if let Some(gate) = inp.pick_latch {
         default_cfg.route_latch_gate = Some(gate);
     }
+    // Issue 116 (`--route-census`): the census rides the same shared cfg
+    // as the latch — the eval engine's counts are the ones read back; the
+    // fit/cal engines carry their own (never read, report-free).
+    #[cfg(feature = "pick_latch")]
+    if inp.route_census {
+        default_cfg.route_latch_census = true;
+    }
     #[cfg(feature = "nb_scope")]
     if let Some(sel) = &nb_selected {
         default_cfg.nb_scale = sel.selected_scale;
@@ -3908,6 +3943,29 @@ fn run_modelless<const N: usize>(
     // RAW eval over the test cases (uncalibrated readout + raw abstain).
     let (raw_eval, lat) = eval_engine(&mut raw_engine, &suite.cases, state_strs, true)?;
 
+    // Issue 116 (`--route-census`, measurement-only): snapshot the seat's
+    // flip census over THIS eval stream right after it ran — before any
+    // later lever re-drives the engine (the pool levers below reuse it).
+    // The ≤10 determinism reruns are inside the count; the picks number
+    // discloses them.
+    #[cfg(feature = "pick_latch")]
+    let route_census_snap = raw_engine.route_flip_census();
+    #[cfg(feature = "pick_latch")]
+    if let Some(c) = route_census_snap {
+        eprintln!(
+            "  route-census: {} picks={} changes={} disagreements={} latch={}",
+            spec.name,
+            c.picks(),
+            c.changes(),
+            c.disagreements(),
+            if inp.pick_latch.is_some() {
+                "armed"
+            } else {
+                "bare"
+            },
+        );
+    }
+
     // CALIBRATED engine: fit on the cal pairs, then re-eval the test cases.
     // (The calibrator window config is read here — `cfg` moves into
     // `build_at_posture` — so the nli G1 posture can reuse the SAME
@@ -4243,6 +4301,13 @@ fn run_modelless<const N: usize>(
             distance_threshold,
             threshold_recommendation: Some(threshold_recommendation),
             risk_target: risk_target_record,
+            #[cfg(feature = "pick_latch")]
+            route_census: route_census_snap.map(|c| RouteCensusRow {
+                picks: c.picks(),
+                changes: c.changes(),
+                disagreements: c.disagreements(),
+                latch_armed: inp.pick_latch.is_some(),
+            }),
             corpus_cap: Some(CorpusCapInfo {
                 effective: effective_cap,
                 source: cap_source.to_string(),
@@ -5091,8 +5156,11 @@ pub mod seat {
             kn_route: true,
             drafter_fix: knobs.drafter_fix,
             // Issue 116: the seat never arms the route latch (the arena's
-            // published face is the manifest's posture, not a CLI lever).
+            // published face is the manifest's posture, not a CLI lever)
+            // — and never the flip census either (report-only harness
+            // lane; the arena's manifest posture stays untouched).
             pick_latch: None,
+            route_census: false,
             suite: &s.suite,
             train: &s.train,
             state_strs: &s.state_strs,
@@ -5508,6 +5576,12 @@ pub struct RunOptions {
     /// the bin parser (the flag-does-nothing guard).
     #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
     pub pick_latch: Option<(f32, f32)>,
+    /// Issue 116 (`pick_latch` feature): arm the route-seat flip census
+    /// (`--route-census`) on the modelless lane's main engine —
+    /// report-only; the row lands on the lane result + stdout. Off by
+    /// default (byte-identical run, no counters paid).
+    #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
+    pub route_census: bool,
     /// Also run the laya-PYTHON lane — the ORIGINAL torch reference as a
     /// subprocess oracle (measurement-only; opt-in, off by default).
     pub laya_python: bool,
@@ -5876,6 +5950,9 @@ impl RunOptions {
             // Issue 116 — the route hysteresis latch is OFF by default
             // (byte-identical; `--pick-latch` arms the producer defaults).
             pick_latch: None,
+            // Issue 116 — the flip census is OFF by default (report-only
+            // when armed; `--route-census`).
+            route_census: false,
             laya_python: false,
             clm: false,
             gliner: false,

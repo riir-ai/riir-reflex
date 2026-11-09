@@ -272,13 +272,25 @@ fn hysteresis_holds_a_route_under_near_tie_noise() {
     let mut prev_bare: Option<usize> = None;
     let mut prev_armed: Option<usize> = None;
     for i in 0..96 {
-        let mut state = String::from("staging rollout deploy production rollback verify ");
-        // Noise words alternate between the domains' vocabularies —
-        // near-tie territory by construction.
+        // Two-domain bases that tilt the argmax across the hold boundary
+        // (measured: the original single-base stream never flipped at all
+        // — a vacuous 0 ≤ 0; this one churns the bare argmax 63/96 rows
+        // while staying inside the latch's margin), plus a noise word pair.
+        let mut state = match i % 3 {
+            0 => String::from(
+                "staging rollout verify rollback deploy refund invoice billing account payment ",
+            ),
+            1 => String::from(
+                "refund invoice billing account payment history staging rollout verify rollback deploy ",
+            ),
+            _ => String::from(
+                "release notes documentation manual changelog rollback deploy staging rollout verify production ",
+            ),
+        };
         if rng.next_f32() > 0.0 {
-            state.push_str("refund invoice billing ");
+            state.push_str("invoice billing ");
         } else {
-            state.push_str("notes docs changelog ");
+            state.push_str("notes docs ");
         }
         state.push_str(&format!("row {i}"));
         // route_probe runs the SAME seat on both engines: on `bare` the
@@ -296,9 +308,13 @@ fn hysteresis_holds_a_route_under_near_tie_noise() {
         prev_armed = Some(a);
     }
     // The mechanism bar: the latched seat changes route no more often
-    // than the bare argmax over a noisy stream (strictly fewer when the
-    // stream actually contains near-ties; a stream of clear wins makes
-    // them equal — the gate never blocks a clear win).
+    // than the bare argmax over a noisy stream — and the stream must
+    // ACTUALLY churn (a vacuous 0 ≤ 0 against a never-flipping argmax
+    // proves the hold nothing).
+    assert!(
+        bare_flips > 0,
+        "the hysteresis stream must actually flip the bare argmax (a \n         vacuous stream proves the hold nothing)"
+    );
     assert!(
         armed_flips <= bare_flips,
         "the latch must not flip routes MORE than the bare argmax \
@@ -326,6 +342,126 @@ fn defaults_come_from_one_place() {
     assert_eq!(
         latch.decide(Some(&[1.0, 2.3, 0.0])),
         LatchDecision::Switched(1)
+    );
+}
+
+// ── The fold itself stays honest under the Embedder ──────────────────
+
+// (Engine-level parity is covered by `g1_cold_latch_seats_the_bare_argmax_pick`
+// — the fold runs inside the real engine there. The probe-side twin pins the
+// same shape independently in routing_state_probe.)
+
+// ── The flip census (`--route-census`, measurement-only) ─────────────
+
+#[test]
+fn census_off_by_default_and_report_only() {
+    // The census exists only when the config armed it; the default
+    // posture pays nothing — and a census-armed engine's DECISIONS are
+    // byte-identical to a census-less engine's (the census observes,
+    // never decides).
+    let mut plain: DecisionEngine<3, EMBED_DIM> =
+        DecisionEngine::build_specs(specs(), EngineConfig::default()).unwrap();
+    assert!(plain.route_flip_census().is_none());
+    let req = ops_request("staging rollout verify rollback deploy production");
+    let baseline = plain.decide(&req).unwrap();
+    assert!(plain.route_flip_census().is_none());
+
+    let census_cfg = EngineConfig {
+        route_latch_census: true,
+        ..EngineConfig::default()
+    };
+    let mut counted: DecisionEngine<3, EMBED_DIM> =
+        DecisionEngine::build_specs(specs(), census_cfg).unwrap();
+    let observed = counted.decide(&req).unwrap();
+    let census = counted
+        .route_flip_census()
+        .expect("census-armed config must expose the census");
+    assert_eq!(census.picks(), 1, "one decide = one route_pick");
+    assert_eq!(census.changes(), 0, "the first pick has no previous route");
+    assert_eq!(
+        census.disagreements(),
+        0,
+        "a latch-off seat can never disagree with the argmax it IS"
+    );
+    assert_eq!(
+        serde_json::to_string(&baseline).unwrap(),
+        serde_json::to_string(&observed).unwrap(),
+        "the census must not change a decision"
+    );
+}
+
+#[test]
+fn census_counts_changes_and_armed_disagreements() {
+    // The T3 flip-rate instrument over a real near-tie stream: the BARE
+    // arm's disagreements stay 0 (its seat IS the argmax) while its
+    // changes counter tracks the churn; the ARMED arm may disagree with
+    // the argmax (counted) and must change its route no more often than
+    // the bare argmax did (the G3 bar, through the census itself).
+    let census_bare_cfg = EngineConfig {
+        route_latch_census: true,
+        ..EngineConfig::default()
+    };
+    let mut bare: DecisionEngine<3, EMBED_DIM> =
+        DecisionEngine::build_specs(specs(), census_bare_cfg).unwrap();
+    let census_armed_cfg = EngineConfig {
+        route_latch_census: true,
+        ..armed_cfg()
+    };
+    let mut armed: DecisionEngine<3, EMBED_DIM> =
+        DecisionEngine::build_specs(specs(), census_armed_cfg).unwrap();
+
+    let mut rng = Lcg(0x1165_0009);
+    for i in 0..96 {
+        // Two-domain bases that tilt the argmax across the hold boundary
+        // (measured: bare churns 63/96 rows, the armed seat holds) plus a
+        // noise word pair — the same construction the hysteresis gate
+        // above measures.
+        let mut state = match i % 3 {
+            0 => String::from(
+                "staging rollout verify rollback deploy refund invoice billing account payment ",
+            ),
+            1 => String::from(
+                "refund invoice billing account payment history staging rollout verify rollback deploy ",
+            ),
+            _ => String::from(
+                "release notes documentation manual changelog rollback deploy staging rollout verify production ",
+            ),
+        };
+        if rng.next_f32() > 0.0 {
+            state.push_str("invoice billing ");
+        } else {
+            state.push_str("notes docs ");
+        }
+        state.push_str(&format!("row {i}"));
+        let _ = bare.route_probe(&state);
+        let _ = armed.route_probe(&state);
+    }
+    let b = bare.route_flip_census().expect("census-armed bare engine");
+    let a = armed
+        .route_flip_census()
+        .expect("census-armed armed engine");
+    assert_eq!(b.picks(), 96);
+    assert_eq!(a.picks(), 96);
+    assert_eq!(
+        b.disagreements(),
+        0,
+        "a latch-off seat can never disagree with the argmax it IS"
+    );
+    assert!(
+        b.changes() > 0,
+        "the near-tie stream must actually churn the bare argmax (a \
+         vacuous stream proves the census nothing)"
+    );
+    assert!(
+        a.changes() <= b.changes(),
+        "armed changes {} must be <= bare changes {}",
+        a.changes(),
+        b.changes()
+    );
+    assert!(
+        a.disagreements() > 0,
+        "the near-tie stream must give the latch real decisions \
+         (disagreements 0 means the cell saw no near-ties)"
     );
 }
 

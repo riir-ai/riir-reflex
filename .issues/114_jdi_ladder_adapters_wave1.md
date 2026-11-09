@@ -163,8 +163,32 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
   once a corpus path is chosen; building it now would ship a suite the harness
   correctly refuses.
 - [ ] T4 — BFCL pick-tier third (the arg-filling tiers REFUSED wave 1 — recorded as
-      the R2b-class wire verdict, never forced).
-- [ ] T5 — API-Bank which-API tier (multi-turn refused wave 1).
+      the R2b-class wire verdict, never forced). **CORPUS DISPOSITION 2026-11-09
+      (same probe pass as T3):** the distribution is SINGLE-FILE-PER-CATEGORY
+      (id/question/function — verified live on `BFCL_v3_live_simple.jsonl`); NO
+      train split exists anywhere in it, so the corpus wall bites the same way:
+      the candidate functions' names/descriptions ARE the test rows' content
+      (grammar-not-answers). Structural note for the re-open: BFCL's option
+      universe is PER-ROW (each row carries its own candidate list — the
+      mmlupro/s1mb variable-breadth shape, `coverage_audit: false` posture), and
+      the options carry their own descriptions in the criteria, so the corpus-less
+      scoring question is thinner than When2Call's — but the harness still refuses
+      a suite with no corpus docs (the prepare-path law), so the same three
+      re-open paths + the xlam path (d) below apply.
+- [ ] T5 — API-Bank which-API tier (multi-turn refused wave 1). **CORPUS
+      DISPOSITION 2026-11-09:** not probed further this session (T5 is last in
+      the wave); the T3/T4 corpus wall is structural to the tools rung — expect
+      the same disposition; probe its splits + corpus posture when its build
+      lane opens.
+  **Wave-level corpus note (path (d), NEW this session):** the When2Call train
+  data derives from **Salesforce/xlam-function-calling-60k (Apache-2.0)** — a
+  DIFFERENT dataset from the test surface (the README's synthetic-data-gen
+  section documents the lineage). A corpus for the four BEHAVIOR domains could
+  be constructed from xlam rows WITHOUT touching When2Call's test rows — but
+  that is corpus-synthesis work (the rethink ESC lane's machinery, the
+  grammar-not-answers echo-gate on every pass), never a fetch stanza. Routed to
+  the rethink-side follow-up; reflex only ships the harness suite once a
+  corpus path exists.
 - [ ] T6 — per-suite paired read (modelless + laya on the new suites, the standard
       harness posture) + the results.json cells land in the feed; rethink's fold
       extends (060 R1d/R2a) — separate booking, gate, and record on the rethink side.

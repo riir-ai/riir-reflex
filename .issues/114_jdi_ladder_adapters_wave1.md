@@ -136,7 +136,32 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
       (CC BY 3.0, card-stub caveat). Teacher capture: still rides the owner-gated
       amo booking (unchanged).
 - [ ] T3 — When2Call second (the abstention-first shape is the wire's own; highest
-      product-value of the three tools suites).
+      product-value of the three tools suites). **SHAPE + CORPUS DISPOSITION 2026-11-09
+      (this session, one probe pass):** the wire is CONFIRMED scoreable — the repo
+      README + the Artificial-Analysis read agree: MCQ = ONE choice among FOUR fixed
+      categories (`direct` / `tool_call` / `request_for_info` / `cannot_answer`; the
+      row's `answers` object carries all four responses; `correct_answer` names the
+      gold). test/mcq = 3,652 rows (the board's population; eval cap = all — the
+      faithful paired-read posture). **BUT the suite is BLOCKED on a lawful corpus
+      source** — three refusals, each measured:
+  1. `test/llm_judge` (300 labeled rows) is **documented in the repo README as "a
+     subset of the MCQ evaluation data"** (and uuid-overlap MEASURED 11/100 in the
+     first pages) — the slice-integrity law refuses it as a train pool, full stop.
+  2. `train_pref` (9,000) / `train_sft` (15,000) carry **no class label** — the
+     README documents a tool-call MARKER (` ... `) for one class only; deriving
+     direct/request_for_info/cannot_answer from response shapes would be an
+     INVENTED transform (refused per the no-silent-transforms gate; a guessed
+     label poisons every corpus it feeds).
+  3. The mcq rows' own `answers` objects are the only per-class labeled text —
+     and they are TEST rows (grammar-not-answers: never a training pool).
+  **Re-open paths (owner/lane call needed):** (a) regenerate the RAW train data
+  via the repo's own `create_raw_train_data.py` (the generation script carries the
+  class labels pre-conversion — but it needs an OpenAI-compatible endpoint = spend
+  + vendor label fidelity); (b) a runner no-corpus posture for laya-only suites
+  (a runner change, not this lane); (c) demote When2Call to wave 2. The adapter's
+  BUILD (builder/keys/state) is unaffected by the block — it can land in minutes
+  once a corpus path is chosen; building it now would ship a suite the harness
+  correctly refuses.
 - [ ] T4 — BFCL pick-tier third (the arg-filling tiers REFUSED wave 1 — recorded as
       the R2b-class wire verdict, never forced).
 - [ ] T5 — API-Bank which-API tier (multi-turn refused wave 1).

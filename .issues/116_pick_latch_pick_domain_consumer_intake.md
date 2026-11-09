@@ -1,6 +1,7 @@
 # Issue 116 — T1 consumer intake: selection hysteresis latch (`pick_latch`) — the `pick_domain` seat
 
 **Status:** OPEN — intake issue, no wiring yet; consumer half of katgpt-rs Issue 987's selection-hysteresis lead (T0 landed `c9bdb533b`, 2026-11-09: `katgpt-core/src/pick_latch.rs`, opt-in feature `pick_latch`, catalog entry 165, 15 gate-mechanics fixtures green). Claim via the lease law before implementing (`git fetch origin && py ../katgpt-rs/scripts/claim_lease_check.py --item 116`, append the `**Claimed:**` line under this Status, push — 48 h expiry, the push is the arbiter). Twin intake: riir-instinct Issue 032 (the A7 LRU eviction seat).
+**Claimed:** zed-m3-idle3 (mac m3, sprint#003-followup housekeeping lane), 1794261826, expires 2026-11-12T0537Z
 
 ## Producer (landed; zero new deps; byte-identical when off)
 

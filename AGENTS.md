@@ -147,6 +147,14 @@ cargo run --release --bin harness -- --label-perm --suites banking77,ag_news,xnl
 # beyond the routed argmax; the oracle pin itself is non-inferiority-FAILED on banking77. Witness-red refuses the
 # run; T2.3 = the forced_domain seam stays production-disarmed):
 cargo run --release --bin harness -- --routing-state-probe --out .benchmarks/<N>_routing_state_probe
+# Route-seat flip census (Issue 116, instrument landed `3254602` — report-only: bare/armed changes + disagreements
+# per suite, needs --features pick_latch) and the pick-latch A/B (consumer half of katgpt-rs Issue 987's
+# selection-hysteresis lead — G3 MEASURED NEGATIVE, Bench 176: the hold costs accuracy (banking77 −8.0pp at the
+# producer defaults; the ln(3) margin exceeds the seat's cosine range) and the stream's churn is SIGNAL, not noise.
+# Stays opt-in forever (the gw_corpus posture); re-open = a NEW stream shape (adjacency-correlated serving
+# traffic), never a re-tune):
+cargo run --release --features pick_latch --bin harness -- --route-census --out .benchmarks/<N>_route_census
+cargo run --release --features pick_latch --bin harness -- --pick-latch [--pick-latch-temp T] --out .benchmarks/<N>_pick_latch_ab
 
 # Harness Warm-tier store (Issue 007 P1, opt-in `corpus_db`; ndb from NDB_BIN else PATH):
 NDB_BIN=../riir-neuron-db/target/release/ndb \

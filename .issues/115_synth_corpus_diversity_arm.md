@@ -1,7 +1,7 @@
 # Issue 115: Synth-Corpus Diversity Measurement Arm (Diffusion-Diversity Div)
 
 **Date:** 2026-11-09
-**Status:** Open
+**Status:** CLOSED 2026-11-10 — T1+T2 landed, the correlation gate FAILED (Bench 178: Spearman +0.41/+0.48 vs the ≥0.7 YES floor; positive sign, ~1% Div spread across pools — pool size dominated, the recipe axis never separated). T3 stays deferred, its gate failed; the issue's own wording closes it ("only a YES promotes T3" — a NO closes). Re-open only when a pool family with real Div separation exists. Record: `.benchmarks/178_issue115_synth_div_correlation.md`. Origin: katgpt-rs Research 660 ([arXiv:2606.01861](https://arxiv.org/abs/2606.01861)) — distillation of the self-play curriculum-diversity theory. Consumer plan: katgpt-rs Plan 634 (primitive `diffusion_diversity`); sibling consumers: riir-ai Plan 646, riir-train Issue 680, riir-refine Issue 222.
 **Origin:** katgpt-rs Research 660 ([arXiv:2606.01861](https://arxiv.org/abs/2606.01861)) — distillation of the self-play curriculum-diversity theory. Consumer plan: katgpt-rs Plan 634 (primitive `diffusion_diversity`); sibling consumers: riir-ai Plan 646, riir-train Issue 680, riir-refine Issue 222.
 
 ## Problem
@@ -18,9 +18,9 @@ The teacher-synthesized corpus lanes (`--synth-corpus`, the grammar-not-answers 
 
 ## Task
 
-- [ ] **T1** After katgpt-rs Plan 634 Phase 1 lands: add a REPORT-ONLY `--synth-div` measurement arm to the harness — build the kNN similarity graph over the synthesized pool's embed vectors, emit `Div_P^τ` per pool beside the echo-gate output; no corpus changes, no gate changes, exit codes unchanged.
-- [ ] **T2** Correlation cell: across existing synth pools, record Div vs `--corpus-ab` accuracy deltas (one frozen read each); pre-register the question "does low-Div predict low marginal corpus-ab gain?" — only a YES with a Spearman floor promotes T3.
-- [ ] **T3** `- [-]` DEFERRED (promotion-gated): a diversity-aware pool-selection weight in `--synth-corpus`. Never wires without T2's measured correlation and the Plan 634 GOAT pass.
+- [x] **T1** DONE (2026-11-10, Bench 178): the measurement lane is `examples/synth_div_probe.rs` behind the opt-in `synth_div` feature forward (`katgpt-core/diffusion_diversity` — CONSUMED `SimGraph::div_tau`, never re-derived) — NOT a harness arm: the pools live as `.raw/corpus_synth*/` artifacts with their own recorded corpus_ab.json reads, so the correlation cell runs against the artifacts directly; report-only, exit codes untouched, no corpus/gate changes. En route: fixed the katgpt-rs gate-chain bug the forward surfaced (`c85ea1348` — the diversity mod gate is EITHER child feature).
+- [x] **T2** DONE (2026-11-10, [Bench 178](../.benchmarks/178_issue115_synth_div_correlation.md)): the pre-registered question answered NO — Spearman Div↔delta = +0.41, Div↔lb95 = +0.48 over the 7 pools with frozen reads (the floor was |ρ| ≥ 0.7 in the YES/NEGATIVE direction); the observed sign is POSITIVE (more spread → more gain, the opposite of the conjecturer worry) but the Div spread itself is ~1% across pools (1.9326–1.9514) — pool SIZE dominated; the recipe axis never separated. T3 stays DEFERRED (its gate failed on sign AND magnitude); re-run only if a pool family with real Div separation appears.
+- [ ] **T3** `- [-]` DEFERRED (promotion-gated): a diversity-aware pool-selection weight in `--synth-corpus`. **Gate FAILED (Bench 178): the YES floor did not clear** — never wires without a NEW T2 pass whose pool family actually separates on Div.
 
 ## Gates
 

@@ -80,6 +80,13 @@ modelless = [
 # ZCA whitener builder) — no new dep edge: katgpt-core is already the ONE
 # foreign code-level dep. Measurement-only; never in RELEASE_FEATURES.
 rho_probe = ["katgpt-core/nuisance_fraction", "katgpt-core/basis_split"]
+# Issue 115 T2 — the synth-pool diversity correlation cell. Forwards
+# katgpt-core `diffusion_diversity` (Plan 634's `SimGraph::div_tau`, arXiv
+# 2606.01861) for the REPORT-ONLY `--synth-div` correlation probe (the
+# pool-spread scalar Div_P^τ over the pool's kNN embed graph); consume,
+# never re-derive (goat-audit watches this edge). Measurement-only; never
+# in RELEASE_FEATURES.
+synth_div = ["katgpt-core/diffusion_diversity"]
 # Issue 116 — the route-selection hysteresis latch (the `pick_domain` seat's
 # consumer half of katgpt-rs Issue 987's T0): forwards katgpt-core
 # `pick_latch` (`PickLatch` — the committed-value-path sigmoid gate over the

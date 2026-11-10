@@ -1,6 +1,8 @@
 # Issue 111: Collective-worth probe — cross-lane error correlation as a cascade-worthiness arm
 
-**Status:** Open — fusion idea (source: dcog manifesto 2026-10-22 + VINCO post 2026-11-05, distributed.inc; internal distill 2026-11-06, private sibling repo). PoC scoped below, report-only first. Named NEGATIVE precedent to respect: reflex Issue 107 / Bench 173 (routing-state probe found no signal beyond the routed argmax). Design revised at verdict round 1: size-aware committee verdict + matched-cost gate.
+**Status:** In progress — T1/T2/T3 claimed (m3-i111, epoch 1794269687, expires 2026-11-12T00:14:47Z); T3 pre-registration committed before any run (below); T4/T5 ride the run record. Fusion idea (source: dcog manifesto 2026-10-22 + VINCO post 2026-11-05, distributed.inc; internal distill 2026-11-06, private sibling repo). PoC scoped below, report-only first. Named NEGATIVE precedent to respect: reflex Issue 107 / Bench 173 (routing-state probe found no signal beyond the routed argmax). Design revised at verdict round 1: size-aware committee verdict + matched-cost gate.
+
+**Claimed:** m3-i111, 1794269687, expires 2026-11-12T00:14:47Z
 
 ## Problem
 
@@ -17,7 +19,24 @@
   - verdict = `worth_committee` / `not_worth` / `undecidable` (probe rows < floor ⇒ undecidable, never folded — the esc_voi discipline).
 - [ ] **T3** — Matched-cost gate (the GOAT bar, pre-registered BEFORE running): a committee runs both lanes on EVERY row while the delta gate spends only on abstained rows — an accuracy-alone comparison favors the committee by construction, so accuracy alone can NEVER pass this gate. Primary axis: the escalation/spend budget (the Bench 066 rate-lever shape) — at equal compute, does cross-lane-informed arming beat delta-only arming on serving accuracy? Every posture reports its accuracy/cost PAIR. Promote path: combined ≥ delta-only **at matched cost**, paired LB95 > 0 on a frozen test read across suites where the lanes have full rows. Otherwise the result is recorded NEGATIVE in the issue and the flag stays opt-in forever. Both directions falsifiable; a second negative probe (after Issue 107) is a legitimate close.
 - [ ] **T4** — Disclosures: probe rows ≤ cal slice only (never test); hosted lanes behind their spend ceilings; box-state + counts printed beside any number; stationary-surface note (this is a LEVEL probe; no mutated state, no dynamics claims).
-- [ ] **T5** — Consumers beyond the harness (report-only recording, no wiring in this issue): rethink ESC worthiness (same delta-shape gate today) and a possible rulewright consumer (does multi-domain rule fan-out beat the single best domain on this repo?) — each adopts only if T3 passes.
+- **T5** — Consumers beyond the harness (report-only recording, no wiring in this issue): rethink ESC worthiness (same delta-shape gate today) and a possible rulewright consumer (does multi-domain rule fan-out beat the single best domain on this repo?) — each adopts only if T3 passes.
+
+### T3 pre-registration — committed BEFORE any run (2026-11-10, m3-i111)
+
+**Postures** (per checkpoint, over the suites of one frozen run):
+- `delta_only` (the shipped gate): arm iff the worthiness verdict arms — delta ≥ margin (0.16 default) ∨ the LCB leg when on; unprobed/thin-support suites stay armed (the gate's own named behavior).
+- `worth_only(t)`: arm iff the T2 committee verdict reads worth at threshold t — `improvement ≥ t` AND Wilson-95-supported (`committee_wilson_lcb > floor_acc`). t swept {0.00, 0.01, …, 0.16}.
+- `combined(t)` (diagnostic only): arm iff delta-arms ∨ worth(t)-arms — dominates cost by construction, never the matched-cost comparison.
+
+**Cost axis:** total escalated questions on the FROZEN TEST read — Σ (covered abstains over armed suites), from the hypothetical-armed counters (disarmed suites priced too, so a posture's cost is its rule's, not the run's arming accident).
+
+**Match:** nearest `worth_only(t*)` to `delta_only`'s cost; the match is valid iff the relative cost gap ≤ 5% (actual gap disclosed). No valid match ⇒ `UNDECIDABLE_COST_MATCH` (nearest pair reported, never folded into a verdict).
+
+**Promote bar (the GOAT question):** at the matched point, per-question paired (worth − delta) over the WHOLE test read, McNemar-composed from the flipped suites' escalated rows: `paired_lb95 > 0` AND `worth_accuracy ≥ delta_accuracy` ⇒ `WORTH_BEATS_DELTA` — evidence for the T5 consumers only; any real promotion still needs its own GOAT gate + delegated-owner verdict, and the flags stay opt-in either way (this issue's own promote-path text). `a + b = 0` (no disagreement rows on flipped suites) ⇒ `UNDECIDABLE_ZERO_STRADDLE`. Else `NEGATIVE` — recorded in this issue, the flags stay opt-in forever, T5 consumers do not adopt.
+
+**T2 verdict pins (committed before the run):** `undecidable` iff probe rows < 16 (`PROBE_MIN_QUESTIONS`) or (improvement > 0 ∧ `committee_wilson_lcb ≤ floor_acc`) — the esc_voi zero-straddle discipline, never folded; `worth_committee` iff improvement > 0 ∧ `committee_wilson_lcb > floor_acc`; `not_worth` iff improvement ≤ 0. n=2 committee pick = the deployed cascade pick (gate hold → the modelless pick; gate abstain → the escalator's answer where served, else the modelless forced pick) — the calibrated gate's hold/abstain IS the tie-break; first-index determinism: the gate is a pinned threshold comparison, no unordered tie exists. The union bound P(≥1 lane right) is a CEILING only. n≥3: majority pick, tie → first-index (min pick index — the determinism law); ρ̂ and n′ = n/(1+(n−1)ρ̂) reported for sizes n+1..n+2 as HEURISTICS, never the verdict. (The harness has exactly 2 lanes today — the n≥3 branch is exercised by unit tests only.)
+
+**Disclosures (T4):** T1/T2 read the CAL slice only; the A/B reads the frozen test records ONCE (one read; both postures recomputed in-process from the same per-question records — the arming rule is the only difference); box state rides results.json meta (accuracy reads are load-insensitive; NO latency claim is made from this run); stationary LEVEL probe — no dynamics claims; suites = the default run set (named-only suites excluded).
 
 ## References
 

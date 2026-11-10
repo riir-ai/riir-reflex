@@ -1,7 +1,8 @@
 # Issue 114 — JDI ladder adapters, wave 1: the decision-shaped tools three (BFCL / When2Call / API-Bank) + CLINC150 (retrieval)
 
 **Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a; adapters unbulleted, one suite at a time. **Wave state after the 2026-11-09 second session (lease zed-464454b5):** T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md)) · **T3 when2call LANDED** ([Bench 101](../.benchmarks/101_when2call_suite_birth.md): the CORPUS-OPTIONAL posture chose re-open path (b) — the only self-serve path; the suite + the runner change landed, laya-only full-population read recorded, honestly below the majority floor) · T4/T5 UNBLOCKED by the same posture (adapter builds ride a follow-up lane; BFCL needs the direct-JSON fetch lane) · T6 clinc150+when2call reflex halves DONE; the rethink fold = the rethink-side booking. The wave's remaining DECISIONS are unchanged: the modelless corpus for T3 (paths (a)/(d) = owner/lane-gated spend or rethink-side synthesis) and the owner-gated amo booking.
-**Claimed:** zed-464454b5 (JDI ESC serve capture monitoring), 1794138600, expires 2026-11-10T00:00:00Z
+**Lease released:** zed-464454b5 (JDI ESC serve capture monitoring), 1794138600, was-expires 2026-11-10T00:00:00Z — expired with T4/T5 unbuilt (the wave's follow-up lane never opened); superseded by the claim below
+**Claimed:** zed-64abf0dd@m3 (riir-refine idle loop continuation, m3), 1794350458, expires 2026-11-12T22:40:58+00:00 — T4+T5 as the ONE shared work item (the direct-JSON fetch lane + the bfcl/api_bank builders, corpus-optional posture)
 
 Rethink Issue 060 (the beat-the-JDI ladder) orders the areas most-use × quick-win first:
 **tools (18.3% fold weight, ZERO coverage today)**, then retrieval (20.0%, one served

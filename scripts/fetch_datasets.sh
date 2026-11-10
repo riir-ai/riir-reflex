@@ -72,6 +72,12 @@ TRAIN_CAP="${TRAIN_CAP:-20000}"
 # probes at the top of main() honor the filter too — a filtered run
 # spends its politeness budget only on the named suites.
 SUITES="${SUITES:-all}"
+# The DIRECT-RESOLVE lane's host root (issue 114 T4/T5): the gorilla-llm BFCL
+# mirror and the API-Bank mirror are raw JSON/JSON-LINES files the
+# datasets-server does not serve (/rows 404s / cast-errors — the issue's probe
+# record), so their fetch rides the hub's /resolve/main/<file> endpoint. The
+# self-test overrides this beside BASE (hermetic loopback, never the hub).
+RAW_BASE="${RAW_BASE:-https://huggingface.co}"
 MAX_PARTS=$(( TRAIN_CAP / 100 > 200 ? TRAIN_CAP / 100 + 1 : 200 ))   # hard stop: never below the 200-page birth guard
 
 FILES=0
@@ -483,6 +489,232 @@ dedupe_train() {
     fi
 }
 
+# ── The DIRECT-RESOLVE lane (issue 114 T4/T5) ──────────────────────────
+# The gorilla-llm BFCL mirror and the API-Bank mirror are raw JSON / JSON-
+# LINES files the datasets-server does not serve (/rows 404s "no supported
+# data files" on the BFCL repo; the API-Bank files cast-error with
+# inconsistent columns — the issue's probe record). Their fetch rides the
+# hub's /resolve/main/<file> endpoint and the converter wraps the rows into
+# the datasets-server ENVELOPE shape the builders read
+# ({"num_rows_total": N, "rows": [{"row_idx": i, "row": {...}}]}). The
+# transform is recorded here + in the manifest row; the digest pins the
+# OUTPUT envelope, never the upstream bytes. jq-path only: without jq the
+# conversion SKIPS LOUD (the dedupe_train posture — this box is the
+# producer of clean pulls).
+
+# _raw_convert <raw-file> <shape: jsonl|array> <out-file> <label>
+#   Wraps an upstream JSONL or JSON-array file into the envelope shape.
+#   Every element must be a JSON object; a non-object element fails loud.
+_raw_convert() {
+    raw=$1; shape=$2; out=$3; label=$4
+    if have jq; then
+        if [ "$shape" = "jsonl" ]; then
+            jq -s -e 'length > 0 and all(.[]; type == "object")' "$raw" >/dev/null 2>&1 || {
+                rm -f "$raw"
+                log "  FAIL   $label (jsonl validation: empty or a non-object line)"
+                FAILED=$((FAILED + 1))
+                return 1
+            }
+            jq -s '{num_rows_total: length, rows: (to_entries | map({row_idx: .key, row: .value}))}' "$raw" > "$out"
+        else
+            jq -e 'type == "array" and length > 0 and all(.[]; type == "object")' "$raw" >/dev/null 2>&1 || {
+                rm -f "$raw"
+                log "  FAIL   $label (array validation: not a non-empty array of objects)"
+                FAILED=$((FAILED + 1))
+                return 1
+            }
+            jq '{num_rows_total: length, rows: (to_entries | map({row_idx: .key, row: .value}))}' "$raw" > "$out"
+        fi
+        return 0
+    fi
+    if [ -n "$PY3" ]; then
+        $PY3 - "$raw" "$shape" "$out" <<'EOF'
+import json, sys
+raw, shape, out = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(raw, encoding="utf-8") as f:
+    if shape == "jsonl":
+        rows = [json.loads(line) for line in f if line.strip()]
+    else:
+        rows = json.load(f)
+if not isinstance(rows, list) or not rows or not all(isinstance(r, dict) for r in rows):
+    sys.exit(2)
+env = {"num_rows_total": len(rows),
+       "rows": [{"row_idx": i, "row": r} for i, r in enumerate(rows)]}
+with open(out, "w", encoding="utf-8") as f:
+    json.dump(env, f)
+EOF
+        rc=$?
+        if [ "$rc" -ne 0 ]; then
+            rm -f "$raw"
+            log "  FAIL   $label (raw validation failed, rc=$rc)"
+            FAILED=$((FAILED + 1))
+            return 1
+        fi
+        return 0
+    fi
+    rm -f "$raw"
+    log "  FAIL   $label (no jq and no working python3 — the raw lane cannot convert)"
+    FAILED=$((FAILED + 1))
+    return 1
+}
+
+# fetch_raw_json <suite> <repo> <repo-path> <as-split> <shape: jsonl|array>
+#   One /resolve/main/<path> GET, validated + converted to the envelope
+#   shape. Idempotent: an existing valid envelope page is skipped (FORCE
+#   refetches).
+fetch_raw_json() {
+    suite=$1; repo=$2; path=$3; split=$4; shape=$5
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    file="$dir/$split-000.json"
+    if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+        n=$(rows_count "$file" 2>/dev/null || echo 0)
+        if [ "$n" -gt 0 ]; then
+            log "  skip   $suite/$split-000 ($n rows)"
+            return 0
+        fi
+    fi
+    url="$RAW_BASE/datasets/$repo/resolve/main/$path"
+    raw="$file.raw"
+    ok=0
+    if http_get "$url" "$raw"; then
+        ok=1
+    fi
+    if [ "$ok" -eq 0 ]; then
+        sleep 5
+        if http_get "$url" "$raw"; then
+            ok=1
+        fi
+    fi
+    if [ "$ok" -eq 0 ]; then
+        rm -f "$raw"
+        log "  FAIL   $suite/$split-000 (http error, resolve $path)"
+        FAILED=$((FAILED + 1))
+        return 0
+    fi
+    if _raw_convert "$raw" "$shape" "$file.tmp" "$suite/$split-000"; then
+        rm -f "$raw"
+        n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
+        mv "$file.tmp" "$file"
+        FILES=$((FILES + 1))
+        ROWS=$((ROWS + n))
+        log "  fetch  $suite/$split-000 rows=$n (resolve $path)"
+    fi
+    sleep "$SLEEP"
+}
+
+# fetch_bfcl_join <suite> <repo> <eval-path> <gold-path> <as-split> [norm-from:to]
+#   The BFCL pick-tier fetch: the eval JSONL + its official possible_answer
+#   file, joined by EXACT id at fetch time (the recorded enrichment — the
+#   gold lives in a separate upstream file, and the builder is pure/no-I/O,
+#   so the join happens here; the manifest row records the transform and the
+#   digest pins the joined OUTPUT). The join is all-or-nothing: every eval
+#   row must find exactly one gold entry and every gold entry must name an
+#   eval row — a mismatch fails the whole fetch loud (never a partial
+#   suite). The OPTIONAL 6th arg is the ONE pinned upstream-typo
+#   normalization (literal "from:to" id rewrite applied before the join):
+#   BFCL_v3_live_multiple carries exactly one such pair — the eval file's
+#   "live_multiple_1052-79-0" vs the gold file's "live_multiple_1052-279-0",
+#   where the gold id-chain (…277, …278, …279) proves 279 is the intended
+#   spelling and the eval file dropped a digit (the question/gold content
+#   match is unambiguous). Any id mismatch OUTSIDE the pinned pair still
+#   fails the fetch loud. jq-only (the join needs --slurpfile; without jq
+#   the pass SKIPS LOUD).
+fetch_bfcl_join() {
+    suite=$1; repo=$2; evalpath=$3; goldpath=$4; split=$5
+    normfrom=""
+    normto=""
+    if [ "$#" -ge 6 ] && [ -n "$6" ]; then
+        normfrom=${6%%:*}
+        normto=${6#*:}
+    fi
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    file="$dir/$split-000.json"
+    if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+        n=$(rows_count "$file" 2>/dev/null || echo 0)
+        if [ "$n" -gt 0 ]; then
+            log "  skip   $suite/$split-000 ($n rows, gold joined)"
+            return 0
+        fi
+    fi
+    if ! have jq; then
+        log "  FAIL   $suite/$split-000 (the gold join needs jq — sync data from a jq host)"
+        FAILED=$((FAILED + 1))
+        return 0
+    fi
+    evalraw="$dir/$split.eval.raw"
+    goldraw="$dir/$split.gold.raw"
+    eurl="$RAW_BASE/datasets/$repo/resolve/main/$evalpath"
+    gurl="$RAW_BASE/datasets/$repo/resolve/main/$goldpath"
+    fetch_one() { # <url> <out> <label>
+        ok=0
+        if http_get "$1" "$2"; then
+            ok=1
+        fi
+        if [ "$ok" -eq 0 ]; then
+            sleep 5
+            if http_get "$1" "$2"; then
+                ok=1
+            fi
+        fi
+        [ "$ok" -eq 1 ] || { rm -f "$2"; log "  FAIL   $3 (http error, resolve)"; return 1; }
+        return 0
+    }
+    ok=1
+    fetch_one "$eurl" "$evalraw" "$suite/$split eval" || ok=0
+    fetch_one "$gurl" "$goldraw" "$suite/$split gold" || ok=0
+    if [ "$ok" -eq 0 ]; then
+        rm -f "$evalraw" "$goldraw"
+        FAILED=$((FAILED + 1))
+        return 0
+    fi
+    # Gold slurp: the possible_answer files are JSONL too (one {id,
+    # ground_truth} object per line).
+    garr="$dir/$split.gold.json"
+    jq -s -e 'length > 0 and all(.[]; type == "object" and has("id") and has("ground_truth"))' "$goldraw" > /dev/null 2>&1 || {
+        rm -f "$evalraw" "$goldraw"
+        log "  FAIL   $suite/$split-000 (gold validation: not non-empty JSONL {id, ground_truth} objects)"
+        FAILED=$((FAILED + 1))
+        return 0
+    }
+    jq -s . "$goldraw" > "$garr"
+    tmp="$file.tmp"
+    if [ -n "$normfrom" ]; then
+        log "  norm   $suite/$split-000: $normfrom -> $normto (the pinned upstream-typo normalization)"
+        jq -c --arg from "$normfrom" --arg to "$normto" \
+            'if .id == $from then .id = $to else . end' "$evalraw" > "$evalraw.norm"
+        mv "$evalraw.norm" "$evalraw"
+    fi
+    jq -s --slurpfile g "$garr" '
+        ($g[0] | map({key: .id, value: .ground_truth}) | from_entries) as $gmap
+        | {joined: [.[] | select($gmap[.id] != null) | . + {ground_truth: $gmap[.id]}],
+           missing: [.[] | select($gmap[.id] == null) | .id],
+           extra: (($g[0] | map(.id)) - [.[] | .id])}' "$evalraw" > "$tmp" 2>/dev/null \
+        || {
+        rm -f "$evalraw" "$goldraw" "$garr" "$tmp"
+        log "  FAIL   $suite/$split-000 (join jq failed)"
+        FAILED=$((FAILED + 1))
+        return 0
+    }
+    m=$(jq -r '.missing | length' "$tmp")
+    x=$(jq -r '.extra | length' "$tmp")
+    if [ "$m" -gt 0 ] || [ "$x" -gt 0 ]; then
+        rm -f "$evalraw" "$goldraw" "$garr" "$tmp"
+        log "  FAIL   $suite/$split-000 (id-set mismatch: $m eval row(s) without gold, $x gold row(s) without an eval row)"
+        FAILED=$((FAILED + 1))
+        return 0
+    fi
+    jq '{num_rows_total: (.joined | length), rows: (.joined | to_entries | map({row_idx: .key, row: .value}))}' "$tmp" > "$tmp.env"
+    rm -f "$evalraw" "$goldraw" "$garr" "$tmp"
+    n=$(rows_count "$tmp.env" 2>/dev/null || echo 0)
+    mv "$tmp.env" "$file"
+    FILES=$((FILES + 1))
+    ROWS=$((ROWS + n))
+    log "  fetch  $suite/$split-000 rows=$n (resolve $evalpath + gold join)"
+    sleep "$SLEEP"
+}
+
 main() {
     if have b3sum; then
         digest_tool="b3sum (blake3)"
@@ -834,6 +1066,64 @@ main() {
         fetch_suite when2call "nvidia%2FWhen2Call" test mcq all test
     fi
 
+    # 18. bfcl — Issue 114 T4 (the JDI ladder wave 1): the gorilla-llm
+    #     Berkeley-Function-Calling-Leaderboard mirror, wave-1 scope = the
+    #     pick tier (simple/multiple + their live twins — the board row's
+    #     "pick the function to call") + the irrelevance tier (the
+    #     "irrelevance-detect" abstain signal, the When2Call-shaped second
+    #     option-key universe). NOT datasets-server-backed (raw JSONL — the
+    #     /rows call 404s; the direct-resolve lane above). The pick files
+    #     are ENRICHED at fetch time with their official possible_answer
+    #     files (the gold join by exact id — the recorded transform; the
+    #     digest pins the joined OUTPUT). The irrelevance files carry no
+    #     possible_answer files (the official gold is the binary label) —
+    #     the builder assigns the fixed abstain option as gold. Categories
+    #     outside wave-1 scope (parallel*/java/js/sql/rest/exe*/multi_turn*/
+    #     chatable/relevance) are NEVER fetched — the R2b wire verdict in
+    #     the issue (pick + irrelevance-detect only). CORPUS-OPTIONAL: no
+    #     train split exists in the mirror, and the candidate functions ARE
+    #     the test rows' content (grammar-not-answers) — none is lawful to
+    #     invent; the corpus re-open is the rethink-side synthesis route.
+    if want_suite bfcl; then
+        log "[probe] bfcl hub metadata"
+        probe_license bfcl "gorilla-llm/Berkeley-Function-Calling-Leaderboard"
+    fi
+    if want_suite bfcl; then
+        BFR="gorilla-llm/Berkeley-Function-Calling-Leaderboard"
+        log "[suite] bfcl pick tier (simple/multiple/live_simple/live_multiple; official possible_answer gold joined by id)"
+        fetch_bfcl_join bfcl "$BFR" "BFCL_v3_simple.json" "possible_answer/BFCL_v3_simple.json" test_simple
+        fetch_bfcl_join bfcl "$BFR" "BFCL_v3_multiple.json" "possible_answer/BFCL_v3_multiple.json" test_multiple
+        fetch_bfcl_join bfcl "$BFR" "BFCL_v3_live_simple.json" "possible_answer/BFCL_v3_live_simple.json" test_live_simple
+        fetch_bfcl_join bfcl "$BFR" "BFCL_v3_live_multiple.json" "possible_answer/BFCL_v3_live_multiple.json" test_live_multiple \
+            "live_multiple_1052-79-0:live_multiple_1052-279-0"
+        log "[suite] bfcl irrelevance tier (the abstain signal; no gold file — the builder assigns the fixed abstain option)"
+        fetch_raw_json bfcl "$BFR" "BFCL_v3_irrelevance.json" test_irrelevance jsonl
+        fetch_raw_json bfcl "$BFR" "BFCL_v3_live_irrelevance.json" test_live_irrelevance jsonl
+    fi
+
+    # 19. api_bank — Issue 114 T5 (the JDI ladder wave 1): the
+    #     liminghao1630/API-Bank mirror, wave-1 scope = the which-API tier
+    #     (level-1-api + level-2-api — the board row's "API-call selection
+    #     in a dialogue"). NOT datasets-server-servable (the raw files
+    #     cast-error with inconsistent columns — the issue's probe), so the
+    #     direct-resolve lane fetches the two -api.json arrays WHOLE. The
+    #     multi-turn level-3 files and the response-generation files are
+    #     OUT of wave-1 scope (the R2b verdict). CORPUS-OPTIONAL (the T3
+    #     decision tree): the candidate API descriptions ARE the test
+    #     rows' content (grammar-not-answers); the authors' own -api-train
+    #     files overlap the same catalog and are never fetched. The gold
+    #     is IN the row (expected_output "API-Request: [Name(...)") — the
+    #     builder parses it (the recorded transform, pinned per row).
+    if want_suite api_bank; then
+        log "[probe] api_bank hub metadata"
+        probe_license api_bank "liminghao1630/API-Bank"
+    fi
+    if want_suite api_bank; then
+        log "[suite] api_bank which-API tier (level-1-api + level-2-api, arrays fetched whole)"
+        fetch_raw_json api_bank "liminghao1630/API-Bank" "test-data/level-1-api.json" test_lv1 array
+        fetch_raw_json api_bank "liminghao1630/API-Bank" "test-data/level-2-api.json" test_lv2 array
+    fi
+
     log ""
     log "summary: files=$FILES rows=$ROWS failed_requests=$FAILED"
     if [ "$FAILED" -gt 0 ]; then
@@ -861,6 +1151,11 @@ ST_TMP=""
 ST_SERVER_PID=""
 ST_FAIL_COUNT=0
 st_fail() { log "  selftest FAIL: $*"; ST_FAIL_COUNT=$((ST_FAIL_COUNT + 1)); }
+st_fail_log() { # <log-file> <reason> — dump the child log so a red run is diagnosable
+    st_fail "$2"
+    [ -f "$1" ] && sed 's/^/    | /' "$1"
+    return 0
+}
 st_expect_file() { [ -f "$1" ] || st_fail "missing file: $1"; }
 st_expect_grep() { grep -q "$1" "$2" 2>/dev/null || st_fail "$3"; }
 st_write_page() { # <path> <total|-1 none> <start> <count> [drop_idx]
@@ -895,12 +1190,49 @@ from urllib.parse import urlparse, parse_qs
 
 TOTALS = {"test": 9, "train": 350}
 
+# Issue 114 T4/T5 — the direct-resolve lane's fixture files (served under
+# /datasets/<repo>/resolve/main/<path>): a tiny BFCL-shaped pick eval + its
+# gold, an irrelevance eval, and an API-Bank-shaped array.
+RESOLVE = {
+    "acme/pick/resolve/main/eval.jsonl": '\n'.join([
+        '{"id": "simple_0", "question": [[{"role": "user", "content": "q0"}]], "function": [{"name": "fn_a", "description": "d a"}]}',
+        '{"id": "simple_1", "question": [[{"role": "user", "content": "q1"}]], "function": [{"name": "fn_b", "description": "d b"}, {"name": "fn_c", "description": "d c"}]}',
+    ]) + '\n',
+    "acme/pick/resolve/main/possible_answer/eval.jsonl": '\n'.join([
+        '{"id": "simple_0", "ground_truth": [{"fn_a": {}}]}',
+        '{"id": "simple_1", "ground_truth": [{"fn_c": {}}]}',
+    ]) + '\n',
+    "acme/pick/resolve/main/irr.jsonl": '{"id": "irrelevance_0", "question": [[{"role": "user", "content": "q2"}]], "function": [{"name": "fn_x", "description": "d x"}]}\n',
+    "acme/pick/resolve/main/badgold.jsonl": '{"id": "simple_0", "ground_truth": [{"fn_a": {}}]}\n{"id": "ghost_9", "ground_truth": [{"fn_z": {}}]}\n',
+    "acme/pick/resolve/main/tyeval.jsonl": '{"id": "t_79", "question": [[{"role": "user", "content": "qt"}]], "function": [{"name": "fn_t", "description": "d t"}]}\n',
+    "acme/pick/resolve/main/tygold.jsonl": '{"id": "t_279", "ground_truth": [{"fn_t": {}}]}\n',
+    "acme/bank/resolve/main/lv1.json": json.dumps([
+        {"id": 0, "instruction": 'ctx\nAPI descriptions:\n{"name": "ApiOne", "description": "one"}\n{"name": "ApiTwo", "description": "two"}',
+         "expected_output": "API-Request: [ApiTwo(key='v')]"},
+        {"id": 1, "instruction": 'ctx2\nAPI descriptions:\n{"name": "ApiThree", "description": "three"}',
+         "expected_output": "no call"},
+    ]),
+}
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
     def do_GET(self):
         u = urlparse(self.path)
+        if u.path.startswith("/datasets/"):
+            key = u.path[len("/datasets/"):]
+            body = RESOLVE.get(key)
+            if body is None:
+                self.send_error(404)
+                return
+            body = body.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if u.path != "/rows":
             self.send_error(404)
             return
@@ -987,11 +1319,65 @@ PYEOF
     st_expect_grep 'sst5/train: 99 rows in 1 file(s)' "$log3" \
         "scenario 3: summary is not the legacy-stop state"
 
+    # ── Scenario 4: the direct-resolve lane (issue 114 T4/T5) ──
+    # fetch_raw_json both shapes + the skip law; fetch_bfcl_join's all-or-
+    # nothing gold join + its LOUD missing-gold failure.
+    out4="$ST_TMP/out4"
+    mkdir -p "$out4"
+    RAW_BASE="$st_base" OUT="$out4" SLEEP=0 FORCE=0 \
+        fetch_raw_json rawt acme/pick irr.jsonl test jsonl \
+        > "$ST_TMP/run4a.log" 2>&1 || st_fail "scenario 4a: fetch_raw_json exited $?"
+    st_expect_file "$out4/rawt/test-000.json"
+    st_expect_grep 'rows=1 (resolve irr.jsonl)' "$ST_TMP/run4a.log" \
+        "scenario 4a: the jsonl envelope was not written"
+    RAW_BASE="$st_base" OUT="$out4" SLEEP=0 FORCE=0 \
+        fetch_raw_json rawt acme/pick irr.jsonl test jsonl \
+        > "$ST_TMP/run4b.log" 2>&1 || st_fail "scenario 4b: re-run exited $?"
+    st_expect_grep 'skip   rawt/test-000 (1 rows)' "$ST_TMP/run4b.log" \
+        "scenario 4b: the idempotence skip law did not hold"
+    RAW_BASE="$st_base" OUT="$out4" SLEEP=0 FORCE=0 \
+        fetch_raw_json rawt acme/bank lv1.json arr array \
+        > "$ST_TMP/run4c.log" 2>&1 || st_fail "scenario 4c: array shape exited $?"
+    st_expect_grep 'rows=2 (resolve lv1.json)' "$ST_TMP/run4c.log" \
+        "scenario 4c: the array envelope was not written"
+    RAW_BASE="$st_base" OUT="$out4" SLEEP=0 FORCE=0 FORCE=0 \
+        fetch_bfcl_join rawt acme/pick eval.jsonl possible_answer/eval.jsonl pick \
+        > "$ST_TMP/run4d.log" 2>&1 || st_fail "scenario 4d: join exited $?"
+    RAW_BASE="$st_base" OUT="$out4" SLEEP=0 FORCE=0 \
+        fetch_bfcl_join rawt acme/pick eval.jsonl possible_answer/eval.jsonl pick \
+        > "$ST_TMP/run4d.log" 2>&1 || true
+    [ -f "$out4/rawt/pick-000.json" ] || st_fail_log "$ST_TMP/run4d.log" \
+        "scenario 4d: the gold join did not produce the joined envelope"
+    if [ -f "$out4/rawt/pick-000.json" ]; then
+        joined=$(jq -r '.rows[1].row.ground_truth[0] | keys[0]' "$out4/rawt/pick-000.json" 2>/dev/null || echo UNREAD)
+        [ "$joined" = "fn_c" ] || st_fail_log "$ST_TMP/run4d.log" \
+            "scenario 4d: the joined gold drifted (row 1 gold: $joined)"
+    fi
+    # The loud half: an id-set mismatch fails the whole fetch, never a
+    # partial suite (simple_1 has no gold; ghost_9 has no eval row).
+    RAW_BASE="$st_base" OUT="$out4" SLEEP=0 FORCE=0 \
+        fetch_bfcl_join rawt acme/pick eval.jsonl badgold.jsonl badpick \
+        > "$ST_TMP/run4e.log" 2>&1 || true
+    st_expect_grep 'id-set mismatch: 1 eval row(s) without gold' "$ST_TMP/run4e.log" \
+        "scenario 4e: the missing-gold failure was not loud" || sed 's/^/    | /' "$ST_TMP/run4e.log"
+    st_expect_grep '1 gold row(s) without an eval row' "$ST_TMP/run4e.log" \
+        "scenario 4e: the extra-gold failure was not loud" || true
+    [ -f "$out4/rawt/badpick-000.json" ] && st_fail "scenario 4e: the mismatched fetch still wrote an envelope"
+    # The pinned-typo path: the one literal id rewrite joins cleanly; the
+    # norm line names the pair (never a silent rewrite).
+    RAW_BASE="$st_base" OUT="$out4" SLEEP=0 FORCE=0 \
+        fetch_bfcl_join rawt acme/pick tyeval.jsonl tygold.jsonl typick "t_79:t_279" \
+        > "$ST_TMP/run4f.log" 2>&1 || true
+    st_expect_grep 'norm   rawt/typick-000: t_79 -> t_279' "$ST_TMP/run4f.log" \
+        "scenario 4f: the pinned normalization was not logged loud" || sed 's/^/    | /' "$ST_TMP/run4f.log"
+    st_expect_grep 'rows=1 (resolve tyeval.jsonl + gold join)' "$ST_TMP/run4f.log" \
+        "scenario 4f: the normalized fetch did not join" || true
+
     kill "$ST_SERVER_PID" 2>/dev/null || true
     wait "$ST_SERVER_PID" 2>/dev/null || true
     rm -rf "$ST_TMP"
     if [ "$ST_FAIL_COUNT" -eq 0 ]; then
-        log "self-test: PASS — resume walks past deduped pages; terminal stays terminal; degraded metadata falls back loud"
+        log "self-test: PASS — resume walks past deduped pages; terminal stays terminal; degraded metadata falls back loud; the direct-resolve lane converts both shapes, skips idempotently, joins gold all-or-nothing"
         return 0
     fi
     log "self-test: FAIL ($ST_FAIL_COUNT assertion(s) — see the selftest FAIL lines above)"

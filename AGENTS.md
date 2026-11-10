@@ -270,12 +270,15 @@ cargo run --release --bin harness -- --corpus-ab --help
 
 ## Harness (katgpt-rs Plan 603 Phase 1)
 
-- 9 dataset suites + decision-point families over byte-identical questions (`src/harness/`, bin `harness`,
+- Dataset suites (the registry in `src/harness/runner.rs` `SUITES` is the counter — derive, never quote a total here)
+  + decision-point families over byte-identical questions (`src/harness/`, bin `harness`,
   dispatch-only CI lane `.github/workflows/harness_tables.yml`). The six Issue-004 synthetic families are RETIRED
   (owner call 2026-10-02); `semantic_defects` (Issue 061) stays, gated by `tests/harness_families_gates.rs` +
-  `tests/harness_seat_gates.rs` + `tests/fixture_fleet_hygiene.rs`.
+  `tests/harness_seat_gates.rs` + `tests/fixture_fleet_hygiene.rs`. The JDI ladder wave-1 rows (issue 114):
+  `clinc150` · `when2call` · `bfcl` · `api_bank` — the last two via the fetch script's direct-resolve lane
+  (raw-JSON mirrors the datasets-server cannot serve), both corpus-optional (`modelless_lane: false`).
 - Datasets: HF datasets-server via `scripts/fetch_datasets.sh` (blake3-digested in
-  `.docs/02_protocols/dataset_manifest.md`).
+  `.docs/02_protocols/dataset_manifest.md`; raw-JSON mirrors ride the same script's `/resolve/main` lane).
 - Laws: fused-gate thresholds do NOT transfer (fit per suite at cal ρ=30); the cal slice must not sit inside its own
   reference corpora; ECE bins are left-open (zero-confidence rows read n/a, never perfect).
 

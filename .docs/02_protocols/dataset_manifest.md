@@ -47,6 +47,8 @@ the mint surface (riir-rethink Issue 024 v1 — the Plan 007 P0 hosted lane;
 | emotion_syn | first-party synthetic — `scripts/synth_suite.py` (plan 013) | **Apache-2.0 (ours)** — generated rows, no scraped or third-party text; the generators' outputs are unencumbered under their own Apache-2.0 grants (verified on the hub 2026-10-27: `prism-ml/Ternary-Bonsai-2-27B-mlx-2bit` apache-2.0, base `Qwen/Qwen3.8-27B` apache-2.0; `Qwen/Qwen3.5-4B` apache-2.0 — the `mlx-community` 4-bit conversion carries no separate tag, the upstream grant governs). Labels = intended latent label CONFIRMED by the other model's zero-shot read (dual-model agreement) | none required (ours) | ✓ |
 | clinc150 | `clinc/clinc_oos` (the canonical clinc org repo — source_datasets: original; issue 114 T1: the old bare `clinc_oos` name 404s "renamed", the issue's `FaizaanAliza` mirror guess does not exist and is not needed — the canonical is parquet-backed) | **CC BY 3.0** (hub tag + `cardData.license` both agree — probed 2026-11-09; ⚠ the card's own prose "Licensing Information" section is an unfilled stub — the grant reads through the structured metadata of the canonical owner, re-read before any paid lane) | Larson et al., 2016 (CLINC150: "I want to find out how to be awesome", the CLINC paper) | ✓ (probe-verified — card-stub caveat noted) |
 | when2call | `nvidia/When2Call` (the NVIDIA org repo; issue 114 T1/T3 — config `test`, split `mcq` only; NO train split is fetched, ever: the corpus-optional posture, see the suite row) | **CC BY 4.0** (the card's own §License/Terms of Use names it verbatim — "licensed under a Creative Commons Attribution 4.0 International License" — plus the hub tag `cc-by-4.0`, both read 2026-11-09; the card ALSO declares "This dataset is ready for commercial use" — the strongest grant language in the ledger) | Ross, Mahabaleshwarka, Suhara, "When2Call: When (not) to Call Tools", NAACL 2025 | ✓ |
+| bfcl | `gorilla-llm/Berkeley-Function-Calling-Leaderboard` (the gorilla org's official HF mirror; issue 114 T1/T4 — the six wave-1 files only: BFCL_v3_{simple,multiple,live_simple,live_multiple,irrelevance,live_irrelevance}.json + the four pick files' possible_answer golds; the direct-resolve lane, NOT datasets-server-served) | **Apache-2.0** (hub tag `license:apache-2.0`, probed 2026-11-10) | Patil et al., "Berkeley Function Calling Leaderboard" (the gorilla project, UC Berkeley) | ✓ |
+| api_bank | `liminghao1630/API-Bank` (the original authors' org repo; issue 114 T1/T5 — test-data/level-{1,2}-api.json only, fetched whole; the direct-resolve lane — the raw files cast-error on datasets-server with inconsistent columns) | **MIT** (hub tag `license:mit`, probed 2026-11-10) | Li et al., "API-Bank: A Comprehensive Benchmark for Tool-Augmented LLMs", EMNLP 2023 | ✓ |
 | sst5_syn | first-party synthetic — `scripts/synth_suite.py --suite sst5_syn` (plan 013 T1b) | **Apache-2.0 (ours)** — same posture as emotion_syn (generated rows, no scraped or third-party text; the same two Apache-2.0 generator grants verified 2026-10-27 govern). The five-level scale follows SST-5's label VOCABULARY only — no SST review text is copied (the sst5 row above stays ⛔ benchmark-only for the real corpus; this suite is the licence-clean re-entry) | none required (ours) | ✓ |
 | emotion | `dair-ai/emotion` | **research/educational only** (card §Licensing — not the hub's `license:other` tag alone) | Saravia et al., 2018 | ⛔ benchmark-only |
 | winogrande_jdi | `allenai/winogrande` | **none on the hub** (no licence tag, no `cardData.license` — probe 2026-10-13; the manifest law applies: resolved by the card/repo, never guessed — resolve before any paid lane) | Sakaguchi et al., 2021 (WinoGrande) | ⚠ resolve before any paid lane |
@@ -1031,6 +1033,130 @@ When2Call's features carry NO ClassLabel (`correct_answer` is a plain
 per-row answers-key verify-at-port in the builder (the §ClassLabel-orders
 law's "no ClassLabel" half, semantics verified against the official
 eval's `get_choices_and_index`).
+
+### 20. bfcl — `gorilla-llm/Berkeley-Function-Calling-Leaderboard` — the JDI ladder wave 1 (issue 114 T4)
+
+The tools rung's pick row (rethink Issue 060): "given a query + tool
+schemas, pick the function to call (or irrelevance-detect)". The wave-1
+scope = SIX raw JSONL files (the R2b wire verdict: the pick tier + the
+irrelevance-detect tier; parallel\*/java/js/sql/rest/exe\*/multi_turn\*/
+chatable/relevance are NEVER fetched). **The DIRECT-RESOLVE lane** (the
+fetch script's `fetch_raw_json`/`fetch_bfcl_join` — the repo is raw
+JSON-LINES, the datasets-server /rows call 404s it): the converter wraps
+the rows into the datasets-server envelope shape the builders read; the
+digest pins the OUTPUT envelope, never the upstream bytes. **The recorded
+transforms** (all in the fetch layer, none silent): (1) the pick files
+are ENRICHED at fetch time with their official `possible_answer/` gold
+files (the all-or-nothing join by exact id — a mismatch fails the fetch
+loud); (2) ONE pinned upstream-typo normalization:
+`live_multiple_1052-79-0` → `live_multiple_1052-279-0` (the gold id-chain
+…277, …278, …279 proves 279 is the intended spelling; the eval file
+dropped a digit; the question/gold content match is unambiguous — the
+join refuses any id mismatch OUTSIDE this pinned pair).
+
+CORPUS-OPTIONAL suite (`modelless_lane: false`): no train split exists
+in the mirror and the candidate functions ARE the test rows' content
+(grammar-not-answers) — the corpus re-open is the rethink-side synthesis
+route; the flag flips back then, never silently. SuiteSpec: named_only,
+test_cap 0 = ALL rows (the faithful posture; the population pin in
+`prepare`), coverage_audit false (per-row candidate-function-name
+universes — the s1mb variable-breadth posture).
+
+Rendering (task-faithful): state = `{query, tools}` — the official
+`question` structure + `function` spec array AS STORED; options = the
+row's own candidate-function names, criteria = each spec's
+`description`. PICK rows: gold = the joined ground_truth entry's function
+name (full-name match first, else the UNIQUE leaf-name match — the
+official ast evals' own matching semantics; simple_363's
+`find_closest` vs `restaurant_search.find_closest` is the one such row,
+census 2026-11-10; a match failure fails loud, naming the row id).
+IRRELEVANCE rows: the fixed abstain option `no_appropriate_function`
+(`BFCL_ABSTAIN_KEY`) is APPENDED LAST and IS the gold — the pick tier
+never carries it (a never-gold distractor would be an invented
+transform). The 4 empty-candidate live_irrelevance rows are SKIPPED (a
+one-option choice is no choice; census 2026-11-10; the population pin
+accounts for them).
+
+Whole-scope census (2026-11-10 fetch, verified live): 3,033 rows fetched
+— pick tier 400 + 200 + 258 + 1,053 = 1,911 (every ground_truth list
+length-1; every gold resolves, 1 by leaf match) · irrelevance tier 240 +
+882 = 1,122, of which 1,118 kept + 4 empty-candidate skips. Built
+population **3,029 cases** (the prepare pin).
+
+| split | rows | files |
+|---|---|---|
+| `test_simple` | 400 | 1 |
+| `test_multiple` | 200 | 1 |
+| `test_live_simple` | 258 | 1 |
+| `test_live_multiple` | 1,053 | 1 |
+| `test_irrelevance` | 240 | 1 |
+| `test_live_irrelevance` | 882 | 1 |
+
+Per-file digests (blake3, the OUTPUT envelopes):
+
+| file | rows | blake3 | bytes |
+|---|---|---|---|
+| `license.json` | — | `850a4308763e94ba5f3948252fa5d2f6125e6cf1a726e9658ca8f2d378f47029` | 3667 |
+| `test_simple-000.json` | 400 | `e44de0bcff548d44cb0356e1857e1d84bf63df470e13a9de3ad3d96da0ec8c3b` | 667847 |
+| `test_multiple-000.json` | 200 | `6fdc1ed3d156294f4ea55c185763a9d6ca2e1f5ba322c0f594e70f3ccb532bae` | 657837 |
+| `test_live_simple-000.json` | 258 | `823e2ca5bbefaa862aefe98174d65f41e7da95c86ebb14af9170bd4190aeec9a` | 542357 |
+| `test_live_multiple-000.json` | 1053 | `6c1a8ac5b21bc96b8b1ce5309b1cd5ca0c78a8be85dc6f759f54b486e028167d` | 7113053 |
+| `test_irrelevance-000.json` | 240 | `b6c95c071def70e90858be7a3777bc216488ae268493a064dcb63810cbc0dd1b` | 302868 |
+| `test_live_irrelevance-000.json` | 882 | `f480fc3043bf7132ba251644f5c7d4fb0b24e0247c7eb2ee68423b43d3cb5142` | 3717655 |
+
+BFCL's features carry no ClassLabel (raw JSONL — the fetch envelope has
+no features block at all); the universes are pinned by the builder's
+per-row verify-at-port (the gold resolution) + the prepare population/tier
+pins (3,029 / 1,118 abstain golds).
+
+### 21. api_bank — `liminghao1630/API-Bank` — the JDI ladder wave 1 (issue 114 T5)
+
+The tools rung's which-API row: "API-call selection in a dialogue". The
+wave-1 scope = the two which-API files (`test-data/level-1-api.json` +
+`test-data/level-2-api.json`, fetched whole — the DIRECT-RESOLVE lane;
+the raw files cast-error on datasets-server with inconsistent columns,
+the issue's probe). The multi-turn level-3 files and the
+response-generation files are OUT of wave-1 scope. **The recorded
+transform** (in the builder, never silent): the gold API name is PARSED
+from the row's own `expected_output` (`API-Request: [Name(...)` prefix)
+and the candidate set from the `API descriptions:` block of
+newline-separated JSON specs in the row's `instruction`.
+
+**ROW-LEVEL SCOREABLE-PARTIAL** (the issue's R2b law, applied at row
+census 2026-11-10): every level-1 row's gold IS among its own candidates
+(399/399; 1–4 candidates each); the level-2 rows are ToolSearcher-gated
+(the dialogue's next step is the tool search) and present exactly ONE
+candidate — the 45 rows whose expected_output names that candidate are
+choice-shaped and KEPT; the 90 whose expected_output names the DOWNSTREAM
+API the search would return are NOT answerable as a choice and DROP (the
+official eval is generation-based there — never forced into the pick
+wire). Built population **444 cases** (399 + 45; the prepare pin).
+
+CORPUS-OPTIONAL suite (`modelless_lane: false`): the candidate API
+descriptions ARE the test rows' content (grammar-not-answers); the
+authors' own `-api-train` files overlap the same catalog and are never
+fetched. SuiteSpec: named_only, test_cap 0, coverage_audit false.
+
+Rendering (task-faithful): state = `{instruction}` — the row's
+instruction VERBATIM (dialogue + candidate specs AS STORED); options =
+the parsed candidate API names, criteria = each spec's `description`.
+
+| split | rows fetched | rows kept (choice-shaped) | files |
+|---|---|---|---|
+| `test_lv1` | 399 | 399 | 1 |
+| `test_lv2` | 135 | 45 | 1 |
+
+Per-file digests (blake3, the OUTPUT envelopes):
+
+| file | rows | blake3 | bytes |
+|---|---|---|---|
+| `license.json` | — | `faa327acac7a7a68d84952d0d8d76c3bd17629d83a0ba7294467a6d618c8afb7` | 1276 |
+| `test_lv1-000.json` | 399 | `3348465b7a17426e5302f5250e7c90fb2aa7f2a0f496a9a549388a1f049af7f8` | 886691 |
+| `test_lv2-000.json` | 135 | `4419df5e4e922385e213b30db529ec513970f86f6285d35ae9bbb6a8f6e9ab96` | 234646 |
+
+API-Bank's fetch envelope has no features block (raw JSON arrays via the
+direct-resolve lane); the builder's per-row parse + the prepare
+population pin (444) are the drift guards.
 
 ## ClassLabel orders (verified)
 

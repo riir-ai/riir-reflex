@@ -414,6 +414,278 @@ pub fn build_when2call(rows_file: &Value, max_rows: usize) -> Suite {
     }
 }
 
+/// Issue 114 T4 — the BFCL abstain option, APPENDED LAST on the
+/// irrelevance-tier rows only (the board row's "or irrelevance-detect";
+/// the pick tier never carries it — the official pick eval always has a
+/// gold function, and adding a never-gold distractor would be an invented
+/// transform). The option universe deliberately exceeds any fixed set —
+/// per-row candidate-function names (the s1mb variable-breadth posture,
+/// `coverage_audit: false`).
+pub(crate) const BFCL_ABSTAIN_KEY: &str = "no_appropriate_function";
+
+/// Issue 114 T4 — the BFCL pick tier's gold resolution law, the official
+/// ast evals' own name-matching semantics: the gold name from the
+/// possible_answer file matches a candidate by FULL name first, else by
+/// LEAF name (the segment after the last `.` — simple_363's gold
+/// `find_closest` vs the candidate's module-qualified
+/// `restaurant_search.find_closest`, the one such row in the fetched
+/// population, census 2026-11-10). A leaf match must be UNAMBIGUOUS (one
+/// candidate) — anything else is a fetch drift and fails loud, naming the
+/// row id.
+fn bfcl_gold_index(candidates: &[&str], gold: &str, row_id: &str) -> usize {
+    if let Some(pos) = candidates.iter().position(|c| *c == gold) {
+        return pos;
+    }
+    let gold_leaf = gold.rsplit('.').next().unwrap_or(gold);
+    let mut hits = candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.rsplit('.').next().unwrap_or(c) == gold_leaf)
+        .map(|(p, _)| p);
+    match (hits.next(), hits.next()) {
+        (Some(p), None) => p,
+        _ => panic!(
+            "bfcl: gold {gold:?} for {row_id} matches no candidate by full or \
+             unique leaf name — the possible_answer join drifted (refetch via \
+             scripts/fetch_datasets.sh; the census pins this to zero besides \
+             the pinned simple_363 leaf row)"
+        ),
+    }
+}
+
+/// Issue 114 T4 — BFCL (`gorilla-llm/Berkeley-Function-Calling-Leaderboard`,
+/// the wave-1 scope): the board's tools-rung pick row — "given a query +
+/// tool schemas, pick the function to call (or irrelevance-detect)". The
+/// eval surface is the CONCATENATION of the six fetched files (the runner's
+/// comma-list split order: simple, multiple, live_simple, live_multiple,
+/// then the two irrelevance tiers); rows are task-faithful as stored:
+/// state = {query: the official `question` structure verbatim, tools: the
+/// official `function` spec array verbatim}. PICK rows (id prefix
+/// simple/multiple/live_simple/live_multiple): options = the row's own
+/// candidate-function names, criteria = each spec's `description` string;
+/// gold = the joined `ground_truth` entry's function name via
+/// [`bfcl_gold_index`]. IRRELEVANCE rows (id prefix irrelevance/
+/// live_irrelevance): the same candidates PLUS the fixed abstain option
+/// appended LAST ([`BFCL_ABSTAIN_KEY`]) — gold is that option; rows whose
+/// candidate list is EMPTY are skipped (a one-option choice is no choice —
+/// 4 such rows in the live_irrelevance tier, census 2026-11-10, recorded
+/// in the manifest row).
+///
+/// CORPUS-OPTIONAL: no train split exists in the mirror and the candidate
+/// functions ARE the test rows' content (grammar-not-answers) — the
+/// modelless lane is skipped loud (`modelless_lane: false` in the
+/// registry); the corpus re-open is the rethink-side synthesis route.
+#[must_use]
+pub fn build_bfcl(rows_file: &Value, max_rows: usize) -> Suite {
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(id), Some(question), Some(functions)) = (
+            row_str(row, "id"),
+            row.get("question"),
+            row.get("function").and_then(Value::as_array),
+        ) else {
+            continue; // malformed row — fails the rule, the row drops
+        };
+        let is_irrelevance = id.starts_with("irrelevance_") || id.starts_with("live_irrelevance_");
+        let mut names: Vec<&str> = Vec::with_capacity(functions.len());
+        let mut descs: Vec<Option<String>> = Vec::with_capacity(functions.len());
+        for f in functions {
+            let Some(name) = f.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            names.push(name);
+            descs.push(
+                f.get("description")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            );
+        }
+        if names.is_empty() {
+            // The irrelevance tier's 4 pinned empty-candidate rows (census
+            // 2026-11-10) and any malformed pick row drop here; the
+            // population + tier pins in `prepare` are the loud guard.
+            continue;
+        }
+        let gold_idx = if is_irrelevance {
+            names.len() // the abstain option, appended last below
+        } else {
+            let ground_truth = row
+                .get("ground_truth")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "bfcl: pick row {id} carries no joined ground_truth — \
+                            refetch via scripts/fetch_datasets.sh (the gold join \
+                            is all-or-nothing)"
+                    )
+                });
+            if ground_truth.len() != 1 {
+                panic!(
+                    "bfcl: pick row {id} carries {} ground_truth entries (the \
+                     fetched census pins exactly 1 per row)",
+                    ground_truth.len()
+                );
+            }
+            let entry = &ground_truth[0];
+            let gold = entry
+                .as_object()
+                .and_then(|o| o.keys().next())
+                .unwrap_or_else(|| {
+                    panic!("bfcl: pick row {id} carries an empty ground_truth entry")
+                });
+            bfcl_gold_index(&names, gold, id)
+        };
+        let mut keys: Vec<String> = names.iter().map(|n| (*n).to_string()).collect();
+        if is_irrelevance {
+            keys.push(BFCL_ABSTAIN_KEY.to_string());
+            descs.push(Some(
+                "None of the available functions is appropriate for this query".to_string(),
+            ));
+        }
+        cases.push(SuiteCase {
+            id: format!("bfcl:{pos}"),
+            state: json!({ "query": question, "tools": functions }),
+            questions: vec![choice_q(
+                "function",
+                "Which function should be called for `query`, given the available \
+                 `tools`?",
+                &keys,
+                Some(descs),
+            )],
+            gold: vec![GoldAnswer {
+                idx: gold_idx,
+                soft: vec![0.0; keys.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    Suite {
+        name: "bfcl",
+        cases,
+        option_counts_note: "per-row candidate-function names (the pick tier's option \
+                             universe; up to 37 candidates on live_multiple); the \
+                             irrelevance tier appends the fixed abstain option LAST and \
+                             golds it; 4 empty-candidate live_irrelevance rows skipped \
+                             (census 2026-11-10); corpus-optional (no lawful train \
+                             pool — grammar-not-answers)",
+    }
+}
+
+/// Issue 114 T5 — the API-Bank which-API tier
+/// (`liminghao1630/API-Bank`, test-data/level-1-api.json + level-2-api.json,
+/// fetched whole): "API-call selection in a dialogue" — the board row's
+/// which-API half (multi-turn state carry refused wave 1; the level-3 and
+/// response files are out of scope). Each row's `instruction` embeds the
+/// dialogue context and a `API descriptions:` block of newline-separated
+/// JSON specs — the row's own candidate set; the gold API name rides the
+/// row's `expected_output` (`API-Request: [Name(...)` prefix, parsed per
+/// row — the recorded transform). ROW-LEVEL SCOREABLE-PARTIAL (the issue's
+/// R2b law, census 2026-11-10): every level-1 row's gold IS among its own
+/// candidates (399/399 — 1–4 candidates each); the level-2 rows are
+/// ToolSearcher-gated (the dialogue's next step is the tool search) and
+/// present exactly ONE candidate — the 45 rows whose expected_output names
+/// that candidate are choice-shaped and kept, the 90 whose expected_output
+/// names the DOWNSTREAM API the search would return are NOT answerable as
+/// a choice and drop (the official eval is generation-based there — never
+/// forced into the pick wire). Options = the parsed candidate API names,
+/// criteria = each spec's `description`; state = {instruction: the row's
+/// instruction VERBATIM (dialogue + candidate specs AS STORED)}. A row
+/// whose gold parses but matches no candidate drops (the prepare census
+/// pin is the loud guard: 399 + 45 = 444).
+///
+/// CORPUS-OPTIONAL (the T3 decision tree): the candidate API descriptions
+/// ARE the test rows' content (grammar-not-answers); the authors' own
+/// -api-train files overlap the same catalog and are never fetched —
+/// `modelless_lane: false`.
+#[must_use]
+pub fn build_api_bank(rows_file: &Value, max_rows: usize) -> Suite {
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(instruction), Some(expected)) =
+            (row_str(row, "instruction"), row_str(row, "expected_output"))
+        else {
+            continue; // malformed row — fails the rule, the row drops
+        };
+        // Gold: the API name in the row's own expected_output — the
+        // recorded parse ("API-Request: [Name(...)"). A row without the
+        // prefix drops (census pins 534/534 carrying it).
+        let Some(gold) = expected
+            .strip_prefix("API-Request: [")
+            .and_then(|rest| rest.split('(').next())
+            .filter(|name| !name.is_empty())
+        else {
+            continue;
+        };
+        // Candidates: the JSON spec lines after the instruction's
+        // "API descriptions:" marker (the recorded parse — the specs are
+        // newline-separated JSON objects there).
+        let Some(spec_block) = instruction.split("API descriptions:").nth(1) else {
+            continue;
+        };
+        let mut names: Vec<String> = Vec::new();
+        let mut descs: Vec<Option<String>> = Vec::new();
+        for line in spec_block.lines() {
+            let line = line.trim();
+            if !line.starts_with("{\"name\"") {
+                continue;
+            }
+            let Ok(spec) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            let Some(name) = spec.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            names.push(name.to_string());
+            descs.push(
+                spec.get("description")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            );
+        }
+        if names.is_empty() {
+            continue; // no candidates parsed — no honest choice to present
+        }
+        let Some(gold_idx) = names.iter().position(|n| n == gold) else {
+            // The row-level scoreable-partial drop: the level-2
+            // ToolSearcher-gated rows whose expected_output names the
+            // DOWNSTREAM API are not answerable as a choice from the
+            // presented options (the official eval is generation-based
+            // there). The prepare census pin (444) is the loud guard.
+            continue;
+        };
+        let keys: Vec<String> = names.iter().map(|n| (*n).to_string()).collect();
+        cases.push(SuiteCase {
+            id: format!("api_bank:{pos}"),
+            state: json!({ "instruction": instruction }),
+            questions: vec![choice_q(
+                "api",
+                "Which API should be called next in the dialogue described by \
+                 `instruction`?",
+                &keys,
+                Some(descs),
+            )],
+            gold: vec![GoldAnswer {
+                idx: gold_idx,
+                soft: vec![0.0; keys.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    Suite {
+        name: "api_bank",
+        cases,
+        option_counts_note: "per-row candidate API names parsed from the instruction's \
+                             `API descriptions:` block (1-4 on level-1; exactly \
+                             ToolSearcher on the kept level-2 rows); the gold rides the \
+                             row's own expected_output; 90 level-2 rows dropped \
+                             (downstream-API golds — the generation-shaped slice, the \
+                             R2b scoreable-partial law); corpus-optional (the candidate \
+                             catalog IS the test content — grammar-not-answers)",
+    }
+}
+
 /// Issue 114 T2 — the CLINC150 intent vocabulary (151: 150 intents + `oos`,
 /// ClassLabel order 0..=150, identical across every clinc/clinc_oos config —
 /// verified against the card's dataset_info blocks 2026-11-09; the builder
@@ -2956,5 +3228,218 @@ mod when2call_builder_tests {
             "tools": ["t"]
         })]);
         let _ = build_when2call(&env, 0);
+    }
+}
+
+#[cfg(test)]
+mod bfcl_builder_tests {
+    use super::{BFCL_ABSTAIN_KEY, build_bfcl};
+
+    fn pick_row(id: &str, gold: &str, names: &[&str]) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "question": [[{"role": "user", "content": "the query"}]],
+            "function": names.iter().map(|n| serde_json::json!({
+                "name": n, "description": format!("desc {n}")
+            })).collect::<Vec<_>>(),
+            "ground_truth": [{ gold: {} }],
+        })
+    }
+
+    fn irrelevance_row(id: &str, names: &[&str]) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "question": [[{"role": "user", "content": "the query"}]],
+            "function": names.iter().map(|n| serde_json::json!({
+                "name": n, "description": format!("desc {n}")
+            })).collect::<Vec<_>>(),
+        })
+    }
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    fn keys_of(s: &super::Suite, case: usize) -> Vec<String> {
+        s.cases[case].questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn bfcl_pick_row_golds_the_joined_function_name() {
+        let env = envelope(vec![pick_row(
+            "simple_0",
+            "fn_b",
+            &["fn_a", "fn_b", "fn_c"],
+        )]);
+        let s = build_bfcl(&env, 0);
+        assert_eq!(s.name, "bfcl");
+        assert_eq!(s.cases.len(), 1);
+        assert_eq!(s.cases[0].gold[0].idx, 1); // fn_b's position
+        // The state is the row's own task input AS STORED.
+        assert_eq!(
+            s.cases[0].state["tools"],
+            serde_json::json!([
+                {"name": "fn_a", "description": "desc fn_a"},
+                {"name": "fn_b", "description": "desc fn_b"},
+                {"name": "fn_c", "description": "desc fn_c"}
+            ])
+        );
+        // The pick tier carries NO abstain option (the official pick eval
+        // always has a gold function — a never-gold distractor would be an
+        // invented transform).
+        assert!(!keys_of(&s, 0).iter().any(|k| k == BFCL_ABSTAIN_KEY));
+    }
+
+    #[test]
+    fn bfcl_irrelevance_row_appends_the_abstain_option_last_and_golds_it() {
+        let env = envelope(vec![irrelevance_row("irrelevance_0", &["fn_x", "fn_y"])]);
+        let s = build_bfcl(&env, 0);
+        let keys = keys_of(&s, 0);
+        assert_eq!(keys.len(), 3);
+        assert_eq!(keys.last().unwrap(), BFCL_ABSTAIN_KEY);
+        assert_eq!(s.cases[0].gold[0].idx, 2); // the abstain option, last
+    }
+
+    #[test]
+    fn bfcl_gold_resolution_matches_the_unique_leaf_name() {
+        // The pinned simple_363 shape: the gold spells the leaf name while
+        // the candidate carries the module-qualified form.
+        let env = envelope(vec![pick_row(
+            "simple_363",
+            "find_closest",
+            &["restaurant_search.find_closest", "other_thing"],
+        )]);
+        let s = build_bfcl(&env, 0);
+        assert_eq!(s.cases[0].gold[0].idx, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "matches no candidate by full or unique leaf name")]
+    fn bfcl_refuses_a_gold_matching_no_candidate() {
+        let env = envelope(vec![pick_row("simple_9", "ghost_fn", &["fn_a", "fn_b"])]);
+        let _ = build_bfcl(&env, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "matches no candidate by full or unique leaf name")]
+    fn bfcl_refuses_an_ambiguous_leaf_match() {
+        // Two candidates sharing the gold's leaf name — the leaf rule must
+        // stay unambiguous.
+        let env = envelope(vec![pick_row(
+            "simple_9",
+            "get",
+            &["a.get", "b.get", "c.other"],
+        )]);
+        let _ = build_bfcl(&env, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "carries no joined ground_truth")]
+    fn bfcl_refuses_a_pick_row_without_the_joined_gold() {
+        let env = envelope(vec![serde_json::json!({
+            "id": "simple_0",
+            "question": [[{"role": "user", "content": "q"}]],
+            "function": [{"name": "fn_a", "description": "d"}],
+        })]);
+        let _ = build_bfcl(&env, 0);
+    }
+
+    #[test]
+    fn bfcl_drops_the_empty_candidate_irrelevance_rows() {
+        let env = envelope(vec![
+            irrelevance_row("live_irrelevance_120-9-0", &[]),
+            irrelevance_row("live_irrelevance_124-9-4", &["fn_z"]),
+        ]);
+        let s = build_bfcl(&env, 0);
+        assert_eq!(s.cases.len(), 1); // the empty-candidate row dropped
+    }
+}
+
+#[cfg(test)]
+mod api_bank_builder_tests {
+    use super::build_api_bank;
+
+    fn bank_row(gold_api: &str, candidates: &[&str], expected: &str) -> serde_json::Value {
+        let mut block = String::from("ctx\nAPI descriptions:\n");
+        for c in candidates {
+            block.push_str(&format!(
+                "{{\"name\": \"{c}\", \"description\": \"desc {c}\"}}\n"
+            ));
+        }
+        serde_json::json!({
+            "id": 0,
+            "instruction": block,
+            "expected_output": expected.replace("GOLD", gold_api),
+            "input": "User: hi\nAI: hello",
+        })
+    }
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    #[test]
+    fn api_bank_golds_the_expected_output_api_name() {
+        let env = envelope(vec![bank_row(
+            "ApiTwo",
+            &["ApiOne", "ApiTwo"],
+            "API-Request: [GOLD(key='v')]",
+        )]);
+        let s = build_api_bank(&env, 0);
+        assert_eq!(s.name, "api_bank");
+        assert_eq!(s.cases.len(), 1);
+        assert_eq!(s.cases[0].gold[0].idx, 1); // ApiTwo's position
+        let keys: Vec<_> = s.cases[0].questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, vec!["ApiOne".to_string(), "ApiTwo".to_string()]);
+        // The state carries the instruction VERBATIM (dialogue + candidate
+        // specs AS STORED — the no-silent-transforms law).
+        assert!(
+            s.cases[0].state["instruction"]
+                .as_str()
+                .unwrap()
+                .contains("API descriptions:")
+        );
+    }
+
+    #[test]
+    fn api_bank_drops_a_row_without_the_api_request_prefix() {
+        let env = envelope(vec![bank_row("ApiOne", &["ApiOne"], "no call")]);
+        let s = build_api_bank(&env, 0);
+        assert!(s.cases.is_empty()); // census pins 444 kept (399 + 45)
+    }
+
+    #[test]
+    fn api_bank_drops_the_downstream_api_level2_rows() {
+        // The level-2 ToolSearcher-gated shape: the presented candidate is
+        // the only choice; a gold naming the DOWNSTREAM API is not
+        // answerable as a choice and drops (the R2b scoreable-partial law,
+        // row level).
+        let env = envelope(vec![
+            bank_row(
+                "DownstreamApi",
+                &["ToolSearcher"],
+                "API-Request: [GOLD(k='v')]",
+            ),
+            bank_row(
+                "ToolSearcher",
+                &["ToolSearcher"],
+                "API-Request: [GOLD(k='v')]",
+            ),
+        ]);
+        let s = build_api_bank(&env, 0);
+        assert_eq!(s.cases.len(), 1); // only the ToolSearcher-gold row kept
+        assert_eq!(s.cases[0].gold[0].idx, 0);
     }
 }

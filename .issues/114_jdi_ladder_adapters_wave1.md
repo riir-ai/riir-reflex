@@ -1,8 +1,7 @@
 # Issue 114 — JDI ladder adapters, wave 1: the decision-shaped tools three (BFCL / When2Call / API-Bank) + CLINC150 (retrieval)
 
-**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a; adapters unbulleted, one suite at a time. **Wave state after the 2026-11-09 second session (lease zed-464454b5):** T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md)) · **T3 when2call LANDED** ([Bench 101](../.benchmarks/101_when2call_suite_birth.md): the CORPUS-OPTIONAL posture chose re-open path (b) — the only self-serve path; the suite + the runner change landed, laya-only full-population read recorded, honestly below the majority floor) · T4/T5 UNBLOCKED by the same posture (adapter builds ride a follow-up lane; BFCL needs the direct-JSON fetch lane) · T6 clinc150+when2call reflex halves DONE; the rethink fold = the rethink-side booking. The wave's remaining DECISIONS are unchanged: the modelless corpus for T3 (paths (a)/(d) = owner/lane-gated spend or rethink-side synthesis) and the owner-gated amo booking.
-**Lease released:** zed-464454b5 (JDI ESC serve capture monitoring), 1794138600, was-expires 2026-11-10T00:00:00Z — expired with T4/T5 unbuilt (the wave's follow-up lane never opened); superseded by the claim below
-**Claimed:** zed-64abf0dd@m3 (riir-refine idle loop continuation, m3), 1794350458, expires 2026-11-12T22:40:58+00:00 — T4+T5 as the ONE shared work item (the direct-JSON fetch lane + the bfcl/api_bank builders, corpus-optional posture)
+**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a; adapters unbulleted, one suite at a time. **Wave state after the 2026-11-10 third session (zed-64abf0dd@m3):** T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md)) · **T3 when2call LANDED** ([Bench 101](../.benchmarks/101_when2call_suite_birth.md): the CORPUS-OPTIONAL posture chose re-open path (b) — the only self-serve path; the suite + the runner change landed, laya-only full-population read recorded, honestly below the majority floor) · **T4 bfcl LANDED** + **T5 api_bank LANDED** ([Bench 180](../.benchmarks/180_bfcl_api_bank_suite_birth.md) — the direct-resolve fetch lane + the two builders, corpus-optional; bfcl reads 0.5612 / skill +0.31, api_bank 0.6081 / skill ≈ 0 — the honest floor posture) · T6 clinc150+when2call+bfcl+api_bank reflex halves DONE; the rethink fold = the rethink-side booking (owner-gated amo hours, unchanged). The wave's remaining DECISIONS are unchanged: the modelless corpus for T3/T4/T5 (paths (a)/(d) = owner/lane-gated spend or rethink-side synthesis) and the owner-gated amo booking. Wave-1 reflex-side work COMPLETE — only the corpus re-opens + the rethink fold remain.
+**Lease closed:** zed-64abf0dd@m3 (riir-refine idle loop continuation, m3), 1794350458, expires 2026-11-12T22:40:58+00:00 — discharged by the T4+T5 landing (Bench 180 + the fetch lane + the builders, this session); the wave's residue is the rethink-side booking, not a reflex claim.
 
 Rethink Issue 060 (the beat-the-JDI ladder) orders the areas most-use × quick-win first:
 **tools (18.3% fold weight, ZERO coverage today)**, then retrieval (20.0%, one served
@@ -176,7 +175,7 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
   **The modelless corpus REMAINS OPEN** — the recorded owner/lane decisions
   (a)/(d) are unchanged; when a corpus lands, the corpus-optional flag flips
   back and the train_row_label/train_docs arms + the modelless dispatch join.
-- [ ] T4 — BFCL pick-tier third (the arg-filling tiers REFUSED wave 1 — recorded as
+- [x] T4 — BFCL pick-tier third (the arg-filling tiers REFUSED wave 1 — recorded as
       the R2b-class wire verdict, never forced). **CORPUS DISPOSITION 2026-11-09
       (same probe pass as T3):** the distribution is SINGLE-FILE-PER-CATEGORY
       (id/question/function — verified live on `BFCL_v3_live_simple.jsonl`); NO
@@ -194,8 +193,23 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
       — the stanza needs the direct-resolve pattern (`/resolve/main/<file>.json`),
       a new fetcher shape (the banking77 parquet stanza does not cover it), plus
       the per-row candidate-list builder (the mmlupro breadth machinery). Ride a
-      follow-up lane.
-- [ ] T5 — API-Bank which-API tier (multi-turn refused wave 1). **CORPUS
+      follow-up lane. **LANDED 2026-11-10 (zed-64abf0dd@m3, the follow-up lane —
+      T4+T5 as the ONE shared work item):** the direct-resolve fetch lane
+      (`fetch_raw_json` + `fetch_bfcl_join` + `_raw_convert`, self-test scenario 4)
+      + the six wave-1 files fetched + the gold join (all-or-nothing by exact id,
+      ONE pinned upstream-typo normalization `live_multiple_1052-79-0` →
+      `live_multiple_1052-279-0` — the gold id-chain …277/…278/…279 proves the
+      eval file dropped a digit; any other mismatch still fails the fetch loud) +
+      `build_bfcl` (per-row candidate-name options; the irrelevance tier appends
+      the fixed `no_appropriate_function` option LAST and golds it; the pick tier
+      never carries it; gold = full-name then UNIQUE-leaf match — the official ast
+      evals' semantics; 3,033 fetched → 3,029 built, 4 empty-candidate
+      live_irrelevance rows skipped) + the prepare pins (3,029 / 1,118 abstain
+      golds). First read [Bench 180](../.benchmarks/180_bfcl_api_bank_suite_birth.md):
+      laya[english] **0.5612** on ALL 3,029 (jdi_chance 0.3665, **jdi_skill
+      +0.3075** — a POSITIVE first read for the pick shape). The corpus re-open
+      stays the rethink-side synthesis route (unchanged).
+- [x] T5 — API-Bank which-API tier (multi-turn refused wave 1). **CORPUS
       DISPOSITION 2026-11-09:** not probed further this session (T5 is last in
       the wave); the T3/T4 corpus wall is structural to the tools rung — expect
       the same disposition; probe its splits + corpus posture when its build
@@ -215,6 +229,24 @@ Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 06
       corpus-optional like when2call. Wave-1 reflex-side work ends here;
       the remaining builds are the follow-up lane's (the direct-JSON fetcher
       + the BFCL/API-Bank builders), filed as this issue's T4/T5 residuals.
+      **LANDED 2026-11-10 (zed-64abf0dd@m3, the same lane as T4):**
+      level-1-api (399) + level-2-api (135) fetched whole via the
+      direct-resolve lane (JSON-array shape). ROW-LEVEL SCOREABLE-PARTIAL
+      (the R2b law at row level, census 2026-11-10): every level-1 row's
+      gold IS among its own candidates; the level-2 rows are
+      ToolSearcher-gated and present exactly ONE candidate — the 45 rows
+      whose expected_output names that candidate are choice-shaped (KEPT),
+      the 90 whose expected_output names the DOWNSTREAM API drop (the
+      official eval is generation-based there — never forced into the pick
+      wire). `build_api_bank`: gold parsed per row from the row's own
+      `expected_output` (the recorded transform), candidates parsed from
+      the instruction's `API descriptions:` block, state = the instruction
+      VERBATIM; **444 cases** built (399 + 45; the prepare pin). First read
+      [Bench 180](../.benchmarks/180_bfcl_api_bank_suite_birth.md):
+      laya[english] **0.6081** on ALL 444 — ≈ the majority class (jdi_chance
+      0.6059, **jdi_skill +0.0057**), an honest near-zero-skill floor read
+      at the corpus-less posture (the corpus re-open stays the rethink-side
+      route, unchanged).
   **Wave-level corpus note (path (d), NEW this session):** the When2Call train
   data derives from **Salesforce/xlam-function-calling-60k (Apache-2.0)** — a
   DIFFERENT dataset from the test surface (the README's synthetic-data-gen

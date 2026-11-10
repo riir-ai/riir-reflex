@@ -58,13 +58,13 @@ use crate::harness::pair_heads::{
 #[cfg(feature = "option_cond")]
 use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
-    CLINC150_KEYS, QKind, Suite, SuiteCase, SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi,
-    build_banking77_mteb, build_clinc150, build_emotion, build_emotion_syn, build_hellaswag_jdi,
-    build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_s1mb_choice,
-    build_s1mb_noul, build_s1mb_score, build_sst5, build_sst5_syn, build_thai_sib200,
-    build_thai_wisesight, build_typed_decisions, build_wanli_en, build_when2call,
-    build_winogrande_jdi, build_xnli_en, stratified_selection_slices, stratified_split, train_docs,
-    train_row_label,
+    BFCL_ABSTAIN_KEY, CLINC150_KEYS, QKind, Suite, SuiteCase, SuiteQuestion, TrainDoc,
+    build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb, build_bfcl,
+    build_clinc150, build_emotion, build_emotion_syn, build_hellaswag_jdi, build_massive_intent_en,
+    build_mmlupro_jdi, build_prompt_injections, build_s1mb_choice, build_s1mb_noul,
+    build_s1mb_score, build_sst5, build_sst5_syn, build_thai_sib200, build_thai_wisesight,
+    build_typed_decisions, build_wanli_en, build_when2call, build_winogrande_jdi, build_xnli_en,
+    stratified_selection_slices, stratified_split, train_docs, train_row_label,
 };
 use crate::pyjson::serialize_state;
 use crate::readout::ReadoutMode;
@@ -688,6 +688,55 @@ const SUITES: &[SuiteSpec] = &[
         named_only: true,
         coverage_audit: false,
         build: build_when2call,
+        synthetic: None,
+        modelless_lane: false,
+    },
+    // Issue 114 T4 — the JDI ladder wave-1 BFCL row: the tools rung's pick
+    // tier + the irrelevance-detect abstain tier (the board row's own
+    // framing, "pick the function to call (or irrelevance-detect)"). The
+    // eval surface = the six fetched files in the runner's pinned comma
+    // order (pick files first, then the irrelevance tiers). CORPUS-OPTIONAL
+    // (`modelless_lane: false`): no train split exists in the mirror and
+    // the candidate functions ARE the test rows' content
+    // (grammar-not-answers) — only the LLM lanes answer. test_cap 0 = ALL
+    // rows (the faithful posture; the population pin in `prepare` reds a
+    // drifted fetch). coverage_audit false: per-row candidate-function-name
+    // universes (the s1mb variable-breadth posture).
+    SuiteSpec {
+        name: "bfcl",
+        dataset_dir: "bfcl",
+        test_cap: 0,
+        cal_cap: 0, // corpus-optional: no train split is fetched (asserted in prepare)
+        corpus_cap_per_label: 0,
+        eval_split: "test_simple,test_multiple,test_live_simple,test_live_multiple,test_irrelevance,test_live_irrelevance",
+        named_only: true,
+        coverage_audit: false,
+        build: build_bfcl,
+        synthetic: None,
+        modelless_lane: false,
+    },
+    // Issue 114 T5 — the JDI ladder wave-1 API-Bank row: the which-API
+    // tier (level-1-api + level-2-api, fetched whole; multi-turn state
+    // carry refused wave 1 — the R2b wire verdict). ROW-LEVEL
+    // SCOREABLE-PARTIAL: 399 level-1 rows + the 45 level-2 rows whose
+    // expected_output names the presented ToolSearcher candidate = 444
+    // choice-shaped cases; the 90 downstream-API level-2 rows drop (the
+    // official eval is generation-based there — never forced into the pick
+    // wire). CORPUS-OPTIONAL (the T3 decision tree): the candidate API
+    // descriptions ARE the test rows' content (grammar-not-answers) — only
+    // the LLM lanes answer. test_cap 0 = ALL kept rows (the faithful
+    // posture; the population pin in `prepare`). coverage_audit false:
+    // per-row candidate-API-name universes.
+    SuiteSpec {
+        name: "api_bank",
+        dataset_dir: "api_bank",
+        test_cap: 0,
+        cal_cap: 0, // corpus-optional: no train split is fetched (asserted in prepare)
+        corpus_cap_per_label: 0,
+        eval_split: "test_lv1,test_lv2",
+        named_only: true,
+        coverage_audit: false,
+        build: build_api_bank,
         synthetic: None,
         modelless_lane: false,
     },
@@ -4744,6 +4793,57 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
                  (gold classes: {gold_classes:?}) — the board row would misreport"
             );
         }
+    }
+    // Issue 114 T4: the BFCL population + tier pins. The population IS the
+    // board row's wave-1 scope (3,033 fetched rows minus the 4 pinned
+    // empty-candidate live_irrelevance skips = 3,029 cases); the tier split
+    // pins the pick/irrelevance halves so a partial or revised fetch (or a
+    // drifted skip census) reds loud instead of misreporting the board row.
+    if spec.name == "bfcl" {
+        assert_eq!(
+            suite.cases.len(),
+            3029,
+            "bfcl: the fetched wave-1 scope drifted from the pinned population \
+             (3,033 rows minus 4 empty-candidate live_irrelevance skips) — a \
+             partial or revised fetch; refetch via scripts/fetch_datasets.sh \
+             and re-pin the manifest digest"
+        );
+        let abstain_gold = suite
+            .cases
+            .iter()
+            .filter(|c| {
+                // The gold idx indexes the CASE's own criteria keys (the
+                // per-row universe), never the global union.
+                c.questions[0]
+                    .criteria
+                    .as_object()
+                    .map(|m| m.keys().cloned().collect::<Vec<_>>())
+                    .unwrap_or_default()
+                    .get(c.gold.first().map(|g| g.idx).unwrap_or(usize::MAX))
+                    .is_some_and(|k| k == BFCL_ABSTAIN_KEY)
+            })
+            .count();
+        assert_eq!(
+            abstain_gold, 1118,
+            "bfcl: the irrelevance tier golds {abstain_gold} abstain options \
+             (pinned 1,118 = 1,122 fetched rows minus the 4 empty-candidate \
+             skips) — the tier split drifted"
+        );
+    }
+    // Issue 114 T5: the API-Bank population pin (the choice-shaped slice:
+    // all 399 level-1 rows + the 45 level-2 rows whose expected_output
+    // names the presented ToolSearcher candidate — the 90 downstream-API
+    // rows drop, the R2b scoreable-partial law at row level).
+    if spec.name == "api_bank" {
+        assert_eq!(
+            suite.cases.len(),
+            444,
+            "api_bank: the fetched which-API tier drifted from the pinned \
+             choice-shaped population (399 level-1 + 45 level-2 kept; 90 \
+             downstream-API rows dropped) — a partial or revised fetch; \
+             refetch via scripts/fetch_datasets.sh and re-pin the manifest \
+             digest"
+        );
     }
 
     // Issue 114 T3 — the CORPUS-OPTIONAL path (`modelless_lane: false` on a

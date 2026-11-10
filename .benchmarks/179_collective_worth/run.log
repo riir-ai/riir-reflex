@@ -1,0 +1,94 @@
+harness: datasets .raw/datasets_t20k · suites []
+═══ suite typed_decisions ═══
+    400 cases / 2000 questions · 4 domains
+    slice-integrity: test 400 (fnv1a64-287d5f73a11932cd) · cal 100 (fnv1a64-0b6e8426558b0d1e) · pool 1100 (fnv1a64-a1679de56e9278b1) · OK
+    readout-report: best-on-cal max_prob (dispatch 0.3005, max_prob 0.1050, inv_entropy 0.3005 vs dispatch 0.3005; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.2940 · ece(maxp) 0.0860 · p50 0.760 ms · 1 s
+    laya[typed]: running…
+  [laya typed] gpu pre-ramp: 1 unmeasured warmup case (agent_trace_observability:0)
+    laya[typed]: acc 0.7445 · ece(maxp) 0.1924 · p50 188.0 ms · 92.9 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (agent_trace_observability:0)
+    laya[english]: acc 0.3575 · ece(maxp) 0.2113 · p50 244.0 ms · 132.9 s
+    laya[multilingual]: running…
+  [laya multilingual] gpu pre-ramp: 1 unmeasured warmup case (agent_trace_observability:0)
+    laya[multilingual]: acc 0.3490 · ece(maxp) 0.3228 · p50 170.0 ms · 94.1 s
+    cascade[english]: acc 0.2940 · esc 0.0% · 0 escalated / 2000 un-escalated · DISARMED (cal Δ +0.046 < min +0.160, n 500)
+    cascade[multilingual]: acc 0.2940 · esc 0.0% · 0 escalated / 2000 un-escalated · DISARMED (cal Δ +0.032 < min +0.160, n 500)
+    cascade[typed]: acc 0.7445 · esc 100.0% · 2000 escalated / 0 un-escalated
+═══ suite ag_news ═══
+    400 cases / 400 questions · 4 domains
+    slice-integrity: test 400 (fnv1a64-238133933bb8d6fc) · cal 200 (fnv1a64-96c58e69e7c6048e) · pool 19800 (fnv1a64-996876e41929dc33) · OK
+    readout-report: best-on-cal max_prob (dispatch 0.4845, max_prob 0.2262, inv_entropy 0.4845 vs dispatch 0.4845; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.4050 · ece(maxp) 0.1465 · p50 0.143 ms · 0.3 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (ag_news:0)
+    laya[english]: acc 0.9500 · ece(maxp) 0.0316 · p50 32.0 ms · 23.3 s
+    cascade[english]: acc 0.6050 · esc 39.2% · 157 escalated / 0 un-escalated
+═══ suite emotion ═══
+    400 cases / 400 questions · 6 domains
+    slice-integrity: test 400 (fnv1a64-36f3eb1067bed96a) · cal 200 (fnv1a64-f2ec48ed7070889c) · pool 15800 (fnv1a64-a05205a8dc7160cb) · OK
+    readout-report: best-on-cal max_prob (dispatch 0.1449, max_prob 0.0245, inv_entropy 0.1449 vs dispatch 0.1449; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.2750 · ece(maxp) 0.1053 · p50 0.110 ms · 0.3 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (emotion:0)
+    laya[english]: acc 0.5925 · ece(maxp) 0.3088 · p50 22.0 ms · 17.6 s
+    cascade[english]: acc 0.4025 · esc 33.0% · 132 escalated / 0 un-escalated
+═══ suite sst5 ═══
+    ⛔ KNOWN-DIRTY SLICE (pinned) — proceeding under acknowledgement:
+    slice-integrity: test 600 (fnv1a64-67fe9666fa0c3a6f) · cal 200 (fnv1a64-d210e7c6707c3d40) · pool 8344 (fnv1a64-cf933108b9825392) · VIOLATIONS
+    pin reason: frozen t20k pool (manifest ebfb0317…, 8544 rows) carries the mirror's exact duplicates: 1 cross-split + 2 train-internal (published rows were measured on these bytes; dedupe is an owner re-baseline, instinct .issues/013 pickup)
+    600 cases / 600 questions · 5 domains
+    slice-integrity: test 600 (fnv1a64-67fe9666fa0c3a6f) · cal 200 (fnv1a64-d210e7c6707c3d40) · pool 8344 (fnv1a64-cf933108b9825392) · VIOLATIONS
+    readout-report: best-on-cal max_prob (dispatch 0.2442, max_prob 0.0340, inv_entropy 0.2442 vs dispatch 0.2442; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.2017 · ece(maxp) 0.0087 · p50 0.091 ms · 0.2 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (sst5:0)
+    laya[english]: acc 0.3717 · ece(maxp) 0.2478 · p50 23.0 ms · 22.4 s
+    cascade[english]: acc 0.2867 · esc 58.2% · 349 escalated / 0 un-escalated
+═══ suite prompt_injections ═══
+    116 cases / 116 questions · 2 domains
+    slice-integrity: test 116 (fnv1a64-a6a375f0273e0bef) · cal 100 (fnv1a64-a45e6561b2a98ff1) · pool 446 (fnv1a64-8b32b961bbd47195) · OK
+    readout-report: best-on-cal max_prob (dispatch 0.4999, max_prob 0.0055, inv_entropy 0.4999 vs dispatch 0.4999; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.4828 · ece(maxp) 0.0228 · p50 0.068 ms · 0.1 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (prompt_injections:0)
+    laya[english]: acc 0.6983 · ece(maxp) 0.2620 · p50 22.0 ms · 9 s
+    cascade[english]: acc 0.6983 · esc 100.0% · 116 escalated / 0 un-escalated
+═══ suite xnli_en ═══
+    300 cases / 300 questions · 3 domains
+    slice-integrity: test 300 (fnv1a64-614262484399affa) · cal 200 (fnv1a64-b8126a40673cc7c6) · pool 19800 (fnv1a64-f3f8f200eba61985) · OK
+    readout-report: best-on-cal max_prob (dispatch 0.3196, max_prob 0.0238, inv_entropy 0.3196 vs dispatch 0.3196; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.3400 · ece(maxp) 0.0055 · p50 0.084 ms · 0.1 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (xnli_en:0)
+    laya[english]: acc 0.8600 · ece(maxp) 0.0685 · p50 24.0 ms · 16.5 s
+    cascade[english]: acc 0.6333 · esc 55.7% · 167 escalated / 0 un-escalated
+═══ suite massive_intent_en ═══
+    300 cases / 300 questions · 59 domains
+    slice-integrity: test 300 (fnv1a64-328f111f90d7a0c1) · cal 200 (fnv1a64-74b76416cdd836d5) · pool 11314 (fnv1a64-fb5a4f0d9147dc0d) · OK
+    readout-report: best-on-cal dispatch (dispatch 0.3684, max_prob 0.3684, inv_entropy 0.4270 vs dispatch 0.3684; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.6100 · ece(maxp) 0.5454 · p50 0.102 ms · 0.2 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (massive_intent_en:0)
+    laya[english]: acc 0.6933 · ece(maxp) 0.2483 · p50 34.0 ms · 21.6 s
+    cascade[english]: acc 0.6333 · esc 34.7% · 104 escalated / 0 un-escalated
+═══ suite banking77 ═══
+    500 cases / 500 questions · 77 domains
+    slice-integrity: test 500 (fnv1a64-cb0b5cbcb0cdfcce) · cal 200 (fnv1a64-8f14f68a2e55799f) · pool 9793 (fnv1a64-14a38d138e218d1b) · OK
+    readout-report: best-on-cal dispatch (dispatch 0.3791, max_prob 0.3791, inv_entropy 0.3934 vs dispatch 0.3791; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.3940 · ece(maxp) 0.3780 · p50 0.348 ms · 0.8 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (banking77:0)
+    laya[english]: acc 0.4220 · ece(maxp) 0.3813 · p50 51.0 ms · 40.6 s
+    cascade[english]: acc 0.4540 · esc 52.6% · 263 escalated / 0 un-escalated
+═══ suite semantic_defects ═══
+    102 cases / 102 questions · 6 domains
+    modelless: acc 0.1863 · ece(maxp) 0.0287 · p50 0.023 ms · 0 s
+    laya[english]: running…
+  [laya english] gpu pre-ramp: 1 unmeasured warmup case (semantic_defects:eval:0)
+    laya[english]: acc 0.3431 · ece(maxp) 0.2746 · p50 34.0 ms · 8 s
+    cascade[english]: acc 0.2941 · esc 60.8% · 62 escalated / 0 un-escalated
+harness: wrote .benchmarks/179_collective_worth/results.json
+harness: wrote .benchmarks/179_collective_worth/TABLES.md
+harness: PASSED — 9 suite(s), no absences

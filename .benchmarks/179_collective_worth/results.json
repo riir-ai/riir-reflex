@@ -1,0 +1,4751 @@
+{
+  "meta": {
+    "date_utc": "2026-11-10T00:48:11Z",
+    "git_sha": "4046f8f",
+    "host": "m3",
+    "profile": "release",
+    "laya_feature": true,
+    "laya_max_questions": 0,
+    "datasets_dir": ".raw/datasets_t20k",
+    "corpus_cap_mode": "registry defaults",
+    "corpus_protocol": "one engine domain per label; corpus = train-split docs of that label, capped per label (registry), self-doc fallback for labels absent from the fetched train rows",
+    "calibration_protocol": "sigmoid-gate fit on a train-tail calibration slice (same builder over the train rows); fused-gate thresholds fitted per suite at the cal-slice 30th percentile (the T1.6 arena posture rho=30%; the birth constants do not transfer — measured: 100% abstain on several suites at defaults); raw-vs-calibrated readout ECE compared per the G1 gate; no calibration claim when the calibrator never moved",
+    "sampling_protocol": "test sample = label-STRATIFIED round-robin over the whole test split (budget = the registry test cap; first-appearance label order, dataset order within each label, deterministic, no RNG); cal slice = the same law over the train rows; corpus pool = the train rows MINUS the cal front (excluded by construction, not position); budget-0 suites unchanged (identity split) — Issue 039 T2",
+    "readout_posture": "shipped Dispatch law everywhere (Issue 039 T4 DEMOTED: the cal-side arming lever overfit the narrow suites' cal slice — emotion's test G1 regressed — and coincided with Dispatch on the wide suites it targeted; the wide-label G1 gap was closed by T2's stratified cal slice). The candidate table is recorded per suite (report-only); EngineConfig::readout stays the opt-in knob",
+    "floor_definition": "conformal-naive floor = split-conformal recalibration of the raw readout confidence, c'(s) = (1 + #{cal s_i <= s}) / (n_cal + 1) — the exchangeability-valid baseline (G1 fails unless the calibrated ECE beats it)",
+    "modal_floor_definition": "input-keyed modal-answer floor = the cal-split (reference) modal gold over questions sharing the input key, pooled by option identity and mapped through each case's own option order (first-4 normalized input tokens × qid × option-count; ties → global prior → case order; arXiv:2610.17495's anti-mimicry census; LOO over eval only when no cal slice exists) — a lane at/below it carries no input-independent signal (issue 094)",
+    "determinism_scoping": "the bit-identity claim is the MODELLESS lane's (plan caveat 3); the laya lane gets the same observed repeat check and it is reported, not claimed",
+    "laya_device": "metal (LAYA_DEVICE or the build's macOS default)",
+    "laya_python_lane": "off (pass --laya-python to add the reference lane)",
+    "clm_lane": "off (pass --clm to add the comparison lane; .issues/027)",
+    "gliner_lane": "off (pass --gliner to add the comparison lane; needs the gliner2 venv — .issues/029)",
+    "bekko_lane": "off (pass --bekko to add the comparison lane; needs the bekko venv — Bench 103)",
+    "agentjev_lane": "off (pass --agentjev to add the comparison lane; needs their jev_service on AGENTJEV_SERVE_URL — .issues/025)",
+    "clef_lane": "off (pass --clef to add the comparison lane; the hosted posture needs the owner's Workers AI creds behind the loopback forwarder, or serve the open weights locally — plan 011 Phase A + .research/007)",
+    "openthai_lane": "off (pass --openthai to add the comparison lane; needs their openthai service on OPENTHAI_SERVE_URL — plan 003)",
+    "drex_lane": "off (pass --drex to add the comparison lane; needs their service on DREX_SERVE_URL, default http://127.0.0.1:8000 — Issue 073)",
+    "d1_lane": "off (pass --d1 to add the comparison lane; needs the reference server on D1_SERVE_URL, default http://127.0.0.1:8078 — Issue 078)",
+    "pplx_lane": "off (pass --pplx to add the comparison lane; serve their autojev server on PPLX_SERVE_URL, default http://127.0.0.1:8793 — Issue 082)",
+    "d3_lane": "off (pass --d3 to add the comparison lane; serve their d3_server.py on D3_SERVE_URL, default http://127.0.0.1:8794 — riir-train 629 T2)",
+    "jeva_lane": "off (pass --jeva to add the comparison lane; serve OUR reference server scripts/jeva_server.py on JEVA_SERVE_URL, default http://127.0.0.1:8095, under the venv python with their repo installed — reflex Issue 090 B1)",
+    "startlux_lane": "off (pass --startlux to add the comparison lane; serve their startlux-decide engine on STARTLUX_SERVE_URL, default http://127.0.0.1:8090 — reflex Issue 095, riir-train 635 T3)",
+    "mammoth_lane": "off (pass --mammoth to add the hosted comparison lane; run the loopback TLS forwarder to inference.baseten.co on MAMMOTH_SERVE_URL, default http://127.0.0.1:8793, with MAMMOTH_API_TOKEN set — rethink Issue 032 T10; T10.1: the key is an OWNER act; window ends 2026-10-27 23:59 PT)",
+    "elephant_lane": "off (pass --elephant to add the self-hosted comparison lane; serve our scripts/elephant_server.py under the qev venv on ELEPHANT_SERVE_URL, default http://127.0.0.1:8096 — rethink Issue 032 T10.2, riir-train 640 T2(a) records the exact venv + weight pin)",
+    "opendecider_lane": "off (pass --opendecider to add the self-hosted comparison lane; pip install \"opendecider[serve]\" then `opendecider serve --model manjunathshiva/opendecider-nano` on OPENDECIDER_SERVE_URL, default http://127.0.0.1:8000 — rethink Issue 038 / Research 013)",
+    "paw_lane": "off (pass --paw to add the comparison lane; PAW_API_KEY optional — .issues/033)",
+    "paw_local_lane": "off (pass --paw-local to add the local-runtime twin; needs the programasweights venv + a hosted-lane cache — .issues/033)",
+    "box_state": {
+      "start": {
+        "power": "AC Power",
+        "power_mode": "high",
+        "load_1m": 4.59,
+        "swap_used_mb": 532.44,
+        "load_source": "loadavg1m",
+        "gpu_util_pct": null,
+        "gpu_mem_mib": null,
+        "latency_quotable": true,
+        "refusals": []
+      },
+      "end": {
+        "power": "AC Power",
+        "power_mode": "high",
+        "load_1m": 1.92,
+        "swap_used_mb": 532.44,
+        "load_source": "loadavg1m",
+        "gpu_util_pct": null,
+        "gpu_mem_mib": null,
+        "latency_quotable": true,
+        "refusals": []
+      }
+    },
+    "head_posture": "OFF (head_scale 0 — the published baseline posture)",
+    "nb_posture": "OFF (nb_scale 0 — the published baseline posture)",
+    "divergences": [
+      "massive option sampling: SplitMix64 (fixed seed), not CPython MT19937 — both lanes see byte-identical questions, which is the integrity that matters",
+      "banking77: mteb/banking77 mirror (the reference's own bench_apps variant); PolyAI/banking77 is script-based and unservable",
+      "engine context = state + prompt (wire criteria None) — the modelless serving path",
+      "synthetic fixtures (semantic_defects): in-process fixtures with programmatic gold; the six Issue-004 harness families (2026-10-02) and code_fixtures (2026-10-11) were retired — owner calls — so the modelless lane no longer answers any self-authored suite but the one that reads above chance"
+    ]
+  },
+  "suites": [
+    {
+      "name": "typed_decisions",
+      "n_cases": 400,
+      "n_questions": 2000,
+      "cases_digest": "fnv1a64-6e37760ee2a5b6c9",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 2000,
+          "accuracy": 0.294,
+          "macro_f1": 0.20381346100350822,
+          "ece": 0.08597900694608687,
+          "brier": 0.6887953868147523,
+          "nll": 1.2268604786604644,
+          "aurc": 0.5613881658769828,
+          "mean_confidence": 0.345885090649128,
+          "acc_at_50_coverage": 0.467,
+          "acc_at_80_coverage": 0.350625
+        },
+        "readout_ece": 0.014013351291418119,
+        "readout_brier": 0.20782644546499313,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "abstain_causes": {
+          "score_gate": 2000,
+          "distance_gate": 0,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.28601398268342015,
+        "readout_ece_calibrated": 0.014013351291418119,
+        "floor_ece": 0.3873323353293416,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": {
+          "choice": {
+            "n": 600,
+            "accuracy": 0.14,
+            "macro_f1": 0.10659569157793983,
+            "ece": 0.10427482724189759,
+            "brier": 0.775437413323873,
+            "nll": 1.479820572848019,
+            "aurc": 0.8533233971432658,
+            "mean_confidence": 0.24427482724189759,
+            "acc_at_50_coverage": 0.19333333333333333,
+            "acc_at_80_coverage": 0.16041666666666668
+          },
+          "noul": {
+            "n": 600,
+            "accuracy": 0.565,
+            "macro_f1": 0.551791545861227,
+            "ece": 0.05682319382826484,
+            "brier": 0.49847883401813664,
+            "nll": 0.6916259033173674,
+            "aurc": 0.4859296412602207,
+            "mean_confidence": 0.5081768061717351,
+            "acc_at_50_coverage": 0.52,
+            "acc_at_80_coverage": 0.5479166666666667
+          },
+          "score": {
+            "n": 800,
+            "accuracy": 0.20625,
+            "macro_f1": 0.15616734623998546,
+            "ece": 0.09412400156259536,
+            "brier": 0.7665512815304019,
+            "nll": 1.438566339527116,
+            "aurc": 0.6977238936165817,
+            "mean_confidence": 0.30037400156259536,
+            "acc_at_50_coverage": 0.32,
+            "acc_at_80_coverage": 0.25625
+          }
+        },
+        "soft_acc": 0.31722780010521806,
+        "brier_soft": 0.24239426229596503,
+        "score_mae": 0.7147912293728421,
+        "within_1": 0.73625,
+        "latency_p50_ms": 0.76,
+        "latency_p99_ms": 1.691,
+        "latency_tail_support": 5,
+        "latency_extremes": {
+          "first_ms": 0.205,
+          "max_ms": 1.725,
+          "argmax_case": 144
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.994681542,
+        "n_cases": 400,
+        "n_questions": 2000,
+        "score_threshold": 0.3102674,
+        "distance_threshold": 0.91222644,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.3102674,
+            "status": "fitted",
+            "targetAccuracy": 0.21917808,
+            "support": {
+              "n": 100,
+              "nPass": 73,
+              "nAbstain": 27
+            }
+          },
+          "distance": {
+            "threshold": 0.91222644,
+            "status": "fitted",
+            "targetAccuracy": 0.14285715,
+            "support": {
+              "n": 100,
+              "nPass": 70,
+              "nAbstain": 30
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 48,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "Elevated; should be handled within the same week.",
+            "pred": "No time pressure; can wait indefinitely.",
+            "count": 92,
+            "share_of_errors": 0.07993049522154648
+          },
+          {
+            "gold": "investigate",
+            "pred": "contain",
+            "count": 74,
+            "share_of_errors": 0.06429192006950478
+          },
+          {
+            "gold": "Critical; requires action within the same day.",
+            "pred": "No time pressure; can wait indefinitely.",
+            "count": 58,
+            "share_of_errors": 0.05039096437880104
+          },
+          {
+            "gold": "escalate_to_human",
+            "pred": "answer_directly",
+            "count": 50,
+            "share_of_errors": 0.043440486533449174
+          },
+          {
+            "gold": "success",
+            "pred": "failure",
+            "count": 50,
+            "share_of_errors": 0.043440486533449174
+          },
+          {
+            "gold": "Routine; handle within the normal queue.",
+            "pred": "No time pressure; can wait indefinitely.",
+            "count": 48,
+            "share_of_errors": 0.04170286707211121
+          },
+          {
+            "gold": "Clearly unhappy; repeat problems or explicit complaints.",
+            "pred": "No sign of dissatisfaction.",
+            "count": 47,
+            "share_of_errors": 0.04083405734144222
+          },
+          {
+            "gold": "approve",
+            "pred": "hold",
+            "count": 45,
+            "share_of_errors": 0.03909643788010426
+          },
+          {
+            "gold": "manual_review",
+            "pred": "hold",
+            "count": 38,
+            "share_of_errors": 0.03301476976542137
+          },
+          {
+            "gold": "High: access to production, secrets or customer data.",
+            "pred": "Negligible: no access to anything sensitive.",
+            "count": 37,
+            "share_of_errors": 0.03214596003475239
+          },
+          {
+            "gold": "No time pressure; can wait indefinitely.",
+            "pred": "Routine; handle within the normal queue.",
+            "count": 37,
+            "share_of_errors": 0.03214596003475239
+          },
+          {
+            "gold": "Material: a large or unexplained difference.",
+            "pred": "None: everything reconciles.",
+            "count": 36,
+            "share_of_errors": 0.03127715030408341
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.2925,
+        "jdi_skill": 0.0021201413427561857,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.3005141208171844
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.10498618748784067
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.3005141208171844
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-2fe9ec3132dbc924"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 2000,
+            "accuracy": 0.3575,
+            "macro_f1": 0.32620639534238516,
+            "ece": 0.2112706999999999,
+            "brier": 0.7684491694499974,
+            "nll": 1.3593418376936985,
+            "aurc": 0.5626661372266888,
+            "mean_confidence": 0.5687707000000009,
+            "acc_at_50_coverage": 0.429,
+            "acc_at_80_coverage": 0.38125
+          },
+          "readout_ece": 0.19182040000000003,
+          "readout_brier": 0.26645623265999985,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": {
+            "choice": {
+              "n": 600,
+              "accuracy": 0.28833333333333333,
+              "macro_f1": 0.2958479995436556,
+              "ece": 0.16805866666666666,
+              "brier": 0.8079409903499993,
+              "nll": 1.5603174844492513,
+              "aurc": 0.6171637396940312,
+              "mean_confidence": 0.4527049999999996,
+              "acc_at_50_coverage": 0.38666666666666666,
+              "acc_at_80_coverage": 0.325
+            },
+            "noul": {
+              "n": 600,
+              "accuracy": 0.47333333333333333,
+              "macro_f1": 0.46994095544820186,
+              "ece": 0.2808480000000001,
+              "brier": 0.6693728044000007,
+              "nll": 0.9693957725723233,
+              "aurc": 0.4926269983870734,
+              "mean_confidence": 0.7541813333333328,
+              "acc_at_50_coverage": 0.4866666666666667,
+              "acc_at_80_coverage": 0.48333333333333334
+            },
+            "score": {
+              "n": 800,
+              "accuracy": 0.3225,
+              "macro_f1": 0.24129818605373515,
+              "ece": 0.2064690000000001,
+              "brier": 0.8131375775625017,
+              "nll": 1.5010696514680573,
+              "aurc": 0.6560603649790228,
+              "mean_confidence": 0.5167620000000003,
+              "acc_at_50_coverage": 0.335,
+              "acc_at_80_coverage": 0.3125
+            }
+          },
+          "soft_acc": 0.33458230168279346,
+          "brier_soft": 0.3348088366904328,
+          "score_mae": 0.6937235449999997,
+          "within_1": 0.7525,
+          "latency_p50_ms": 244.0,
+          "latency_p99_ms": 372.0,
+          "latency_tail_support": 5,
+          "latency_extremes": {
+            "first_ms": 84.0,
+            "max_ms": 414.0,
+            "argmax_case": 392
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 132.899107583,
+          "n_cases": 400,
+          "n_questions": 2000,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.2925,
+          "jdi_skill": 0.09187279151943463
+        },
+        "multilingual": {
+          "lane": "laya-riir",
+          "model": "multilingual",
+          "hard": {
+            "n": 2000,
+            "accuracy": 0.349,
+            "macro_f1": 0.3498994829046305,
+            "ece": 0.32280229999999993,
+            "brier": 0.9056679379849982,
+            "nll": 1.9436809234449117,
+            "aurc": 0.554820549344135,
+            "mean_confidence": 0.6687793000000012,
+            "acc_at_50_coverage": 0.404,
+            "acc_at_80_coverage": 0.36375
+          },
+          "readout_ece": 0.25666635,
+          "readout_brier": 0.3014306228250001,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": {
+            "choice": {
+              "n": 600,
+              "accuracy": 0.295,
+              "macro_f1": 0.3242803546952691,
+              "ece": 0.362346,
+              "brier": 0.9884960357500008,
+              "nll": 2.5096392870563395,
+              "aurc": 0.5968789601913673,
+              "mean_confidence": 0.6559423333333334,
+              "acc_at_50_coverage": 0.31666666666666665,
+              "acc_at_80_coverage": 0.28541666666666665
+            },
+            "noul": {
+              "n": 600,
+              "accuracy": 0.4866666666666667,
+              "macro_f1": 0.4534096824570536,
+              "ece": 0.40840199999999977,
+              "brier": 0.874118264733335,
+              "nll": 1.6946655329027263,
+              "aurc": 0.4613874178933604,
+              "mean_confidence": 0.8919399999999996,
+              "acc_at_50_coverage": 0.45,
+              "acc_at_80_coverage": 0.48333333333333334
+            },
+            "score": {
+              "n": 800,
+              "accuracy": 0.28625,
+              "macro_f1": 0.2554689567204614,
+              "ece": 0.23129124999999998,
+              "brier": 0.8672091196000032,
+              "nll": 1.7059736936429828,
+              "aurc": 0.7179156295538103,
+              "mean_confidence": 0.5110365000000006,
+              "acc_at_50_coverage": 0.26,
+              "acc_at_80_coverage": 0.2765625
+            }
+          },
+          "soft_acc": 0.3271328198665314,
+          "brier_soft": 0.4737295325604735,
+          "score_mae": 0.7603941325000002,
+          "within_1": 0.7,
+          "latency_p50_ms": 170.0,
+          "latency_p99_ms": 480.0,
+          "latency_tail_support": 5,
+          "latency_extremes": {
+            "first_ms": 41.0,
+            "max_ms": 581.0,
+            "argmax_case": 119
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 94.145068167,
+          "n_cases": 400,
+          "n_questions": 2000,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.2925,
+          "jdi_skill": 0.07985865724381624
+        },
+        "typed": {
+          "lane": "laya-riir",
+          "model": "typed",
+          "hard": {
+            "n": 2000,
+            "accuracy": 0.7445,
+            "macro_f1": 0.7349433525103708,
+            "ece": 0.1923918,
+            "brier": 0.40988110527999805,
+            "nll": 0.7184640377885018,
+            "aurc": 0.12634017215900445,
+            "mean_confidence": 0.5521081999999994,
+            "acc_at_50_coverage": 0.859,
+            "acc_at_80_coverage": 0.793125
+          },
+          "readout_ece": 0.3952849499999999,
+          "readout_brier": 0.3611238168749993,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": {
+            "choice": {
+              "n": 600,
+              "accuracy": 0.7333333333333333,
+              "macro_f1": 0.6943336435123875,
+              "ece": 0.25484566666666664,
+              "brier": 0.46509025648333213,
+              "nll": 0.8649966941522675,
+              "aurc": 0.11299371741797679,
+              "mean_confidence": 0.47848766666666676,
+              "acc_at_50_coverage": 0.8966666666666666,
+              "acc_at_80_coverage": 0.8
+            },
+            "noul": {
+              "n": 600,
+              "accuracy": 0.785,
+              "macro_f1": 0.7833092099185031,
+              "ece": 0.12942600000000015,
+              "brier": 0.3215147912666666,
+              "nll": 0.4946194012650314,
+              "aurc": 0.08280543014765192,
+              "mean_confidence": 0.6624203333333335,
+              "acc_at_50_coverage": 0.93,
+              "acc_at_80_coverage": 0.8541666666666666
+            },
+            "score": {
+              "n": 800,
+              "accuracy": 0.7225,
+              "macro_f1": 0.7150339821484726,
+              "ece": 0.19867975000000002,
+              "brier": 0.4347489773875002,
+              "nll": 0.7764480229082796,
+              "aurc": 0.1370651831938734,
+              "mean_confidence": 0.5245894999999998,
+              "acc_at_50_coverage": 0.87,
+              "acc_at_80_coverage": 0.7671875
+            }
+          },
+          "soft_acc": 0.4668227307218911,
+          "brier_soft": 0.06772113657369036,
+          "score_mae": 0.24240826250000005,
+          "within_1": 0.995,
+          "latency_p50_ms": 188.0,
+          "latency_p99_ms": 323.0,
+          "latency_tail_support": 5,
+          "latency_extremes": {
+            "first_ms": 85.0,
+            "max_ms": 339.0,
+            "argmax_case": 183
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 92.923661292,
+          "n_cases": 400,
+          "n_questions": 2000,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.2925,
+          "jdi_skill": 0.6388692579505301
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 2000,
+          "n_answered": 0,
+          "n_escalated": 0,
+          "n_un_escalated": 2000,
+          "escalation_rate": 0.0,
+          "accuracy": 0.294,
+          "n_correct": 588,
+          "escalated_laya_correct": 0,
+          "escalated_modelless_correct": 0,
+          "escalator_served_questions": 2000,
+          "worthiness": {
+            "disarmed": true,
+            "probe_n": 500,
+            "probe_laya_acc": 0.354,
+            "probe_modelless_acc": 0.308,
+            "delta": 0.045999999999999985,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 500,
+                  "both_err": 229,
+                  "agree_on_err": 92,
+                  "agreement_on_error": 0.4017467248908297,
+                  "both_wrong_rate": 0.458,
+                  "kappa": -0.08280334051053553
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 500,
+                "committee_acc": 0.354,
+                "committee_wilson_lcb": 0.31334230488712544,
+                "floor_acc": 0.308,
+                "improvement": 0.045999999999999985,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.542
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 2000,
+            "laya_correct_covered": 715,
+            "ml_correct_covered": 588,
+            "mcnemar": [
+              478,
+              351
+            ]
+          }
+        },
+        "multilingual": {
+          "n_questions": 2000,
+          "n_answered": 0,
+          "n_escalated": 0,
+          "n_un_escalated": 2000,
+          "escalation_rate": 0.0,
+          "accuracy": 0.294,
+          "n_correct": 588,
+          "escalated_laya_correct": 0,
+          "escalated_modelless_correct": 0,
+          "escalator_served_questions": 2000,
+          "worthiness": {
+            "disarmed": true,
+            "probe_n": 500,
+            "probe_laya_acc": 0.34,
+            "probe_modelless_acc": 0.308,
+            "delta": 0.03200000000000003,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 500,
+                  "both_err": 233,
+                  "agree_on_err": 63,
+                  "agreement_on_error": 0.2703862660944206,
+                  "both_wrong_rate": 0.466,
+                  "kappa": -0.02275908102405104
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 500,
+                "committee_acc": 0.34,
+                "committee_wilson_lcb": 0.299838858148611,
+                "floor_acc": 0.308,
+                "improvement": 0.03200000000000003,
+                "verdict": "undecidable",
+                "ceiling_union": 0.534,
+                "undecidable_reason": "improvement +0.0320 positive but Wilson LCB 0.2998 does not clear the floor 0.3080 — zero-straddling"
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 2000,
+            "laya_correct_covered": 698,
+            "ml_correct_covered": 588,
+            "mcnemar": [
+              482,
+              372
+            ]
+          }
+        },
+        "typed": {
+          "n_questions": 2000,
+          "n_answered": 0,
+          "n_escalated": 2000,
+          "n_un_escalated": 0,
+          "escalation_rate": 1.0,
+          "accuracy": 0.7445,
+          "n_correct": 1489,
+          "escalated_laya_correct": 1489,
+          "escalated_modelless_correct": 588,
+          "escalator_served_questions": 2000,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 500,
+            "probe_laya_acc": 0.806,
+            "probe_modelless_acc": 0.308,
+            "delta": 0.49800000000000005,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 500,
+                  "both_err": 68,
+                  "agree_on_err": 33,
+                  "agreement_on_error": 0.4852941176470588,
+                  "both_wrong_rate": 0.136,
+                  "kappa": 0.05133340360493313
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 500,
+                "committee_acc": 0.806,
+                "committee_wilson_lcb": 0.7690603699721197,
+                "floor_acc": 0.308,
+                "improvement": 0.49800000000000005,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.864
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 2000,
+            "laya_correct_covered": 1489,
+            "ml_correct_covered": 588,
+            "mcnemar": [
+              1017,
+              116
+            ]
+          }
+        }
+      },
+      "slices": {
+        "n_test": 400,
+        "n_cal": 100,
+        "n_pool": 1100,
+        "test_digest": "fnv1a64-287d5f73a11932cd",
+        "cal_digest": "fnv1a64-0b6e8426558b0d1e",
+        "pool_digest": "fnv1a64-a1679de56e9278b1",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.464,
+        "n_questions": 2000,
+        "n_keys": 80,
+        "n_fallback": 40,
+        "global_modal_share": 0.228,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "ag_news",
+      "n_cases": 400,
+      "n_questions": 400,
+      "cases_digest": "fnv1a64-07eff23c06505584",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 400,
+          "accuracy": 0.405,
+          "macro_f1": 0.3750065995228045,
+          "ece": 0.14648413084447381,
+          "brier": 0.7435743949329912,
+          "nll": 1.3735037691094945,
+          "aurc": 0.5223346365908929,
+          "mean_confidence": 0.25851586915552616,
+          "acc_at_50_coverage": 0.475,
+          "acc_at_80_coverage": 0.421875
+        },
+        "readout_ece": 0.08126678965985774,
+        "readout_brier": 0.24416386548899646,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.3925,
+          "selective_accuracy": 0.3950617283950617,
+          "selective_n": 243
+        },
+        "abstain_causes": {
+          "score_gate": 0,
+          "distance_gate": 157,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.4045773483812809,
+        "readout_ece_calibrated": 0.08126678965985774,
+        "floor_ece": 0.2281965174129353,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.143,
+        "latency_p99_ms": 0.262,
+        "latency_tail_support": 5,
+        "latency_extremes": {
+          "first_ms": 0.253,
+          "max_ms": 0.322,
+          "argmax_case": 42
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.299448917,
+        "n_cases": 400,
+        "n_questions": 400,
+        "score_threshold": 0.43972817,
+        "distance_threshold": 0.41053298,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.43972817,
+            "status": "fitted",
+            "targetAccuracy": 0.485,
+            "support": {
+              "n": 200,
+              "nPass": 200,
+              "nAbstain": 0
+            }
+          },
+          "distance": {
+            "threshold": 0.41053298,
+            "status": "fitted",
+            "targetAccuracy": 0.5214286,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "sci_tech",
+            "pred": "world",
+            "count": 59,
+            "share_of_errors": 0.24789915966386555
+          },
+          {
+            "gold": "sports",
+            "pred": "world",
+            "count": 58,
+            "share_of_errors": 0.24369747899159663
+          },
+          {
+            "gold": "business",
+            "pred": "world",
+            "count": 39,
+            "share_of_errors": 0.1638655462184874
+          },
+          {
+            "gold": "sports",
+            "pred": "sci_tech",
+            "count": 16,
+            "share_of_errors": 0.06722689075630252
+          },
+          {
+            "gold": "sci_tech",
+            "pred": "business",
+            "count": 15,
+            "share_of_errors": 0.06302521008403361
+          },
+          {
+            "gold": "world",
+            "pred": "sci_tech",
+            "count": 14,
+            "share_of_errors": 0.058823529411764705
+          },
+          {
+            "gold": "business",
+            "pred": "sci_tech",
+            "count": 11,
+            "share_of_errors": 0.046218487394957986
+          },
+          {
+            "gold": "business",
+            "pred": "sports",
+            "count": 7,
+            "share_of_errors": 0.029411764705882353
+          },
+          {
+            "gold": "sports",
+            "pred": "business",
+            "count": 6,
+            "share_of_errors": 0.025210084033613446
+          },
+          {
+            "gold": "world",
+            "pred": "business",
+            "count": 5,
+            "share_of_errors": 0.02100840336134454
+          },
+          {
+            "gold": "sci_tech",
+            "pred": "sports",
+            "count": 4,
+            "share_of_errors": 0.01680672268907563
+          },
+          {
+            "gold": "world",
+            "pred": "sports",
+            "count": 4,
+            "share_of_errors": 0.01680672268907563
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.3075,
+        "jdi_skill": 0.14079422382671483,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.48454473227262496
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.22621368184685706
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.48454473227262496
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-53b4ac1dd09f2472"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 400,
+            "accuracy": 0.95,
+            "macro_f1": 0.9439373207318056,
+            "ece": 0.03155950000000057,
+            "brier": 0.08078989162499997,
+            "nll": 0.16374224530654963,
+            "aurc": 0.006681571222221135,
+            "mean_confidence": 0.9220469999999991,
+            "acc_at_50_coverage": 1.0,
+            "acc_at_80_coverage": 0.990625
+          },
+          "readout_ece": 0.14119374999999995,
+          "readout_brier": 0.068163076475,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 32.0,
+          "latency_p99_ms": 62.0,
+          "latency_tail_support": 5,
+          "latency_extremes": {
+            "first_ms": 15.0,
+            "max_ms": 98.0,
+            "argmax_case": 7
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 23.33286175,
+          "n_cases": 400,
+          "n_questions": 400,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.3075,
+          "jdi_skill": 0.927797833935018
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 400,
+          "n_answered": 243,
+          "n_escalated": 157,
+          "n_un_escalated": 0,
+          "escalation_rate": 0.3925,
+          "accuracy": 0.605,
+          "n_correct": 242,
+          "escalated_laya_correct": 146,
+          "escalated_modelless_correct": 66,
+          "escalator_served_questions": 400,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 60,
+            "probe_laya_acc": 0.9833333333333333,
+            "probe_modelless_acc": 0.4,
+            "delta": 0.5833333333333333,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 200,
+                  "both_err": 3,
+                  "agree_on_err": 1,
+                  "agreement_on_error": 0.3333333333333333,
+                  "both_wrong_rate": 0.015,
+                  "kappa": 0.3144302449414271
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 200,
+                "committee_acc": 0.66,
+                "committee_wilson_lcb": 0.5918849547167886,
+                "floor_acc": 0.485,
+                "improvement": 0.17500000000000004,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.985
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 157,
+            "laya_correct_covered": 146,
+            "ml_correct_covered": 66,
+            "mcnemar": [
+              85,
+              5
+            ]
+          }
+        }
+      },
+      "slices": {
+        "n_test": 400,
+        "n_cal": 200,
+        "n_pool": 19800,
+        "test_digest": "fnv1a64-238133933bb8d6fc",
+        "cal_digest": "fnv1a64-96c58e69e7c6048e",
+        "pool_digest": "fnv1a64-996876e41929dc33",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.2625,
+        "n_questions": 400,
+        "n_keys": 195,
+        "n_fallback": 398,
+        "global_modal_share": 0.25,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "emotion",
+      "n_cases": 400,
+      "n_questions": 400,
+      "cases_digest": "fnv1a64-6feefd1c947dd008",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 400,
+          "accuracy": 0.275,
+          "macro_f1": 0.13453110563703544,
+          "ece": 0.10534773923456672,
+          "brier": 0.8322678506961155,
+          "nll": 1.788558352918849,
+          "aurc": 0.7258681023648036,
+          "mean_confidence": 0.1696522607654333,
+          "acc_at_50_coverage": 0.3,
+          "acc_at_80_coverage": 0.290625
+        },
+        "readout_ece": 0.12973278537392618,
+        "readout_brier": 0.21620792750127282,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.33,
+          "selective_accuracy": 0.291044776119403,
+          "selective_n": 268
+        },
+        "abstain_causes": {
+          "score_gate": 0,
+          "distance_gate": 132,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.27494118794798855,
+        "readout_ece_calibrated": 0.12973278537392618,
+        "floor_ece": 0.2981592039800995,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.11,
+        "latency_p99_ms": 0.13,
+        "latency_tail_support": 5,
+        "latency_extremes": {
+          "first_ms": 0.119,
+          "max_ms": 0.158,
+          "argmax_case": 312
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.266270667,
+        "n_cases": 400,
+        "n_questions": 400,
+        "score_threshold": 0.14525883,
+        "distance_threshold": 0.4265421,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.14525883,
+            "status": "fitted",
+            "targetAccuracy": 0.145,
+            "support": {
+              "n": 200,
+              "nPass": 200,
+              "nAbstain": 0
+            }
+          },
+          "distance": {
+            "threshold": 0.4265421,
+            "status": "fitted",
+            "targetAccuracy": 0.15714286,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "sadness",
+            "pred": "joy",
+            "count": 93,
+            "share_of_errors": 0.32068965517241377
+          },
+          {
+            "gold": "anger",
+            "pred": "joy",
+            "count": 48,
+            "share_of_errors": 0.16551724137931034
+          },
+          {
+            "gold": "fear",
+            "pred": "joy",
+            "count": 39,
+            "share_of_errors": 0.13448275862068965
+          },
+          {
+            "gold": "love",
+            "pred": "joy",
+            "count": 28,
+            "share_of_errors": 0.09655172413793103
+          },
+          {
+            "gold": "joy",
+            "pred": "love",
+            "count": 15,
+            "share_of_errors": 0.05172413793103448
+          },
+          {
+            "gold": "sadness",
+            "pred": "fear",
+            "count": 13,
+            "share_of_errors": 0.04482758620689655
+          },
+          {
+            "gold": "sadness",
+            "pred": "love",
+            "count": 10,
+            "share_of_errors": 0.034482758620689655
+          },
+          {
+            "gold": "anger",
+            "pred": "fear",
+            "count": 8,
+            "share_of_errors": 0.027586206896551724
+          },
+          {
+            "gold": "joy",
+            "pred": "fear",
+            "count": 7,
+            "share_of_errors": 0.02413793103448276
+          },
+          {
+            "gold": "anger",
+            "pred": "love",
+            "count": 6,
+            "share_of_errors": 0.020689655172413793
+          },
+          {
+            "gold": "surprise",
+            "pred": "joy",
+            "count": 6,
+            "share_of_errors": 0.020689655172413793
+          },
+          {
+            "gold": "surprise",
+            "pred": "fear",
+            "count": 4,
+            "share_of_errors": 0.013793103448275862
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.2975,
+        "jdi_skill": 0.0,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.1449462106823921
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.024536297470331203
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.1449462106823921
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-d4127db8eebd778e"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 400,
+            "accuracy": 0.5925,
+            "macro_f1": 0.47086603548842415,
+            "ece": 0.308786,
+            "brier": 0.6962648099500026,
+            "nll": 2.184045176210792,
+            "aurc": 0.2657102861338114,
+            "mean_confidence": 0.9012859999999996,
+            "acc_at_50_coverage": 0.715,
+            "acc_at_80_coverage": 0.6375
+          },
+          "readout_ece": 0.2570897499999998,
+          "readout_brier": 0.2910166185750001,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 22.0,
+          "latency_p99_ms": 51.0,
+          "latency_tail_support": 5,
+          "latency_extremes": {
+            "first_ms": 14.0,
+            "max_ms": 75.0,
+            "argmax_case": 20
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 17.594474458,
+          "n_cases": 400,
+          "n_questions": 400,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.2975,
+          "jdi_skill": 0.41992882562277584
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 400,
+          "n_answered": 268,
+          "n_escalated": 132,
+          "n_un_escalated": 0,
+          "escalation_rate": 0.33,
+          "accuracy": 0.4025,
+          "n_correct": 161,
+          "escalated_laya_correct": 83,
+          "escalated_modelless_correct": 32,
+          "escalator_served_questions": 400,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 60,
+            "probe_laya_acc": 0.5166666666666667,
+            "probe_modelless_acc": 0.11666666666666667,
+            "delta": 0.4,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 200,
+                  "both_err": 94,
+                  "agree_on_err": 23,
+                  "agreement_on_error": 0.24468085106382978,
+                  "both_wrong_rate": 0.47,
+                  "kappa": -0.03713724353399687
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 200,
+                "committee_acc": 0.265,
+                "committee_wilson_lcb": 0.2086815410670056,
+                "floor_acc": 0.145,
+                "improvement": 0.12000000000000002,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.53
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 132,
+            "laya_correct_covered": 83,
+            "ml_correct_covered": 32,
+            "mcnemar": [
+              59,
+              8
+            ]
+          }
+        }
+      },
+      "slices": {
+        "n_test": 400,
+        "n_cal": 200,
+        "n_pool": 15800,
+        "test_digest": "fnv1a64-36f3eb1067bed96a",
+        "cal_digest": "fnv1a64-f2ec48ed7070889c",
+        "pool_digest": "fnv1a64-a05205a8dc7160cb",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.3125,
+        "n_questions": 400,
+        "n_keys": 162,
+        "n_fallback": 267,
+        "global_modal_share": 0.17,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "sst5",
+      "n_cases": 600,
+      "n_questions": 600,
+      "cases_digest": "fnv1a64-ad64a6cb0039e916",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 600,
+          "accuracy": 0.20166666666666666,
+          "macro_f1": 0.18904600262677734,
+          "ece": 0.008660208781560264,
+          "brier": 0.7986493075782463,
+          "nll": 1.6059232237797827,
+          "aurc": 0.8159105046398081,
+          "mean_confidence": 0.21032687544822692,
+          "acc_at_50_coverage": 0.18333333333333332,
+          "acc_at_80_coverage": 0.19166666666666668
+        },
+        "readout_ece": 0.06578970318039258,
+        "readout_brier": 0.16676633528051943,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.5816666666666667,
+          "selective_accuracy": 0.20717131474103587,
+          "selective_n": 251
+        },
+        "abstain_causes": {
+          "score_gate": 207,
+          "distance_gate": 142,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.20093427270650863,
+        "readout_ece_calibrated": 0.06578970318039258,
+        "floor_ece": 0.3342868988391377,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": 1.1781307634711267,
+        "within_1": 0.44333333333333336,
+        "latency_p50_ms": 0.091,
+        "latency_p99_ms": 0.112,
+        "latency_tail_support": 7,
+        "latency_extremes": {
+          "first_ms": 0.091,
+          "max_ms": 0.176,
+          "argmax_case": 597
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.198588334,
+        "n_cases": 600,
+        "n_questions": 600,
+        "score_threshold": 0.20488091,
+        "distance_threshold": 0.41663086,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.20488091,
+            "status": "fitted",
+            "targetAccuracy": 0.29285714,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          },
+          "distance": {
+            "threshold": 0.41663086,
+            "status": "fitted",
+            "targetAccuracy": 0.20714286,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "negative",
+            "pred": "neutral",
+            "count": 65,
+            "share_of_errors": 0.13569937369519833
+          },
+          {
+            "gold": "very positive",
+            "pred": "neutral",
+            "count": 50,
+            "share_of_errors": 0.10438413361169102
+          },
+          {
+            "gold": "positive",
+            "pred": "neutral",
+            "count": 44,
+            "share_of_errors": 0.0918580375782881
+          },
+          {
+            "gold": "negative",
+            "pred": "positive",
+            "count": 41,
+            "share_of_errors": 0.08559498956158663
+          },
+          {
+            "gold": "very negative",
+            "pred": "neutral",
+            "count": 31,
+            "share_of_errors": 0.06471816283924843
+          },
+          {
+            "gold": "very positive",
+            "pred": "positive",
+            "count": 30,
+            "share_of_errors": 0.06263048016701461
+          },
+          {
+            "gold": "positive",
+            "pred": "very positive",
+            "count": 28,
+            "share_of_errors": 0.05845511482254697
+          },
+          {
+            "gold": "negative",
+            "pred": "very negative",
+            "count": 25,
+            "share_of_errors": 0.05219206680584551
+          },
+          {
+            "gold": "positive",
+            "pred": "very negative",
+            "count": 24,
+            "share_of_errors": 0.05010438413361169
+          },
+          {
+            "gold": "very positive",
+            "pred": "very negative",
+            "count": 21,
+            "share_of_errors": 0.04384133611691023
+          },
+          {
+            "gold": "neutral",
+            "pred": "positive",
+            "count": 19,
+            "share_of_errors": 0.03966597077244259
+          },
+          {
+            "gold": "neutral",
+            "pred": "negative",
+            "count": 16,
+            "share_of_errors": 0.033402922755741124
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.2733333333333333,
+        "jdi_skill": 0.0,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.24420316398143768
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.034027166366577155
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.24420316398143768
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-0c648062c19b8c01"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 600,
+            "accuracy": 0.37166666666666665,
+            "macro_f1": 0.32915341205482057,
+            "ece": 0.2477898333333333,
+            "brier": 0.8171809703500024,
+            "nll": 1.729144921851138,
+            "aurc": 0.5279207298357831,
+            "mean_confidence": 0.6194564999999997,
+            "acc_at_50_coverage": 0.45666666666666667,
+            "acc_at_80_coverage": 0.4041666666666667
+          },
+          "readout_ece": 0.08109283333333335,
+          "readout_brier": 0.22282314455000005,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 23.0,
+          "latency_p99_ms": 34.0,
+          "latency_tail_support": 7,
+          "latency_extremes": {
+            "first_ms": 12.0,
+            "max_ms": 63.0,
+            "argmax_case": 15
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 22.406484875,
+          "n_cases": 600,
+          "n_questions": 600,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.2733333333333333,
+          "jdi_skill": 0.1353211009174312
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 600,
+          "n_answered": 251,
+          "n_escalated": 349,
+          "n_un_escalated": 0,
+          "escalation_rate": 0.5816666666666667,
+          "accuracy": 0.2866666666666667,
+          "n_correct": 172,
+          "escalated_laya_correct": 120,
+          "escalated_modelless_correct": 69,
+          "escalator_served_questions": 600,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 104,
+            "probe_laya_acc": 0.40384615384615385,
+            "probe_modelless_acc": 0.23076923076923078,
+            "delta": 0.17307692307692307,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 200,
+                  "both_err": 93,
+                  "agree_on_err": 22,
+                  "agreement_on_error": 0.23655913978494625,
+                  "both_wrong_rate": 0.465,
+                  "kappa": -0.012611617416919862
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 200,
+                "committee_acc": 0.335,
+                "committee_wilson_lcb": 0.27324086932910685,
+                "floor_acc": 0.245,
+                "improvement": 0.09000000000000002,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.535
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 349,
+            "laya_correct_covered": 120,
+            "ml_correct_covered": 69,
+            "mcnemar": [
+              94,
+              43
+            ]
+          }
+        }
+      },
+      "slices": {
+        "n_test": 600,
+        "n_cal": 200,
+        "n_pool": 8344,
+        "test_digest": "fnv1a64-67fe9666fa0c3a6f",
+        "cal_digest": "fnv1a64-d210e7c6707c3d40",
+        "pool_digest": "fnv1a64-cf933108b9825392",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": [
+          "sst5: corpus pool ∩ test sample = 1 identical row(s) — the train pull leaks the eval population (near-duplicates that are not verbatim are the slice_leak lane's axis; EXACT identity is refused here)",
+          "sst5: corpus pool ∩ cal front = 1 identical row(s) — selection and gate-fit would score against rows the engine also trains on"
+        ],
+        "acknowledged": true
+      },
+      "modal_floor": {
+        "acc": 0.13833333333333334,
+        "n_questions": 600,
+        "n_keys": 188,
+        "n_fallback": 578,
+        "global_modal_share": 0.2,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "prompt_injections",
+      "n_cases": 116,
+      "n_questions": 116,
+      "cases_digest": "fnv1a64-5080803ec29f2423",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 116,
+          "accuracy": 0.4827586206896552,
+          "macro_f1": 0.32558139534883723,
+          "ece": 0.02279288141891872,
+          "brier": 0.500525170702045,
+          "nll": 0.6936723965468061,
+          "aurc": 0.39800187632632034,
+          "mean_confidence": 0.5055515021085739,
+          "acc_at_50_coverage": 0.5689655172413793,
+          "acc_at_80_coverage": 0.5978260869565217
+        },
+        "readout_ece": 0.01724094049683933,
+        "readout_brier": 0.25000261215119507,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "abstain_causes": {
+          "score_gate": 116,
+          "distance_gate": 0,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.4826689280312637,
+        "readout_ece_calibrated": 0.01724094049683933,
+        "floor_ece": 0.2491464663707746,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.068,
+        "latency_p99_ms": 0.089,
+        "latency_tail_support": 2,
+        "latency_extremes": {
+          "first_ms": 0.074,
+          "max_ms": 0.09,
+          "argmax_case": 53
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.050971417,
+        "n_cases": 116,
+        "n_questions": 116,
+        "score_threshold": 0.50998205,
+        "distance_threshold": 0.46189553,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.50998205,
+            "status": "fitted",
+            "targetAccuracy": 0.51,
+            "support": {
+              "n": 100,
+              "nPass": 100,
+              "nAbstain": 0
+            }
+          },
+          "distance": {
+            "threshold": 0.46189553,
+            "status": "fitted",
+            "targetAccuracy": 0.5857143,
+            "support": {
+              "n": 100,
+              "nPass": 70,
+              "nAbstain": 30
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [],
+        "pair_head_ab": null,
+        "jdi_chance": 0.5172413793103449,
+        "jdi_skill": 0.0,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.49991039812564847
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.005516927242279035
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.49991039812564847
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-6693f8f5cbe1b3b3"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 116,
+            "accuracy": 0.6982758620689655,
+            "macro_f1": 0.6750700280112045,
+            "ece": 0.2620396551724138,
+            "brier": 0.5259102800000001,
+            "nll": 3.1496688651163907,
+            "aurc": 0.10727341980747937,
+            "mean_confidence": 0.9603155172413793,
+            "acc_at_50_coverage": 0.9655172413793104,
+            "acc_at_80_coverage": 0.7717391304347826
+          },
+          "readout_ece": 0.2620396551724138,
+          "readout_brier": 0.26295514000000003,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 22.0,
+          "latency_p99_ms": 64.0,
+          "latency_tail_support": 2,
+          "latency_extremes": {
+            "first_ms": 22.0,
+            "max_ms": 76.0,
+            "argmax_case": 12
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 9.029795542,
+          "n_cases": 116,
+          "n_questions": 116,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.5172413793103449,
+          "jdi_skill": 0.37499999999999994
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 116,
+          "n_answered": 0,
+          "n_escalated": 116,
+          "n_un_escalated": 0,
+          "escalation_rate": 1.0,
+          "accuracy": 0.6982758620689655,
+          "n_correct": 81,
+          "escalated_laya_correct": 81,
+          "escalated_modelless_correct": 56,
+          "escalator_served_questions": 116,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 100,
+            "probe_laya_acc": 0.77,
+            "probe_modelless_acc": 0.5,
+            "delta": 0.27,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 100,
+                  "both_err": 22,
+                  "agree_on_err": 22,
+                  "agreement_on_error": 1.0,
+                  "both_wrong_rate": 0.22,
+                  "kappa": 0.0
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 100,
+                "committee_acc": 0.77,
+                "committee_wilson_lcb": 0.6784561689907251,
+                "floor_acc": 0.5,
+                "improvement": 0.27,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.78
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 116,
+            "laya_correct_covered": 81,
+            "ml_correct_covered": 56,
+            "mcnemar": [
+              25,
+              0
+            ]
+          }
+        }
+      },
+      "slices": {
+        "n_test": 116,
+        "n_cal": 100,
+        "n_pool": 446,
+        "test_digest": "fnv1a64-a6a375f0273e0bef",
+        "cal_digest": "fnv1a64-a45e6561b2a98ff1",
+        "pool_digest": "fnv1a64-8b32b961bbd47195",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.5344827586206896,
+        "n_questions": 116,
+        "n_keys": 84,
+        "n_fallback": 107,
+        "global_modal_share": 0.5,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "xnli_en",
+      "n_cases": 300,
+      "n_questions": 300,
+      "cases_digest": "fnv1a64-b136750e5af1d412",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 300,
+          "accuracy": 0.34,
+          "macro_f1": 0.20524722352398592,
+          "ece": 0.0055084086457888315,
+          "brier": 0.6676390279773547,
+          "nll": 1.099977760575335,
+          "aurc": 0.6936648678764618,
+          "mean_confidence": 0.34550840864578886,
+          "acc_at_50_coverage": 0.3466666666666667,
+          "acc_at_80_coverage": 0.3333333333333333
+        },
+        "readout_ece": 0.03354977031548814,
+        "readout_brier": 0.22723144806580076,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.5566666666666666,
+          "selective_accuracy": 0.3383458646616541,
+          "selective_n": 133
+        },
+        "abstain_causes": {
+          "score_gate": 88,
+          "distance_gate": 79,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.3394640296697617,
+        "readout_ece_calibrated": 0.03354977031548814,
+        "floor_ece": 0.313665008291874,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.084,
+        "latency_p99_ms": 0.147,
+        "latency_tail_support": 4,
+        "latency_extremes": {
+          "first_ms": 0.097,
+          "max_ms": 0.195,
+          "argmax_case": 169
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.134877583,
+        "n_cases": 300,
+        "n_questions": 300,
+        "score_threshold": 0.2998552,
+        "distance_threshold": 0.51104105,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.2998552,
+            "status": "fitted",
+            "targetAccuracy": 0.32142857,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          },
+          "distance": {
+            "threshold": 0.51104105,
+            "status": "fitted",
+            "targetAccuracy": 0.32142857,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 64,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "contradiction",
+            "pred": "neutral",
+            "count": 95,
+            "share_of_errors": 0.4797979797979798
+          },
+          {
+            "gold": "entailment",
+            "pred": "neutral",
+            "count": 93,
+            "share_of_errors": 0.4696969696969697
+          },
+          {
+            "gold": "contradiction",
+            "pred": "entailment",
+            "count": 5,
+            "share_of_errors": 0.025252525252525252
+          },
+          {
+            "gold": "neutral",
+            "pred": "entailment",
+            "count": 5,
+            "share_of_errors": 0.025252525252525252
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.3333333333333333,
+        "jdi_skill": 0.010000000000000063,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.31960380733013155
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.023821600973606083
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.31960380733013155
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-452745661eb64ed0"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 300,
+            "accuracy": 0.86,
+            "macro_f1": 0.8611876188602533,
+            "ece": 0.06853533333333349,
+            "brier": 0.22044518360000007,
+            "nll": 0.39874945916910204,
+            "aurc": 0.0380700868516878,
+            "mean_confidence": 0.920768666666667,
+            "acc_at_50_coverage": 0.98,
+            "acc_at_80_coverage": 0.9208333333333333
+          },
+          "readout_ece": 0.10435199999999993,
+          "readout_brier": 0.1072243406666667,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 24.0,
+          "latency_p99_ms": 32.0,
+          "latency_tail_support": 4,
+          "latency_extremes": {
+            "first_ms": 17.0,
+            "max_ms": 69.0,
+            "argmax_case": 8
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 16.494799208,
+          "n_cases": 300,
+          "n_questions": 300,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.3333333333333333,
+          "jdi_skill": 0.7899999999999998
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 300,
+          "n_answered": 133,
+          "n_escalated": 167,
+          "n_un_escalated": 0,
+          "escalation_rate": 0.5566666666666666,
+          "accuracy": 0.6333333333333333,
+          "n_correct": 190,
+          "escalated_laya_correct": 145,
+          "escalated_modelless_correct": 57,
+          "escalator_served_questions": 300,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 110,
+            "probe_laya_acc": 0.9181818181818182,
+            "probe_modelless_acc": 0.34545454545454546,
+            "delta": 0.5727272727272728,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 200,
+                  "both_err": 4,
+                  "agree_on_err": 3,
+                  "agreement_on_error": 0.75,
+                  "both_wrong_rate": 0.02,
+                  "kappa": -0.012138325571161441
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 200,
+                "committee_acc": 0.635,
+                "committee_wilson_lcb": 0.5663170259754062,
+                "floor_acc": 0.32,
+                "improvement": 0.315,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.98
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 167,
+            "laya_correct_covered": 145,
+            "ml_correct_covered": 57,
+            "mcnemar": [
+              95,
+              7
+            ]
+          }
+        }
+      },
+      "slices": {
+        "n_test": 300,
+        "n_cal": 200,
+        "n_pool": 19800,
+        "test_digest": "fnv1a64-614262484399affa",
+        "cal_digest": "fnv1a64-b8126a40673cc7c6",
+        "pool_digest": "fnv1a64-f3f8f200eba61985",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.3333333333333333,
+        "n_questions": 300,
+        "n_keys": 198,
+        "n_fallback": 288,
+        "global_modal_share": 0.335,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "massive_intent_en",
+      "n_cases": 300,
+      "n_questions": 300,
+      "cases_digest": "fnv1a64-49390c8b80475849",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 300,
+          "accuracy": 0.61,
+          "macro_f1": 0.6034990885757014,
+          "ece": 0.5453643404816588,
+          "brier": 0.9258055462765862,
+          "nll": 2.775557959666437,
+          "aurc": 0.22784459897009157,
+          "mean_confidence": 0.06463565951834123,
+          "acc_at_50_coverage": 0.7666666666666667,
+          "acc_at_80_coverage": 0.6708333333333333
+        },
+        "readout_ece": 0.06140097419420875,
+        "readout_brier": 0.2076811518254866,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.3466666666666667,
+          "selective_accuracy": 0.6122448979591837,
+          "selective_n": 196
+        },
+        "abstain_causes": {
+          "score_gate": 16,
+          "distance_gate": 88,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.5453643404816588,
+        "readout_ece_calibrated": 0.06140097419420875,
+        "floor_ece": 0.12494195688225537,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.102,
+        "latency_p99_ms": 0.122,
+        "latency_tail_support": 4,
+        "latency_extremes": {
+          "first_ms": 0.104,
+          "max_ms": 0.139,
+          "argmax_case": 141
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.212371834,
+        "n_cases": 300,
+        "n_questions": 300,
+        "score_threshold": 0.23724596,
+        "distance_threshold": 0.5259382,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.23724596,
+            "status": "fitted",
+            "targetAccuracy": 0.55,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          },
+          "distance": {
+            "threshold": 0.5259382,
+            "status": "fitted",
+            "targetAccuracy": 0.4,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 48,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "iot_hue_lightoff",
+            "pred": "iot_wemo_off",
+            "count": 4,
+            "share_of_errors": 0.03418803418803419
+          },
+          {
+            "gold": "calendar_query",
+            "pred": "qa_maths",
+            "count": 2,
+            "share_of_errors": 0.017094017094017096
+          },
+          {
+            "gold": "datetime_query",
+            "pred": "iot_cleaning",
+            "count": 2,
+            "share_of_errors": 0.017094017094017096
+          },
+          {
+            "gold": "lists_createoradd",
+            "pred": "lists_query",
+            "count": 2,
+            "share_of_errors": 0.017094017094017096
+          },
+          {
+            "gold": "music_dislikeness",
+            "pred": "play_music",
+            "count": 2,
+            "share_of_errors": 0.017094017094017096
+          },
+          {
+            "gold": "transport_traffic",
+            "pred": "qa_factoid",
+            "count": 2,
+            "share_of_errors": 0.017094017094017096
+          },
+          {
+            "gold": "alarm_query",
+            "pred": "alarm_remove",
+            "count": 1,
+            "share_of_errors": 0.008547008547008548
+          },
+          {
+            "gold": "alarm_query",
+            "pred": "alarm_set",
+            "count": 1,
+            "share_of_errors": 0.008547008547008548
+          },
+          {
+            "gold": "alarm_remove",
+            "pred": "alarm_set",
+            "count": 1,
+            "share_of_errors": 0.008547008547008548
+          },
+          {
+            "gold": "audio_volume_down",
+            "pred": "audio_volume_up",
+            "count": 1,
+            "share_of_errors": 0.008547008547008548
+          },
+          {
+            "gold": "audio_volume_mute",
+            "pred": "audio_volume_other",
+            "count": 1,
+            "share_of_errors": 0.008547008547008548
+          },
+          {
+            "gold": "audio_volume_mute",
+            "pred": "general_quirky",
+            "count": 1,
+            "share_of_errors": 0.008547008547008548
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.08666666666666667,
+        "jdi_skill": 0.572992700729927,
+        "readout_report": {
+          "best_on_cal": "dispatch",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.36843151019886133
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.36843151019886133
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.42701785534620285
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-da4b04bcd9bb6c8b"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 300,
+            "accuracy": 0.6933333333333334,
+            "macro_f1": 0.6936125577989888,
+            "ece": 0.24830266666666645,
+            "brier": 0.540529478666667,
+            "nll": 3.5499559002853465,
+            "aurc": 0.14436891325283494,
+            "mean_confidence": 0.9300260000000002,
+            "acc_at_50_coverage": 0.9133333333333333,
+            "acc_at_80_coverage": 0.775
+          },
+          "readout_ece": 0.24406833333333328,
+          "readout_brier": 0.24726970376666677,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 34.0,
+          "latency_p99_ms": 42.0,
+          "latency_tail_support": 4,
+          "latency_extremes": {
+            "first_ms": 24.0,
+            "max_ms": 69.0,
+            "argmax_case": 6
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 21.572639375,
+          "n_cases": 300,
+          "n_questions": 300,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.08666666666666667,
+          "jdi_skill": 0.6642335766423358
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 300,
+          "n_answered": 196,
+          "n_escalated": 104,
+          "n_un_escalated": 0,
+          "escalation_rate": 0.3466666666666667,
+          "accuracy": 0.6333333333333333,
+          "n_correct": 190,
+          "escalated_laya_correct": 70,
+          "escalated_modelless_correct": 63,
+          "escalator_served_questions": 300,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 99,
+            "probe_laya_acc": 0.7575757575757576,
+            "probe_modelless_acc": 0.37373737373737376,
+            "delta": 0.3838383838383838,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 200,
+                  "both_err": 44,
+                  "agree_on_err": 5,
+                  "agreement_on_error": 0.11363636363636363,
+                  "both_wrong_rate": 0.22,
+                  "kappa": 0.33993399339933994
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 200,
+                "committee_acc": 0.62,
+                "committee_wilson_lcb": 0.5510671796046104,
+                "floor_acc": 0.43,
+                "improvement": 0.19,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.78
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 104,
+            "laya_correct_covered": 70,
+            "ml_correct_covered": 63,
+            "mcnemar": [
+              21,
+              14
+            ]
+          }
+        }
+      },
+      "slices": {
+        "n_test": 300,
+        "n_cal": 200,
+        "n_pool": 11314,
+        "test_digest": "fnv1a64-328f111f90d7a0c1",
+        "cal_digest": "fnv1a64-74b76416cdd836d5",
+        "pool_digest": "fnv1a64-fb5a4f0d9147dc0d",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.11,
+        "n_questions": 300,
+        "n_keys": 175,
+        "n_fallback": 265,
+        "global_modal_share": 0.02,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "banking77",
+      "n_cases": 500,
+      "n_questions": 500,
+      "cases_digest": "fnv1a64-dd8ab35333abb82a",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 500,
+          "accuracy": 0.394,
+          "macro_f1": 0.35256293737855116,
+          "ece": 0.37796421800740065,
+          "brier": 0.9822180594530954,
+          "nll": 4.174181699600196,
+          "aurc": 0.5090083545416316,
+          "mean_confidence": 0.01603578199259937,
+          "acc_at_50_coverage": 0.484,
+          "acc_at_80_coverage": 0.4375
+        },
+        "readout_ece": 0.027789311647415153,
+        "readout_brier": 0.2289881572429523,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.526,
+          "selective_accuracy": 0.5485232067510548,
+          "selective_n": 237
+        },
+        "abstain_causes": {
+          "score_gate": 132,
+          "distance_gate": 131,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.37796421800740065,
+        "readout_ece_calibrated": 0.027789311647415153,
+        "floor_ece": 0.19416915422885572,
+        "g1_pass": true,
+        "g1_verdict": "pass",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.348,
+        "latency_p99_ms": 0.649,
+        "latency_tail_support": 6,
+        "latency_extremes": {
+          "first_ms": 0.309,
+          "max_ms": 0.673,
+          "argmax_case": 127
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.784669666,
+        "n_cases": 500,
+        "n_questions": 500,
+        "score_threshold": 0.317653,
+        "distance_threshold": 0.55494976,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.317653,
+            "status": "fitted",
+            "targetAccuracy": 0.47857141,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          },
+          "distance": {
+            "threshold": 0.55494976,
+            "status": "fitted",
+            "targetAccuracy": 0.4857143,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 40,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "card payment wrong exchange rate",
+            "pred": "exchange rate",
+            "count": 5,
+            "share_of_errors": 0.0165016501650165
+          },
+          {
+            "gold": "top up by cash or cheque",
+            "pred": "top up limits",
+            "count": 5,
+            "share_of_errors": 0.0165016501650165
+          },
+          {
+            "gold": "card delivery estimate",
+            "pred": "card arrival",
+            "count": 4,
+            "share_of_errors": 0.013201320132013201
+          },
+          {
+            "gold": "card payment not recognised",
+            "pred": "card linking",
+            "count": 4,
+            "share_of_errors": 0.013201320132013201
+          },
+          {
+            "gold": "lost or stolen card",
+            "pred": "card linking",
+            "count": 4,
+            "share_of_errors": 0.013201320132013201
+          },
+          {
+            "gold": "pending cash withdrawal",
+            "pred": "pending top up",
+            "count": 4,
+            "share_of_errors": 0.013201320132013201
+          },
+          {
+            "gold": "reverted card payment?",
+            "pred": "declined card payment",
+            "count": 4,
+            "share_of_errors": 0.013201320132013201
+          },
+          {
+            "gold": "why verify identity",
+            "pred": "verify my identity",
+            "count": 4,
+            "share_of_errors": 0.013201320132013201
+          },
+          {
+            "gold": "card acceptance",
+            "pred": "card arrival",
+            "count": 3,
+            "share_of_errors": 0.009900990099009901
+          },
+          {
+            "gold": "card not working",
+            "pred": "card arrival",
+            "count": 3,
+            "share_of_errors": 0.009900990099009901
+          },
+          {
+            "gold": "card not working",
+            "pred": "card linking",
+            "count": 3,
+            "share_of_errors": 0.009900990099009901
+          },
+          {
+            "gold": "card payment fee charged",
+            "pred": "card linking",
+            "count": 3,
+            "share_of_errors": 0.009900990099009901
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.014,
+        "jdi_skill": 0.385395537525355,
+        "readout_report": {
+          "best_on_cal": "dispatch",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.37906540132593364
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.37906540132593364
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.39341777086257934
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-a8ba728d1bb79dd2"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 500,
+            "accuracy": 0.422,
+            "macro_f1": 0.37652146392023184,
+            "ece": 0.38134340000000017,
+            "brier": 0.9326880786800371,
+            "nll": 6.121876279293705,
+            "aurc": 0.4066392903778559,
+            "mean_confidence": 0.7951093999999999,
+            "acc_at_50_coverage": 0.6,
+            "acc_at_80_coverage": 0.475
+          },
+          "readout_ece": 0.3940097999999995,
+          "readout_brier": 0.38357401278,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 51.0,
+          "latency_p99_ms": 59.0,
+          "latency_tail_support": 6,
+          "latency_extremes": {
+            "first_ms": 36.0,
+            "max_ms": 93.0,
+            "argmax_case": 4
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 40.623977833,
+          "n_cases": 500,
+          "n_questions": 500,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.014,
+          "jdi_skill": 0.41379310344827586
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 500,
+          "n_answered": 237,
+          "n_escalated": 263,
+          "n_un_escalated": 0,
+          "escalation_rate": 0.526,
+          "accuracy": 0.454,
+          "n_correct": 227,
+          "escalated_laya_correct": 97,
+          "escalated_modelless_correct": 67,
+          "escalator_served_questions": 500,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 109,
+            "probe_laya_acc": 0.42201834862385323,
+            "probe_modelless_acc": 0.21100917431192662,
+            "delta": 0.21100917431192662,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 200,
+                  "both_err": 78,
+                  "agree_on_err": 11,
+                  "agreement_on_error": 0.14102564102564102,
+                  "both_wrong_rate": 0.39,
+                  "kappa": 0.25779065629607034
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 200,
+                "committee_acc": 0.51,
+                "committee_wilson_lcb": 0.44118587625055616,
+                "floor_acc": 0.395,
+                "improvement": 0.11499999999999999,
+                "verdict": "worth_committee",
+                "ceiling_union": 0.61
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            }
+          },
+          "ab": {
+            "covered_abstains": 263,
+            "laya_correct_covered": 97,
+            "ml_correct_covered": 67,
+            "mcnemar": [
+              61,
+              31
+            ]
+          }
+        }
+      },
+      "slices": {
+        "n_test": 500,
+        "n_cal": 200,
+        "n_pool": 9793,
+        "test_digest": "fnv1a64-cb0b5cbcb0cdfcce",
+        "cal_digest": "fnv1a64-8f14f68a2e55799f",
+        "pool_digest": "fnv1a64-14a38d138e218d1b",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.046,
+        "n_questions": 500,
+        "n_keys": 148,
+        "n_fallback": 311,
+        "global_modal_share": 0.015,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    },
+    {
+      "name": "semantic_defects",
+      "n_cases": 102,
+      "n_questions": 102,
+      "cases_digest": "fnv1a64-8032fe33f25653bc",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 102,
+          "accuracy": 0.18627450980392157,
+          "macro_f1": 0.17981060921698963,
+          "ece": 0.028703849835723043,
+          "brier": 0.8338161412602471,
+          "nll": 1.7937330962600424,
+          "aurc": 0.822020626645722,
+          "mean_confidence": 0.18253409088242287,
+          "acc_at_50_coverage": 0.19607843137254902,
+          "acc_at_80_coverage": 0.18518518518518517
+        },
+        "readout_ece": 0.18434360097436345,
+        "readout_brier": 0.1856302045906745,
+        "raw_abstain": {
+          "abstain_rate": 0.6078431372549019,
+          "selective_accuracy": 0.25,
+          "selective_n": 40
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.6078431372549019,
+          "selective_accuracy": 0.25,
+          "selective_n": 40
+        },
+        "abstain_causes": {
+          "score_gate": 43,
+          "distance_gate": 19,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.18434360097436345,
+        "readout_ece_calibrated": 0.18434360097436345,
+        "floor_ece": 0.36171310629514974,
+        "g1_pass": null,
+        "g1_verdict": "no_claim",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.023,
+        "latency_p99_ms": 0.029,
+        "latency_tail_support": 2,
+        "latency_extremes": {
+          "first_ms": 0.025,
+          "max_ms": 0.031,
+          "argmax_case": 23
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.006645417,
+        "n_cases": 102,
+        "n_questions": 102,
+        "score_threshold": 0.0010168552,
+        "distance_threshold": 0.52091897,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.0010168552,
+            "status": "fitted",
+            "targetAccuracy": 0.30769232,
+            "support": {
+              "n": 18,
+              "nPass": 13,
+              "nAbstain": 5
+            }
+          },
+          "distance": {
+            "threshold": 0.52091897,
+            "status": "fitted",
+            "targetAccuracy": 0.30769232,
+            "support": {
+              "n": 18,
+              "nPass": 13,
+              "nAbstain": 5
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 18446744073709551615,
+          "source": "registry (selection n/a: self-corpora)",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "off_by_one",
+            "pred": "swapped_lookup",
+            "count": 9,
+            "share_of_errors": 0.10843373493975904
+          },
+          {
+            "gold": "clean",
+            "pred": "inverted_condition",
+            "count": 7,
+            "share_of_errors": 0.08433734939759036
+          },
+          {
+            "gold": "inverted_condition",
+            "pred": "clean",
+            "count": 7,
+            "share_of_errors": 0.08433734939759036
+          },
+          {
+            "gold": "swallowed_error",
+            "pred": "swapped_lookup",
+            "count": 7,
+            "share_of_errors": 0.08433734939759036
+          },
+          {
+            "gold": "swapped_lookup",
+            "pred": "clean",
+            "count": 7,
+            "share_of_errors": 0.08433734939759036
+          },
+          {
+            "gold": "unwrapped_none",
+            "pred": "clean",
+            "count": 7,
+            "share_of_errors": 0.08433734939759036
+          },
+          {
+            "gold": "clean",
+            "pred": "swapped_lookup",
+            "count": 5,
+            "share_of_errors": 0.060240963855421686
+          },
+          {
+            "gold": "swallowed_error",
+            "pred": "clean",
+            "count": 5,
+            "share_of_errors": 0.060240963855421686
+          },
+          {
+            "gold": "inverted_condition",
+            "pred": "swapped_lookup",
+            "count": 4,
+            "share_of_errors": 0.04819277108433735
+          },
+          {
+            "gold": "off_by_one",
+            "pred": "inverted_condition",
+            "count": 4,
+            "share_of_errors": 0.04819277108433735
+          },
+          {
+            "gold": "unwrapped_none",
+            "pred": "swapped_lookup",
+            "count": 4,
+            "share_of_errors": 0.04819277108433735
+          },
+          {
+            "gold": "off_by_one",
+            "pred": "clean",
+            "count": 3,
+            "share_of_errors": 0.03614457831325301
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.16666666666666666,
+        "jdi_skill": 0.023529411764705896,
+        "corpus_digest": "fnv1a64-195c2ee8889fe60a"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 102,
+            "accuracy": 0.3431372549019608,
+            "macro_f1": 0.36815044858523116,
+            "ece": 0.2746245098039216,
+            "brier": 0.8277908167647064,
+            "nll": 1.6137145444339294,
+            "aurc": 0.6479108015638669,
+            "mean_confidence": 0.6071931372549016,
+            "acc_at_50_coverage": 0.37254901960784315,
+            "acc_at_80_coverage": 0.35802469135802467
+          },
+          "readout_ece": 0.16869411764705886,
+          "readout_brier": 0.26830741999999996,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 34.0,
+          "latency_p99_ms": 64.0,
+          "latency_tail_support": 2,
+          "latency_extremes": {
+            "first_ms": 24.0,
+            "max_ms": 70.0,
+            "argmax_case": 6
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 7.95088425,
+          "n_cases": 102,
+          "n_questions": 102,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.16666666666666666,
+          "jdi_skill": 0.21176470588235294
+        }
+      },
+      "cascade": {
+        "english": {
+          "n_questions": 102,
+          "n_answered": 40,
+          "n_escalated": 62,
+          "n_un_escalated": 0,
+          "escalation_rate": 0.6078431372549019,
+          "accuracy": 0.29411764705882354,
+          "n_correct": 30,
+          "escalated_laya_correct": 20,
+          "escalated_modelless_correct": 9,
+          "escalator_served_questions": 102,
+          "worthiness": {
+            "disarmed": false,
+            "probe_n": 10,
+            "probe_laya_acc": 0.2,
+            "probe_modelless_acc": 0.2,
+            "delta": 0.0,
+            "min_delta": 0.16,
+            "collective": {
+              "pairs": [
+                {
+                  "lane_a": "modelless",
+                  "lane_b": "escalator",
+                  "rows": 18,
+                  "both_err": 9,
+                  "agree_on_err": 1,
+                  "agreement_on_error": 0.1111111111111111,
+                  "both_wrong_rate": 0.5,
+                  "kappa": 0.0
+                }
+              ],
+              "committee": {
+                "n_lanes": 2,
+                "rows": 18,
+                "committee_acc": 0.2777777777777778,
+                "committee_wilson_lcb": 0.1249975330046966,
+                "floor_acc": 0.2777777777777778,
+                "improvement": 0.0,
+                "verdict": "not_worth",
+                "ceiling_union": 0.5
+              },
+              "definition": "agreement_on_error = agree_on_err / both_err — among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the common cal rows. Committee (n=2) = the deployed cascade pick: the calibrated gate's hold → the modelless pick, abstain → the escalator's answer (served) — the gate IS the tie-break; ceiling_union = P(at least one lane right), unreachable by a deployed gate, ceiling only. Rows = cal questions both lanes answered (T4: cal slice only)."
+            },
+            "unprobed_reason": "thin support: 10 probe questions < 16 — armed, pre-lever behavior holds"
+          },
+          "ab": {
+            "covered_abstains": 62,
+            "laya_correct_covered": 20,
+            "ml_correct_covered": 9,
+            "mcnemar": [
+              14,
+              3
+            ]
+          }
+        }
+      },
+      "modal_floor": {
+        "acc": 0.16666666666666666,
+        "n_questions": 102,
+        "n_keys": 18,
+        "n_fallback": 102,
+        "global_modal_share": 0.2777777777777778,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    }
+  ],
+  "worth_ab": {
+    "english": {
+      "postures": [
+        {
+          "rule": "delta_only",
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.00)",
+          "t": 0.0,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 3288,
+          "correct": 1997,
+          "n_questions": 4718,
+          "accuracy": 0.4232725731242052,
+          "escalation_rate": 0.6969054684188215
+        },
+        {
+          "rule": "combined(t=0.00)",
+          "t": 0.0,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 3350,
+          "correct": 2008,
+          "n_questions": 4718,
+          "accuracy": 0.42560406952098345,
+          "escalation_rate": 0.7100466299279355
+        },
+        {
+          "rule": "worth_only(t=0.01)",
+          "t": 0.01,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 3288,
+          "correct": 1997,
+          "n_questions": 4718,
+          "accuracy": 0.4232725731242052,
+          "escalation_rate": 0.6969054684188215
+        },
+        {
+          "rule": "combined(t=0.01)",
+          "t": 0.01,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 3350,
+          "correct": 2008,
+          "n_questions": 4718,
+          "accuracy": 0.42560406952098345,
+          "escalation_rate": 0.7100466299279355
+        },
+        {
+          "rule": "worth_only(t=0.02)",
+          "t": 0.02,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 3288,
+          "correct": 1997,
+          "n_questions": 4718,
+          "accuracy": 0.4232725731242052,
+          "escalation_rate": 0.6969054684188215
+        },
+        {
+          "rule": "combined(t=0.02)",
+          "t": 0.02,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 3350,
+          "correct": 2008,
+          "n_questions": 4718,
+          "accuracy": 0.42560406952098345,
+          "escalation_rate": 0.7100466299279355
+        },
+        {
+          "rule": "worth_only(t=0.03)",
+          "t": 0.03,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 3288,
+          "correct": 1997,
+          "n_questions": 4718,
+          "accuracy": 0.4232725731242052,
+          "escalation_rate": 0.6969054684188215
+        },
+        {
+          "rule": "combined(t=0.03)",
+          "t": 0.03,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 3350,
+          "correct": 2008,
+          "n_questions": 4718,
+          "accuracy": 0.42560406952098345,
+          "escalation_rate": 0.7100466299279355
+        },
+        {
+          "rule": "worth_only(t=0.04)",
+          "t": 0.04,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 3288,
+          "correct": 1997,
+          "n_questions": 4718,
+          "accuracy": 0.4232725731242052,
+          "escalation_rate": 0.6969054684188215
+        },
+        {
+          "rule": "combined(t=0.04)",
+          "t": 0.04,
+          "armed_suites": [
+            "typed_decisions",
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 3350,
+          "correct": 2008,
+          "n_questions": 4718,
+          "accuracy": 0.42560406952098345,
+          "escalation_rate": 0.7100466299279355
+        },
+        {
+          "rule": "worth_only(t=0.05)",
+          "t": 0.05,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 1288,
+          "correct": 1870,
+          "n_questions": 4718,
+          "accuracy": 0.3963543874523103,
+          "escalation_rate": 0.27299703264094954
+        },
+        {
+          "rule": "combined(t=0.05)",
+          "t": 0.05,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.06)",
+          "t": 0.06,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 1288,
+          "correct": 1870,
+          "n_questions": 4718,
+          "accuracy": 0.3963543874523103,
+          "escalation_rate": 0.27299703264094954
+        },
+        {
+          "rule": "combined(t=0.06)",
+          "t": 0.06,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.07)",
+          "t": 0.07,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 1288,
+          "correct": 1870,
+          "n_questions": 4718,
+          "accuracy": 0.3963543874523103,
+          "escalation_rate": 0.27299703264094954
+        },
+        {
+          "rule": "combined(t=0.07)",
+          "t": 0.07,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.08)",
+          "t": 0.08,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 1288,
+          "correct": 1870,
+          "n_questions": 4718,
+          "accuracy": 0.3963543874523103,
+          "escalation_rate": 0.27299703264094954
+        },
+        {
+          "rule": "combined(t=0.08)",
+          "t": 0.08,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.09)",
+          "t": 0.09,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 1288,
+          "correct": 1870,
+          "n_questions": 4718,
+          "accuracy": 0.3963543874523103,
+          "escalation_rate": 0.27299703264094954
+        },
+        {
+          "rule": "combined(t=0.09)",
+          "t": 0.09,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.10)",
+          "t": 0.1,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 939,
+          "correct": 1819,
+          "n_questions": 4718,
+          "accuracy": 0.38554472233997455,
+          "escalation_rate": 0.19902501059771088
+        },
+        {
+          "rule": "combined(t=0.10)",
+          "t": 0.1,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.11)",
+          "t": 0.11,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77"
+          ],
+          "cost": 939,
+          "correct": 1819,
+          "n_questions": 4718,
+          "accuracy": 0.38554472233997455,
+          "escalation_rate": 0.19902501059771088
+        },
+        {
+          "rule": "combined(t=0.11)",
+          "t": 0.11,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.12)",
+          "t": 0.12,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en"
+          ],
+          "cost": 676,
+          "correct": 1789,
+          "n_questions": 4718,
+          "accuracy": 0.3791860958033065,
+          "escalation_rate": 0.14328105129292074
+        },
+        {
+          "rule": "combined(t=0.12)",
+          "t": 0.12,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.13)",
+          "t": 0.13,
+          "armed_suites": [
+            "ag_news",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en"
+          ],
+          "cost": 544,
+          "correct": 1738,
+          "n_questions": 4718,
+          "accuracy": 0.36837643069097076,
+          "escalation_rate": 0.11530309453158118
+        },
+        {
+          "rule": "combined(t=0.13)",
+          "t": 0.13,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.14)",
+          "t": 0.14,
+          "armed_suites": [
+            "ag_news",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en"
+          ],
+          "cost": 544,
+          "correct": 1738,
+          "n_questions": 4718,
+          "accuracy": 0.36837643069097076,
+          "escalation_rate": 0.11530309453158118
+        },
+        {
+          "rule": "combined(t=0.14)",
+          "t": 0.14,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.15)",
+          "t": 0.15,
+          "armed_suites": [
+            "ag_news",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en"
+          ],
+          "cost": 544,
+          "correct": 1738,
+          "n_questions": 4718,
+          "accuracy": 0.36837643069097076,
+          "escalation_rate": 0.11530309453158118
+        },
+        {
+          "rule": "combined(t=0.15)",
+          "t": 0.15,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        },
+        {
+          "rule": "worth_only(t=0.16)",
+          "t": 0.16,
+          "armed_suites": [
+            "ag_news",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en"
+          ],
+          "cost": 544,
+          "correct": 1738,
+          "n_questions": 4718,
+          "accuracy": 0.36837643069097076,
+          "escalation_rate": 0.11530309453158118
+        },
+        {
+          "rule": "combined(t=0.16)",
+          "t": 0.16,
+          "armed_suites": [
+            "ag_news",
+            "emotion",
+            "sst5",
+            "prompt_injections",
+            "xnli_en",
+            "massive_intent_en",
+            "banking77",
+            "semantic_defects"
+          ],
+          "cost": 1350,
+          "correct": 1881,
+          "n_questions": 4718,
+          "accuracy": 0.3986858838490886,
+          "escalation_rate": 0.2861381941500636
+        }
+      ],
+      "matched": {
+        "worth_t": 0.09,
+        "delta_cost": 1350,
+        "worth_cost": 1288,
+        "cost_gap_rel": 0.045925925925925926,
+        "delta_accuracy": 0.3986858838490886,
+        "worth_accuracy": 0.3963543874523103,
+        "n_worth_right_delta_wrong": 3,
+        "n_worth_wrong_delta_right": 14,
+        "n_questions": 4718,
+        "paired_mean": -0.0023314963967782957,
+        "paired_lb95": -0.003769020057051666,
+        "verdict": "NEGATIVE"
+      },
+      "cost_match_tolerance": 0.05
+    },
+    "multilingual": {
+      "postures": [
+        {
+          "rule": "delta_only",
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.00)",
+          "t": 0.0,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.00)",
+          "t": 0.0,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.01)",
+          "t": 0.01,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.01)",
+          "t": 0.01,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.02)",
+          "t": 0.02,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.02)",
+          "t": 0.02,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.03)",
+          "t": 0.03,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.03)",
+          "t": 0.03,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.04)",
+          "t": 0.04,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.04)",
+          "t": 0.04,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.05)",
+          "t": 0.05,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.05)",
+          "t": 0.05,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.06)",
+          "t": 0.06,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.06)",
+          "t": 0.06,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.07)",
+          "t": 0.07,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.07)",
+          "t": 0.07,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.08)",
+          "t": 0.08,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.08)",
+          "t": 0.08,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.09)",
+          "t": 0.09,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.09)",
+          "t": 0.09,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.10)",
+          "t": 0.1,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.10)",
+          "t": 0.1,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.11)",
+          "t": 0.11,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.11)",
+          "t": 0.11,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.12)",
+          "t": 0.12,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.12)",
+          "t": 0.12,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.13)",
+          "t": 0.13,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.13)",
+          "t": 0.13,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.14)",
+          "t": 0.14,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.14)",
+          "t": 0.14,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.15)",
+          "t": 0.15,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.15)",
+          "t": 0.15,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "worth_only(t=0.16)",
+          "t": 0.16,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        },
+        {
+          "rule": "combined(t=0.16)",
+          "t": 0.16,
+          "armed_suites": [],
+          "cost": 0,
+          "correct": 588,
+          "n_questions": 2000,
+          "accuracy": 0.294,
+          "escalation_rate": 0.0
+        }
+      ],
+      "cost_match_tolerance": 0.05
+    },
+    "typed": {
+      "postures": [
+        {
+          "rule": "delta_only",
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.00)",
+          "t": 0.0,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.00)",
+          "t": 0.0,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.01)",
+          "t": 0.01,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.01)",
+          "t": 0.01,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.02)",
+          "t": 0.02,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.02)",
+          "t": 0.02,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.03)",
+          "t": 0.03,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.03)",
+          "t": 0.03,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.04)",
+          "t": 0.04,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.04)",
+          "t": 0.04,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.05)",
+          "t": 0.05,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.05)",
+          "t": 0.05,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.06)",
+          "t": 0.06,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.06)",
+          "t": 0.06,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.07)",
+          "t": 0.07,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.07)",
+          "t": 0.07,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.08)",
+          "t": 0.08,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.08)",
+          "t": 0.08,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.09)",
+          "t": 0.09,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.09)",
+          "t": 0.09,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.10)",
+          "t": 0.1,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.10)",
+          "t": 0.1,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.11)",
+          "t": 0.11,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.11)",
+          "t": 0.11,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.12)",
+          "t": 0.12,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.12)",
+          "t": 0.12,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.13)",
+          "t": 0.13,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.13)",
+          "t": 0.13,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.14)",
+          "t": 0.14,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.14)",
+          "t": 0.14,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.15)",
+          "t": 0.15,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.15)",
+          "t": 0.15,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "worth_only(t=0.16)",
+          "t": 0.16,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        },
+        {
+          "rule": "combined(t=0.16)",
+          "t": 0.16,
+          "armed_suites": [
+            "typed_decisions"
+          ],
+          "cost": 2000,
+          "correct": 1489,
+          "n_questions": 2000,
+          "accuracy": 0.7445,
+          "escalation_rate": 1.0
+        }
+      ],
+      "matched": {
+        "worth_t": 0.16,
+        "delta_cost": 2000,
+        "worth_cost": 2000,
+        "cost_gap_rel": 0.0,
+        "delta_accuracy": 0.7445,
+        "worth_accuracy": 0.7445,
+        "n_worth_right_delta_wrong": 0,
+        "n_worth_wrong_delta_right": 0,
+        "n_questions": 2000,
+        "paired_mean": 0.0,
+        "paired_lb95": 0.0,
+        "verdict": "UNDECIDABLE_ZERO_STRADDLE"
+      },
+      "cost_match_tolerance": 0.05
+    }
+  }
+}

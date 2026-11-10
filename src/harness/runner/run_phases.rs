@@ -82,6 +82,21 @@ fn validate_run_options(opts: &RunOptions) -> Result<(), String> {
                 .to_string(),
         );
     }
+    if opts.collective_worth && !opts.cascade_worthiness {
+        return Err(
+            "--collective-worth needs --cascade --cascade-worthiness: the probe reads the \
+             cal-gate records the worthiness lane builds (issue 111 T1/T2)"
+                .to_string(),
+        );
+    }
+    if opts.worth_ab && !(opts.collective_worth && opts.cascade_worthiness) {
+        return Err(
+            "--worth-ab needs --cascade --cascade-worthiness --collective-worth: the A/B reads \
+             the delta verdicts, the committee verdicts, and the hypothetical-armed counters \
+             (issue 111 T3)"
+                .to_string(),
+        );
+    }
     // A requested name matching NO registered spec selects nothing and the
     // run would write a 0-suite results.json over the out-dir's previous
     // contents (measured twice on the default tables: 09-24's 2-suite
@@ -223,13 +238,57 @@ pub fn run(opts: &RunOptions) -> Result<(RunOutput, Vec<String>), String> {
     }
 
     let meta = build_meta(opts, box_start);
+    // Issue 111 T3: the matched-cost worthiness A/B, grouped per checkpoint
+    // (the arming decision is per (suite, checkpoint) — the worthiness gate
+    // is per checkpoint). Suite-level absence (no cascade row for a lane)
+    // is a named error, never a silent suite drop from the comparison.
+    let worth_ab = if opts.worth_ab {
+        match worth_ab_blocks(&results, opts) {
+            Ok(blocks) if blocks.is_empty() => {
+                errors.push("worth-ab: no suite produced cascade records".to_string());
+                None
+            }
+            Ok(blocks) => Some(blocks),
+            Err(e) => {
+                errors.push(format!("worth-ab: {e}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
     Ok((
         RunOutput {
             meta,
             suites: results,
+            worth_ab,
         },
         errors,
     ))
+}
+
+/// Issue 111 T3 — the per-checkpoint A/B blocks over the collected suites.
+fn worth_ab_blocks(
+    results: &[SuiteResult],
+    opts: &RunOptions,
+) -> Result<BTreeMap<String, crate::harness::worth_ab::WorthAbBlock>, String> {
+    use crate::harness::worth_ab;
+    // checkpoint → suite inputs.
+    let mut per_ck: BTreeMap<String, Vec<worth_ab::SuiteAbInput>> = BTreeMap::new();
+    for result in results {
+        for (ck, rep) in &result.cascade {
+            let input = worth_ab::suite_input(&result.name, rep)
+                .map_err(|e| format!("{} (checkpoint {ck}): {e}", result.name))?;
+            per_ck.entry(ck.clone()).or_default().push(input);
+        }
+    }
+    let mut blocks = BTreeMap::new();
+    for (ck, suites) in per_ck {
+        let block = worth_ab::evaluate(&suites, opts.cascade_worthiness_margin)
+            .map_err(|e| format!("checkpoint {ck}: {e}"))?;
+        blocks.insert(ck, block);
+    }
+    Ok(blocks)
 }
 
 /// The run loop's per-suite body (issue 098 T3 phase fn). `None` = the
@@ -1096,6 +1155,9 @@ fn compose_cascade(
         return composed;
     }
     if let Some(mq) = modelless_questions {
+        let extras = opts
+            .worth_ab
+            .then_some(crate::harness::cascade::CascadeExtras { ab_counts: true });
         for (ck, lq) in &laya_lanes.questions {
             // Issue 042 lever 3: when armed, the worthiness probe
             // gates THIS checkpoint's escalation on the cal-slice
@@ -1109,12 +1171,14 @@ fn compose_cascade(
                         cal_cases: prepared.cal_cases.as_slice(),
                         min_delta: opts.cascade_worthiness_margin,
                         min_probe_lcb: opts.cascade_worthiness_lcb,
+                        collective_worth: opts.collective_worth,
                     });
             match crate::harness::cascade::compose(
                 &prepared.suite.cases,
                 mq,
                 lq,
                 worthiness.as_ref(),
+                extras.as_ref(),
             ) {
                 Ok(rep) => {
                     let disarm_note = rep

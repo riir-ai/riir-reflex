@@ -584,3 +584,20 @@ cubecl-wgpu = { path = "../riir-infer/vendor/cubecl-wgpu-0.11.0-pre.2" }
 # riir-instinct dc1002b). metal (via riir-infer-laya's macOS-scoped dep, under
 # laya-riir-metal) pulls it; inert at the default posture.
 block = { path = "vendor/block" }
+
+# Issue 115 T2 — the Div-vs-corpus-ab correlation probe (measurement only,
+# never a gate). The file opens with
+# `#![cfg(all(feature = "modelless", feature = "synth_div"))]`, so without
+# this row a default-features `clippy --all-targets` compiles it to an
+# empty crate and dies E0601 (the laya_fixture_timing law; measured on the
+# i111 lane's clippy run 2026-11-10 — the i115 landing missed the row).
+[[example]]
+name = "synth_div_probe"
+required-features = ["modelless", "synth_div"]
+
+# Issue 110 T1 — the conflict-band falsification probe (measurement only).
+# Whole-file `#![cfg(feature = "modelless")]` — same law, same row
+# (the i110 landing missed it; latent at --no-default-features).
+[[example]]
+name = "conflict_band_probe"
+required-features = ["modelless"]

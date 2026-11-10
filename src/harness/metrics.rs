@@ -810,3 +810,22 @@ mod binary_pairs_metrics_tests {
         assert!(br.is_nan() && res.is_nan() && unc.is_nan());
     }
 }
+
+/// The Wilson score interval at 95% (z = 1.959964); n = 0 → (0, 1).
+/// One home (ungated, pure): the Issue-111 collective-worth verdict and
+/// the worth-ab evaluator reuse the exact bound the ceiling probe reads
+/// (a second copy is a second thing to drift); it moved here from
+/// `runner/ceiling_probe.rs` when the ungated cascade module needed it —
+/// `runner` is `modelless`-gated and an ungated module cannot see it.
+pub fn wilson95(k: usize, n: usize) -> (f64, f64) {
+    if n == 0 {
+        return (0.0, 1.0);
+    }
+    let z = 1.959_964_f64;
+    let p = k as f64 / n as f64;
+    let z2 = z * z;
+    let denom = 1.0 + z2 / n as f64;
+    let center = (p + z2 / (2.0 * n as f64)) / denom;
+    let half = z / denom * ((p * (1.0 - p) / n as f64 + z2 / (4.0 * n as f64 * n as f64)).sqrt());
+    ((center - half).max(0.0), (center + half).min(1.0))
+}

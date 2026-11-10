@@ -243,7 +243,7 @@ pub use risk_target::{
 };
 
 // Issue 108 — the gold-support ceiling probe (report-only, judge seat).
-mod ceiling_probe;
+pub(crate) mod ceiling_probe;
 pub use ceiling_probe::{
     CONTRACT_VERSION, CONTROL_CATCH_BAR, CROSS_FAMILY_KAPPA_BAR, CeilingProbeOptions,
     CeilingProbeOutput, DEFAULT_FLIPPED_CONTROLS, JUDGE_MODEL_ENV, JUDGE_URL_ENV, MIN_SAMPLE_N,
@@ -1926,6 +1926,10 @@ pub struct RunMeta {
 pub struct RunOutput {
     pub meta: RunMeta,
     pub suites: Vec<SuiteResult>,
+    /// Issue 111 T3: the matched-cost worthiness A/B blocks per checkpoint
+    /// (additive, present only under `--worth-ab`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worth_ab: Option<BTreeMap<String, crate::harness::worth_ab::WorthAbBlock>>,
 }
 
 // ── data loading ────────────────────────────────────────────────────────
@@ -5582,6 +5586,19 @@ pub struct RunOptions {
     /// default (byte-identical run, no counters paid).
     #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
     pub route_census: bool,
+    /// Issue 111 T1/T2 (`--collective-worth`): the collective-worth probe
+    /// — agreement-on-error lane pairs + the size-aware committee verdict
+    /// over the cal slice, serialized into the worthiness verdict.
+    /// Report-only; needs `cascade_worthiness` (the cal records ride it).
+    /// Default off = byte-identical.
+    pub collective_worth: bool,
+    /// Issue 111 T3 (`--worth-ab`): the matched-cost worthiness A/B — the
+    /// pre-registered GOAT question (`.issues/111`): at equal test-side
+    /// escalation spend, does committee-informed arming beat delta-only
+    /// arming on serving accuracy? Report-only; implies
+    /// `collective_worth`; the run-level block rides `RunOutput`.
+    /// Default off = byte-identical.
+    pub worth_ab: bool,
     /// Also run the laya-PYTHON lane — the ORIGINAL torch reference as a
     /// subprocess oracle (measurement-only; opt-in, off by default).
     pub laya_python: bool,
@@ -5953,6 +5970,14 @@ impl RunOptions {
             // Issue 116 — the flip census is OFF by default (report-only
             // when armed; `--route-census`).
             route_census: false,
+            // Issue 111 T1/T2 — the collective-worth probe is OFF by
+            // default (report-only; needs `--cascade --cascade-worthiness`;
+            // `--collective-worth` arms it).
+            collective_worth: false,
+            // Issue 111 T3 — the matched-cost worthiness A/B is OFF by
+            // default (report-only; implies `collective_worth`;
+            // `--worth-ab` arms it).
+            worth_ab: false,
             laya_python: false,
             clm: false,
             gliner: false,

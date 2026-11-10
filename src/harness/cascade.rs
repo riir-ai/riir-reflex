@@ -64,6 +64,7 @@
 
 use serde::Serialize;
 
+use super::metrics::wilson95;
 use super::suites::SuiteCase;
 
 /// Minimum probe support to ARM/DISARM on the measured delta. Below it the
@@ -139,6 +140,12 @@ pub struct CascadeReport {
     /// `None` = lever off — byte-identical with the landed T4′ lane.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worthiness: Option<WorthinessVerdict>,
+    /// Issue 111 T3: the hypothetical-armed counters under `--worth-ab`
+    /// (additive, skipped when off). Computed over the covered abstains
+    /// regardless of the run's arming so the A/B prices every suite at
+    /// its rule's posture.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ab: Option<AbCounters>,
 }
 
 /// The cal-slice worthiness verdict (issue 042 lever 3), serialized into
@@ -163,6 +170,10 @@ pub struct WorthinessVerdict {
     /// lever-3 byte shape.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub probe_lcb: Option<f64>,
+    /// Issue 111 T1/T2: the collective-worth block when
+    /// `--collective-worth` is on (additive, skipped when off).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collective: Option<CollectiveWorthBlock>,
     /// Why the probe could not read (no cal records / no served cal
     /// cases / thin support). Present = the pre-lever behavior (armed)
     /// held, named — never a silent fallthrough.
@@ -188,10 +199,263 @@ pub struct WorthinessInput<'a> {
     /// margin cannot separate). `None` = the leg is off (byte-identical
     /// with the lever-3 lane).
     pub min_probe_lcb: Option<f64>,
+    /// Issue 111 T1/T2 (`--collective-worth`): also compute the
+    /// collective-worth block (agreement-on-error pairs + the committee
+    /// verdict) over the same validated cal records. `false` = off,
+    /// byte-identical with the lever-3 lane.
+    pub collective_worth: bool,
 }
 
 /// z for a one-sided 95% interval.
 const PROBE_LCB_Z95: f64 = 1.644_934;
+
+/// Issue 111 T2 n≥3 path — the majority-committee verdict over ≥3 lanes'
+/// label-space picks on shared rows. The harness wires exactly 2 lanes
+/// today (the gate shape), so this path is exercised by unit tests only;
+/// it is `pub` so a third-lane consumer (T5's rulewright/multi-domain
+/// shape) drops in without a fork. Committee pick per row = the majority
+/// vote; ties resolve to the FIRST-INDEX rule (the minimum pick index
+/// among the tied-max counts — the determinism law). ρ̂ (mean pairwise
+/// agreement-on-error over pairs with a defined denominator) and the
+/// classical n′ = n/(1+(n−1)ρ̂) are HEURISTICS reported for the next two
+/// sizes up — predictions for committee sizes NOT yet run, never the
+/// verdict (the verdict is measured directly).
+pub fn majority_committee_verdict(
+    lanes: &[&[usize]],
+    golds: &[usize],
+) -> Result<CommitteeVerdict, String> {
+    if lanes.len() < 3 {
+        return Err(format!(
+            "majority committee needs ≥ 3 lanes, got {} (the n=2 gate uses the \
+             deployed-cascade committee — see WorthinessInput::probe)",
+            lanes.len()
+        ));
+    }
+    let n = golds.len();
+    if n == 0 {
+        return Err("majority committee: empty row set".to_string());
+    }
+    for (j, lane) in lanes.iter().enumerate() {
+        if lane.len() != n {
+            return Err(format!(
+                "majority committee shape drift: lane {j} has {} picks vs {n} rows",
+                lane.len()
+            ));
+        }
+    }
+    let mut committee_correct = 0usize;
+    let mut best_lane_correct = 0usize;
+    // ρ̂ inputs: per-pair (both_err, agree_on_err).
+    let mut pair_both_err = vec![0usize; lanes.len() * lanes.len()];
+    let mut pair_agree_err = vec![0usize; lanes.len() * lanes.len()];
+    for (ri, &gold) in golds.iter().enumerate() {
+        // Majority vote; tie → first-index (min pick index among the
+        // tied-max counts).
+        let mut votes: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+        for lane in lanes {
+            *votes.entry(lane[ri]).or_insert(0) += 1;
+        }
+        let top = votes.values().copied().max().unwrap_or(0);
+        let pick = votes
+            .iter()
+            .find(|&(_, c)| *c == top)
+            .map(|(&p, _)| p)
+            .unwrap_or(lanes[0][ri]);
+        if pick == gold {
+            committee_correct += 1;
+        }
+        for j in 0..lanes.len() {
+            for k in (j + 1)..lanes.len() {
+                let (a, b) = (lanes[j][ri], lanes[k][ri]);
+                if a != gold && b != gold {
+                    pair_both_err[j * lanes.len() + k] += 1;
+                    if a == b {
+                        pair_agree_err[j * lanes.len() + k] += 1;
+                    }
+                }
+            }
+        }
+    }
+    for lane in lanes {
+        let correct = lane.iter().zip(golds).filter(|(p, g)| p == g).count();
+        best_lane_correct = best_lane_correct.max(correct);
+    }
+    let committee_acc = committee_correct as f64 / n as f64;
+    let floor_acc = best_lane_correct as f64 / n as f64;
+    let improvement = committee_acc - floor_acc;
+    let (lcb, _) = wilson95(committee_correct, n);
+    let (verdict, undecidable_reason) = if n < PROBE_MIN_QUESTIONS {
+        (
+            "undecidable".to_string(),
+            Some(format!("thin support: {n} rows < {PROBE_MIN_QUESTIONS}")),
+        )
+    } else if improvement <= 0.0 {
+        ("not_worth".to_string(), None)
+    } else if lcb > floor_acc {
+        ("worth_committee".to_string(), None)
+    } else {
+        (
+            "undecidable".to_string(),
+            Some(format!(
+                "improvement {improvement:+.4} positive but Wilson LCB {lcb:.4} does not clear \
+                 the floor {floor_acc:.4} — zero-straddling"
+            )),
+        )
+    };
+    // ρ̂ = mean agreement-on-error over the pairs with a defined
+    // denominator; the n′ predictions ride it (heuristics only).
+    let mut defined = 0usize;
+    let mut aoe_sum = 0.0f64;
+    for j in 0..lanes.len() {
+        for k in (j + 1)..lanes.len() {
+            let both = pair_both_err[j * lanes.len() + k];
+            if both > 0 {
+                defined += 1;
+                aoe_sum += pair_agree_err[j * lanes.len() + k] as f64 / both as f64;
+            }
+        }
+    }
+    let heuristics = (defined > 0).then(|| {
+        let rho_hat = aoe_sum / defined as f64;
+        let n_prime_predictions = ((lanes.len() + 1)..=(lanes.len() + 2))
+            .map(|size| {
+                let d = 1.0 + (size as f64 - 1.0) * rho_hat;
+                (size, size as f64 / d)
+            })
+            .collect();
+        CommitteeHeuristics {
+            rho_hat,
+            n_prime_predictions,
+        }
+    });
+    Ok(CommitteeVerdict {
+        n_lanes: lanes.len(),
+        rows: n,
+        committee_acc,
+        committee_wilson_lcb: lcb,
+        floor_acc,
+        improvement,
+        verdict,
+        ceiling_union: None,
+        heuristics,
+        undecidable_reason,
+    })
+}
+
+/// Issue 111 T1/T2 — the collective-worth probe's lane-pair block: the
+/// arXiv:2506.07962 agreement-on-error convention over the cal rows BOTH
+/// lanes answered, plus the two secondary diagnostics. The definition is
+/// carried IN the row (`CollectiveWorthBlock::definition`) — a number
+/// without its convention is unreadable at the consumer.
+#[derive(Debug, Clone, Serialize)]
+pub struct PairStats {
+    pub lane_a: String,
+    pub lane_b: String,
+    /// Common cal rows (questions both lanes answered).
+    pub rows: usize,
+    /// Rows where both lanes err.
+    pub both_err: usize,
+    /// Rows where both err AND emit the same wrong pick.
+    pub agree_on_err: usize,
+    /// `agree_on_err / both_err`; None when `both_err = 0` — no error
+    /// agreement is observable, never a fake 0-or-1.
+    pub agreement_on_error: Option<f64>,
+    /// `both_err / rows`.
+    pub both_wrong_rate: f64,
+    /// Cohen's κ over picks on the common rows; None when the observed
+    /// label space is degenerate (κ denominator 0).
+    pub kappa: Option<f64>,
+}
+
+/// Issue 111 T2 — the size-aware committee verdict's heuristics half (n≥3
+/// only). BOTH fields are labeled predictions for committee sizes NOT yet
+/// run — never the verdict (the verdict is measured directly at sizes run).
+#[derive(Debug, Clone, Serialize)]
+pub struct CommitteeHeuristics {
+    /// Mean pairwise agreement-on-error across lane pairs (the ρ̂ input).
+    pub rho_hat: f64,
+    /// n′ = n/(1+(n−1)ρ̂) for the next committee sizes up (n+1, n+2) —
+    /// the classical correction's PREDICTION, heuristics only.
+    pub n_prime_predictions: Vec<(usize, f64)>,
+}
+
+/// Issue 111 T2 — the size-aware committee verdict. EMPIRICAL first: the
+/// committee pick's accuracy is MEASURED on the cal rows; ρ̂/n′ are
+/// heuristics reported only for sizes not yet run. The verdict bars are
+/// pre-registered in `.issues/111` (T3 pre-registration block) BEFORE any
+/// run — `undecidable` on thin rows or a zero-straddling improvement (the
+/// esc_voi discipline), never folded.
+#[derive(Debug, Clone, Serialize)]
+pub struct CommitteeVerdict {
+    /// Lanes on the common rows (2 today; the majority path exists for ≥3).
+    pub n_lanes: usize,
+    /// Cal rows the committee was measured on.
+    pub rows: usize,
+    /// The committee pick's measured accuracy on those rows.
+    pub committee_acc: f64,
+    /// Wilson-95 lower bound on `committee_acc`.
+    pub committee_wilson_lcb: f64,
+    /// The comparator floor: modelless-only accuracy on the same rows (n=2)
+    /// or the best single lane (n≥3).
+    pub floor_acc: f64,
+    /// `committee_acc − floor_acc`.
+    pub improvement: f64,
+    /// `worth_committee` / `not_worth` / `undecidable` (pre-registered bars).
+    pub verdict: String,
+    /// n=2 only: P(at least one lane right) — the COMPLEMENTARITY CEILING.
+    /// It assumes the right lane is always picked on disagreement, so it is
+    /// unreachable by a deployed gate and never a verdict input.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ceiling_union: Option<f64>,
+    /// n≥3 only (heuristic predictions for unrun sizes).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heuristics: Option<CommitteeHeuristics>,
+    /// Why the verdict read undecidable (thin rows / zero-straddling
+    /// improvement). Present iff `verdict == "undecidable"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub undecidable_reason: Option<String>,
+}
+
+/// Issue 111 — the collective-worth block serialized into the worthiness
+/// verdict when `--collective-worth` is on (additive, skipped when off).
+#[derive(Debug, Clone, Serialize)]
+pub struct CollectiveWorthBlock {
+    /// T1: per-lane-pair stats over the common cal rows.
+    pub pairs: Vec<PairStats>,
+    /// T2: the size-aware committee verdict.
+    pub committee: CommitteeVerdict,
+    /// The definition disclosed IN the row (T1/T4): what agreement-on-error
+    /// means here and how the committee pick is constructed at this size.
+    pub definition: String,
+}
+
+/// Issue 111 T3 — opt-in extras for [`compose`]: the per-suite counters the
+/// worth-ab evaluator reads. Default (absent) = byte-identical posture.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CascadeExtras {
+    /// Compute the escalated-set counters over the WOULD-BE armed posture
+    /// (covered abstains, regardless of the run's arming) — the A/B
+    /// evaluator's per-suite inputs, serialized only when present.
+    pub ab_counts: bool,
+}
+
+/// Issue 111 T3 — the per-suite hypothetical-armed counters (results.json,
+/// additive, present only under `--worth-ab`). Computed over the covered
+/// abstains (abstained ∧ escalator-served) so a DISARMED suite is priced as
+/// its rule would deploy it — the A/B cost axis.
+#[derive(Debug, Clone, Serialize)]
+pub struct AbCounters {
+    /// Abstained ∧ escalator-served questions = the would-be escalation
+    /// spend when the suite is armed.
+    pub covered_abstains: usize,
+    /// Escalator correct among the covered abstains.
+    pub laya_correct_covered: usize,
+    /// Modelless correct among the covered abstains.
+    pub ml_correct_covered: usize,
+    /// McNemar pair on the covered abstains: (escalator right ∧ modelless
+    /// wrong, modelless right ∧ escalator wrong).
+    pub mcnemar: (usize, usize),
+}
 
 /// One-sided-95% lower confidence bound on `laya_acc − ml_acc` over the
 /// same probe set (two-proportion normal approx). CONSERVATIVE on paired
@@ -212,15 +476,18 @@ impl WorthinessInput<'_> {
     /// cal record would fabricate the delta exactly like a misaligned
     /// test record would fabricate accuracy.
     fn probe(&self) -> Result<WorthinessVerdict, String> {
-        let unprobed = |reason: String, n, la, ma| WorthinessVerdict {
-            disarmed: false,
-            probe_n: n,
-            probe_laya_acc: la,
-            probe_modelless_acc: ma,
-            delta: if n > 0 { la - ma } else { 0.0 },
-            min_delta: self.min_delta,
-            probe_lcb: None,
-            unprobed_reason: Some(reason),
+        let unprobed = |reason: String, n, la, ma, collective: Option<CollectiveWorthBlock>| {
+            WorthinessVerdict {
+                disarmed: false,
+                probe_n: n,
+                probe_laya_acc: la,
+                probe_modelless_acc: ma,
+                delta: if n > 0 { la - ma } else { 0.0 },
+                min_delta: self.min_delta,
+                probe_lcb: None,
+                collective,
+                unprobed_reason: Some(reason),
+            }
         };
         let Some(gate) = self.gate else {
             return Ok(unprobed(
@@ -228,6 +495,7 @@ impl WorthinessInput<'_> {
                 0,
                 0.0,
                 0.0,
+                None,
             ));
         };
         let Some(esc) = self.escalator else {
@@ -237,6 +505,7 @@ impl WorthinessInput<'_> {
                 0,
                 0.0,
                 0.0,
+                None,
             ));
         };
         if gate.picks.len() != self.cal_cases.len() || gate.abstained.len() != self.cal_cases.len()
@@ -287,6 +556,17 @@ impl WorthinessInput<'_> {
             }
         }
 
+        // Issue 111 T1/T2: the collective-worth block is its OWN measurement
+        // over the common cal rows (both lanes answered) — it attaches to
+        // every verdict, including the delta probe's unprobed reads (an
+        // empty abstain set says nothing about the committee). Shape drift
+        // is already refused above, so the block's index walks are safe.
+        let collective = if self.collective_worth {
+            Some(self.collective_block(gate, esc)?)
+        } else {
+            None
+        };
+
         let (mut laya_ok, mut ml_ok, mut probe_n) = (0usize, 0usize, 0usize);
         for (j, &ci) in esc.served_orig.iter().enumerate() {
             let case = &self.cal_cases[ci];
@@ -309,6 +589,7 @@ impl WorthinessInput<'_> {
                 0,
                 0.0,
                 0.0,
+                collective,
             ));
         }
         let laya_acc = laya_ok as f64 / probe_n as f64;
@@ -323,6 +604,7 @@ impl WorthinessInput<'_> {
                 probe_n,
                 laya_acc,
                 ml_acc,
+                collective,
             ));
         }
         // Issue 046 lever 4: the LCB leg is additive — armed iff the
@@ -344,7 +626,173 @@ impl WorthinessInput<'_> {
             delta,
             min_delta: self.min_delta,
             probe_lcb: probe_lcb.map(|(_, lcb)| lcb),
+            collective,
             unprobed_reason: None,
+        })
+    }
+
+    /// Issue 111 T1/T2 — the collective-worth block over the SAME validated
+    /// cal records the delta read (shape drift is already refused above).
+    /// Reads the CAL slice only (T4); the rows are the questions both lanes
+    /// answered (the escalator-served cal cases).
+    fn collective_block(
+        &self,
+        gate: &CalGateRecords,
+        esc: &LayaQuestions,
+    ) -> Result<CollectiveWorthBlock, String> {
+        // Per-question common-row tuples: (ml_pick, ml_abstained, esc_pick, gold).
+        let mut rows: Vec<(usize, bool, usize, usize)> = Vec::new();
+        for (j, &ci) in esc.served_orig.iter().enumerate() {
+            let case = &self.cal_cases[ci];
+            for (qi, gold) in case.gold.iter().enumerate() {
+                rows.push((
+                    gate.picks[ci][qi],
+                    gate.abstained[ci][qi],
+                    esc.picks[j][qi],
+                    gold.idx,
+                ));
+            }
+        }
+        let n = rows.len();
+        // n = 0 is legal (the escalator served no cal case): the block
+        // reports an all-zero row set and the committee's own thin gate
+        // reads undecidable — never a fabricated number, never a lane
+        // kill (the delta probe's unprobed path names the absence).
+
+        // T1 — the single pair (the gate shape is 2-lane today).
+        let (mut both_err, mut agree_on_err, mut agree) = (0usize, 0usize, 0usize);
+        let mut ml_label: std::collections::HashMap<usize, usize> =
+            std::collections::HashMap::new();
+        let mut esc_label: std::collections::HashMap<usize, usize> =
+            std::collections::HashMap::new();
+        for &(ml_pick, _, esc_pick, gold) in &rows {
+            *ml_label.entry(ml_pick).or_insert(0) += 1;
+            *esc_label.entry(esc_pick).or_insert(0) += 1;
+            if ml_pick == esc_pick {
+                agree += 1;
+            }
+            if ml_pick != gold && esc_pick != gold {
+                both_err += 1;
+                if ml_pick == esc_pick {
+                    agree_on_err += 1;
+                }
+            }
+        }
+        let aoe = (both_err > 0).then(|| agree_on_err as f64 / both_err as f64);
+        // Cohen's κ over picks: observed agreement vs the marginals'
+        // chance agreement, over the union of the labels either lane used.
+        let p_o = if n > 0 { agree as f64 / n as f64 } else { 0.0 };
+        let p_e: f64 = if n > 0 {
+            ml_label
+                .iter()
+                .filter_map(|(label, &ml_n)| {
+                    esc_label
+                        .get(label)
+                        .map(|&esc_n| (ml_n as f64 / n as f64) * (esc_n as f64 / n as f64))
+                })
+                .sum()
+        } else {
+            0.0
+        };
+        let kappa = (n > 0 && p_e < 1.0).then(|| (p_o - p_e) / (1.0 - p_e));
+        let pairs = vec![PairStats {
+            lane_a: "modelless".to_string(),
+            lane_b: "escalator".to_string(),
+            rows: n,
+            both_err,
+            agree_on_err,
+            agreement_on_error: aoe,
+            both_wrong_rate: if n > 0 {
+                both_err as f64 / n as f64
+            } else {
+                0.0
+            },
+            kappa,
+        }];
+
+        // T2 (n=2) — the committee is the DEPLOYED cascade pick: the
+        // calibrated gate's hold/abstain IS the tie-break (hold → the
+        // modelless pick; abstain → the escalator's answer, served by
+        // construction on these rows). First-index determinism: the gate
+        // is a pinned threshold comparison, no unordered tie exists.
+        let mut committee_correct = 0usize;
+        let mut floor_correct = 0usize;
+        let mut union_right = 0usize;
+        for &(ml_pick, ml_abstained, esc_pick, gold) in &rows {
+            let pick = if ml_abstained { esc_pick } else { ml_pick };
+            if pick == gold {
+                committee_correct += 1;
+            }
+            if ml_pick == gold {
+                floor_correct += 1;
+            }
+            if ml_pick == gold || esc_pick == gold {
+                union_right += 1;
+            }
+        }
+        let committee_acc = if n > 0 {
+            committee_correct as f64 / n as f64
+        } else {
+            0.0
+        };
+        let floor_acc = if n > 0 {
+            floor_correct as f64 / n as f64
+        } else {
+            0.0
+        };
+        let improvement = committee_acc - floor_acc;
+        let (lcb, _) = wilson95(committee_correct, n);
+        let (verdict, undecidable_reason) = if n < PROBE_MIN_QUESTIONS {
+            (
+                "undecidable".to_string(),
+                Some(format!(
+                    "thin support: {n} common cal rows < {PROBE_MIN_QUESTIONS}"
+                )),
+            )
+        } else if improvement <= 0.0 {
+            ("not_worth".to_string(), None)
+        } else if lcb > floor_acc {
+            ("worth_committee".to_string(), None)
+        } else {
+            // improvement > 0 but the Wilson LCB does not clear the floor —
+            // the zero-straddling case (esc_voi discipline): undecidable.
+            (
+                "undecidable".to_string(),
+                Some(format!(
+                    "improvement {improvement:+.4} positive but Wilson LCB {lcb:.4} does not \
+                     clear the floor {floor_acc:.4} — zero-straddling"
+                )),
+            )
+        };
+        let committee = CommitteeVerdict {
+            n_lanes: 2,
+            rows: n,
+            committee_acc,
+            committee_wilson_lcb: lcb,
+            floor_acc,
+            improvement,
+            verdict,
+            ceiling_union: Some(if n > 0 {
+                union_right as f64 / n as f64
+            } else {
+                0.0
+            }),
+            heuristics: None,
+            undecidable_reason,
+        };
+
+        Ok(CollectiveWorthBlock {
+            pairs,
+            committee,
+            definition: "agreement_on_error = agree_on_err / both_err — among rows where BOTH \
+                         lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962); \
+                         both_wrong_rate = both_err / rows; kappa = Cohen's κ over picks on the \
+                         common cal rows. Committee (n=2) = the deployed cascade pick: the \
+                         calibrated gate's hold → the modelless pick, abstain → the escalator's \
+                         answer (served) — the gate IS the tie-break; ceiling_union = \
+                         P(at least one lane right), unreachable by a deployed gate, ceiling \
+                         only. Rows = cal questions both lanes answered (T4: cal slice only)."
+                .to_string(),
         })
     }
 }
@@ -359,6 +807,7 @@ pub fn compose(
     modelless: &ModellessQuestions,
     laya: &LayaQuestions,
     worthiness: Option<&WorthinessInput>,
+    extras: Option<&CascadeExtras>,
 ) -> Result<CascadeReport, String> {
     if modelless.picks.len() != cases.len() || modelless.abstained.len() != cases.len() {
         return Err(format!(
@@ -430,6 +879,12 @@ pub fn compose(
     let mut escalated_laya_correct = 0usize;
     let mut escalated_modelless_correct = 0usize;
     let mut escalator_served_questions = 0usize;
+    let mut ab = extras.filter(|e| e.ab_counts).map(|_| AbCounters {
+        covered_abstains: 0,
+        laya_correct_covered: 0,
+        ml_correct_covered: 0,
+        mcnemar: (0, 0),
+    });
 
     for (ci, case) in cases.iter().enumerate() {
         let laya_j = served_pos.get(&ci);
@@ -444,6 +899,24 @@ pub fn compose(
                     n_correct += 1;
                 }
                 continue;
+            }
+            // Issue 111 T3: the covered-abstain counters are arming-blind
+            // (the WOULD-BE escalated set) so the A/B prices disarmed
+            // suites at their rule's posture too.
+            if let (Some(counters), Some(&j)) = (ab.as_mut(), laya_j) {
+                counters.covered_abstains += 1;
+                let laya_right = laya.picks[j][qi] == gold.idx;
+                let ml_right = modelless.picks[ci][qi] == gold.idx;
+                if laya_right {
+                    counters.laya_correct_covered += 1;
+                }
+                if ml_right {
+                    counters.ml_correct_covered += 1;
+                }
+                counters.mcnemar = (
+                    counters.mcnemar.0 + (laya_right && !ml_right) as usize,
+                    counters.mcnemar.1 + (ml_right && !laya_right) as usize,
+                );
             }
             match laya_j {
                 Some(&j) if escalation_armed => {
@@ -484,6 +957,7 @@ pub fn compose(
         escalated_modelless_correct,
         escalator_served_questions,
         worthiness: worthiness_verdict,
+        ab,
     })
 }
 
@@ -550,6 +1024,7 @@ mod tests {
             cal_cases,
             min_delta,
             min_probe_lcb: None,
+            collective_worth: false,
         }
     }
 
@@ -570,7 +1045,7 @@ mod tests {
         // Laya serves BOTH cases; on the escalated question (c1 q0, gold 0)
         // laya picks 1 → wrong.
         let l = lq(vec![0, 1], vec![vec![0, 1], vec![1, 1]]);
-        let rep = compose(&cases, &m, &l, None).expect("compose");
+        let rep = compose(&cases, &m, &l, None, None).expect("compose");
         assert_eq!(rep.n_questions, 4);
         assert_eq!(rep.n_answered, 3);
         assert_eq!(rep.n_escalated, 1);
@@ -601,7 +1076,7 @@ mod tests {
         );
         // laya served ONLY case 0 (bucket-skipped case 1, trimmed case 2).
         let l = lq(vec![0], vec![vec![0, 1]]);
-        let rep = compose(&cases, &m, &l, None).expect("compose");
+        let rep = compose(&cases, &m, &l, None, None).expect("compose");
         assert_eq!(rep.n_questions, 6);
         assert_eq!(rep.n_escalated, 2);
         assert_eq!(rep.n_un_escalated, 4);
@@ -620,7 +1095,7 @@ mod tests {
             vec![vec![false, false], vec![false, false]],
         );
         let l = lq(vec![0, 1], vec![vec![1, 1], vec![1, 1]]);
-        let rep = compose(&cases, &m, &l, None).expect("compose");
+        let rep = compose(&cases, &m, &l, None, None).expect("compose");
         assert_eq!(rep.n_escalated, 0);
         assert!((rep.escalation_rate).abs() < 1e-12);
         // cascade accuracy == the forced modelless accuracy (laya never read).
@@ -633,7 +1108,7 @@ mod tests {
         let cases = vec![case("c0", 2)];
         let m = mq(vec![vec![0, 0]], vec![vec![true, true]]);
         let l = lq(vec![0], vec![vec![1, 0]]);
-        let rep = compose(&cases, &m, &l, None).expect("compose");
+        let rep = compose(&cases, &m, &l, None, None).expect("compose");
         assert_eq!(rep.n_escalated, 2);
         assert!((rep.escalation_rate - 1.0).abs() < 1e-12);
         // gold [0, 1], laya [1, 0] → 0 correct: accuracy IS laya's here.
@@ -646,16 +1121,16 @@ mod tests {
         // missing abstained vector for the case.
         let m = mq(vec![vec![0, 0]], vec![]);
         let l = lq(vec![0], vec![vec![0, 0]]);
-        assert!(compose(&cases, &m, &l, None).is_err());
+        assert!(compose(&cases, &m, &l, None, None).is_err());
         // laya served_orig out of range.
         let m = mq(vec![vec![0, 0]], vec![vec![false, false]]);
         let l = lq(vec![7], vec![vec![0, 0]]);
-        assert!(compose(&cases, &m, &l, None).is_err());
+        assert!(compose(&cases, &m, &l, None, None).is_err());
         // laya pick vector shorter than the case's questions.
         let l = lq(vec![0], vec![vec![0]]);
-        assert!(compose(&cases, &m, &l, None).is_err());
+        assert!(compose(&cases, &m, &l, None, None).is_err());
         // empty case set.
-        assert!(compose(&[], &mq(vec![], vec![]), &lq(vec![], vec![]), None).is_err());
+        assert!(compose(&[], &mq(vec![], vec![]), &lq(vec![], vec![]), None, None).is_err());
     }
 
     #[test]
@@ -671,13 +1146,13 @@ mod tests {
         // laya: right where modelless was right (c0q0 → 0), wrong where it
         // was wrong (c1q0 → 1): cascade == modelless forced exactly.
         let l = lq(vec![0, 1], vec![vec![0, 0], vec![1, 0]]);
-        let rep = compose(&cases, &m, &l, None).expect("compose");
+        let rep = compose(&cases, &m, &l, None, None).expect("compose");
         assert_eq!(rep.escalated_laya_correct, 1);
         assert_eq!(rep.escalated_modelless_correct, 1);
         // now the escalator flips BOTH: cascade +2 where modelless lost one
         // and won one → accuracy strictly better.
         let l2 = lq(vec![0, 1], vec![vec![0, 0], vec![0, 0]]);
-        let rep2 = compose(&cases, &m, &l2, None).expect("compose");
+        let rep2 = compose(&cases, &m, &l2, None, None).expect("compose");
         assert!(rep2.accuracy > rep.accuracy);
         assert_eq!(rep2.escalated_laya_correct, 2);
         assert_eq!(rep2.escalated_modelless_correct, 1);
@@ -717,7 +1192,7 @@ mod tests {
         let cal_laya = lq((0..10).collect(), (0..10).map(|_| vec![1, 1]).collect());
         let test_laya = lq(vec![0, 1], vec![vec![0, 0], vec![1, 1]]);
         let w = worthiness_input(m.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.0);
-        let rep = compose(&test_cases, &m, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict present");
         assert!(v.disarmed);
         assert_eq!(v.probe_n, 20);
@@ -746,7 +1221,7 @@ mod tests {
         let cal_laya = lq((0..10).collect(), (0..10).map(|_| vec![0, 1]).collect());
         let test_laya = lq(vec![0, 1], vec![vec![0, 0], vec![1, 1]]);
         let w = worthiness_input(m.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.0);
-        let rep = compose(&test_cases, &m, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict present");
         assert!(!v.disarmed);
         assert!(v.unprobed_reason.is_none());
@@ -763,13 +1238,13 @@ mod tests {
         let cal_laya = lq((0..10).collect(), (0..10).map(|_| vec![0, 1]).collect());
         let test_laya = lq(vec![0, 1], vec![vec![0, 0], vec![1, 1]]);
         let w = worthiness_input(m.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.25);
-        let rep = compose(&test_cases, &m, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict present");
         assert!(!v.disarmed);
         assert!(v.unprobed_reason.is_none());
         // one tick below the margin disarms.
         let w2 = worthiness_input(m.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.250001);
-        let rep2 = compose(&test_cases, &m, &test_laya, Some(&w2)).expect("compose");
+        let rep2 = compose(&test_cases, &m, &test_laya, Some(&w2), None).expect("compose");
         assert!(rep2.worthiness.as_ref().expect("verdict").disarmed);
         assert_eq!(rep2.n_escalated, 0);
     }
@@ -780,7 +1255,7 @@ mod tests {
         let test_laya = lq(vec![0, 1], vec![vec![0, 0], vec![1, 1]]);
         // gate half absent.
         let w = worthiness_input(None, Some(&test_laya), &cal_cases, 0.0);
-        let rep = compose(&test_cases, &m, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict");
         assert!(!v.disarmed);
         assert!(
@@ -792,7 +1267,7 @@ mod tests {
         assert_eq!(rep.n_escalated, 2); // pre-lever behavior: escalation ran
         // escalator half absent.
         let w2 = worthiness_input(m.cal_gate.as_ref(), None, &cal_cases, 0.0);
-        let rep2 = compose(&test_cases, &m, &test_laya, Some(&w2)).expect("compose");
+        let rep2 = compose(&test_cases, &m, &test_laya, Some(&w2), None).expect("compose");
         let v2 = rep2.worthiness.as_ref().expect("verdict");
         assert!(!v2.disarmed);
         assert!(
@@ -813,7 +1288,7 @@ mod tests {
         let cal_laya = lq(vec![0], vec![vec![1, 1]]); // 0/2 vs modelless 2/2 on cal0
         let test_laya = lq(vec![0, 1], vec![vec![0, 0], vec![1, 1]]);
         let w = worthiness_input(m.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.0);
-        let rep = compose(&test_cases, &m, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict");
         assert!(!v.disarmed);
         assert_eq!(v.probe_n, 2);
@@ -837,7 +1312,7 @@ mod tests {
         gate.abstained[0] = vec![true, false];
         let m2 = mq_with_cal(m.picks.clone(), m.abstained.clone(), Some(gate));
         let w = worthiness_input(m2.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.0);
-        let rep = compose(&test_cases, &m2, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m2, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict");
         // probe = cal0 q0 (abstained + served) only → n 1 < 16 → unprobed,
         // but the COUNT proves the read walked exactly the served ∩
@@ -858,12 +1333,12 @@ mod tests {
         };
         let m_bad = mq_with_cal(m.picks.clone(), m.abstained.clone(), Some(bad_gate));
         let w = worthiness_input(m_bad.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.0);
-        assert!(compose(&test_cases, &m_bad, &test_laya, Some(&w)).is_err());
+        assert!(compose(&test_cases, &m_bad, &test_laya, Some(&w), None).is_err());
         // escalator served_orig out of cal range (10 cases → 0..10 valid;
         // 10 is the first out-of-range index).
         let bad_cal_laya = lq(vec![10], vec![vec![0, 1]]);
         let w2 = worthiness_input(m.cal_gate.as_ref(), Some(&bad_cal_laya), &cal_cases, 0.0);
-        assert!(compose(&test_cases, &m, &test_laya, Some(&w2)).is_err());
+        assert!(compose(&test_cases, &m, &test_laya, Some(&w2), None).is_err());
     }
 
     // ── Issue 046 lever 4: the probe-LCB arm leg ──
@@ -904,7 +1379,7 @@ mod tests {
             min_probe_lcb: Some(0.05),
             ..worthiness_input(m.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.3)
         };
-        let rep = compose(&test_cases, &m, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict present");
         assert!(!v.disarmed, "LCB +0.0907 ≥ 0.05 must arm past margin 0.3");
         let lcb = v.probe_lcb.expect("lcb present");
@@ -942,7 +1417,7 @@ mod tests {
             min_probe_lcb: Some(0.05),
             ..worthiness_input(m20.cal_gate.as_ref(), Some(&cal_laya), &cal_cases20, 0.16)
         };
-        let rep = compose(&test_cases, &m20, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m20, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict");
         assert!(
             v.disarmed,
@@ -960,7 +1435,7 @@ mod tests {
         let test_laya = lq(vec![0, 1], vec![vec![0, 0], vec![1, 1]]);
         // Leg off: no probe_lcb key, margin-leg semantics untouched.
         let w = worthiness_input(m.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.16);
-        let rep = compose(&test_cases, &m, &test_laya, Some(&w)).expect("compose");
+        let rep = compose(&test_cases, &m, &test_laya, Some(&w), None).expect("compose");
         let v = rep.worthiness.as_ref().expect("verdict");
         assert!(v.probe_lcb.is_none());
         assert!(
@@ -977,7 +1452,7 @@ mod tests {
             min_probe_lcb: Some(0.99),
             ..worthiness_input(m.cal_gate.as_ref(), Some(&cal_laya), &cal_cases, 0.16)
         };
-        let rep2 = compose(&test_cases, &m, &test_laya, Some(&w2)).expect("compose");
+        let rep2 = compose(&test_cases, &m, &test_laya, Some(&w2), None).expect("compose");
         let v2 = rep2.worthiness.as_ref().expect("verdict");
         assert_eq!(
             v2.disarmed, v.disarmed,
@@ -993,7 +1468,7 @@ mod tests {
             min_probe_lcb: Some(0.05),
             ..worthiness_input(None, Some(&test_laya), &cal_cases, 0.16)
         };
-        let rep3 = compose(&test_cases, &m, &test_laya, Some(&w3)).expect("compose");
+        let rep3 = compose(&test_cases, &m, &test_laya, Some(&w3), None).expect("compose");
         let v3 = rep3.worthiness.as_ref().expect("verdict");
         assert!(!v3.disarmed);
         assert!(v3.probe_lcb.is_none());
@@ -1006,8 +1481,417 @@ mod tests {
         // shape, and no worthiness block on the row.
         let (_cal_cases, test_cases, m) = worthiness_fixture();
         let test_laya = lq(vec![0, 1], vec![vec![0, 0], vec![1, 1]]);
-        let rep = compose(&test_cases, &m, &test_laya, None).expect("compose");
+        let rep = compose(&test_cases, &m, &test_laya, None, None).expect("compose");
         assert!(rep.worthiness.is_none());
         assert_eq!(rep.n_escalated, 2);
+    }
+
+    // ── Issue 111 — collective-worth probe fixtures ──
+
+    /// `n` cal cases × 2 questions (gold 0,1 per case). The gate abstains
+    /// on a chosen subset; the escalator serves every cal case.
+    fn collective_fixture(
+        gate_picks: &[&[usize]],
+        gate_abstains: &[&[bool]],
+        laya_picks: &[&[usize]],
+    ) -> (Vec<SuiteCase>, CalGateRecords, LayaQuestions) {
+        let cal_cases: Vec<SuiteCase> = (0..gate_picks.len())
+            .map(|ci| case(&format!("cal{ci}"), 2))
+            .collect();
+        let gate = CalGateRecords {
+            picks: gate_picks.iter().map(|r| r.to_vec()).collect(),
+            abstained: gate_abstains.iter().map(|r| r.to_vec()).collect(),
+        };
+        let esc = lq(
+            (0..gate_picks.len()).collect(),
+            laya_picks.iter().map(|r| r.to_vec()).collect(),
+        );
+        (cal_cases, gate, esc)
+    }
+
+    fn collective_input<'a>(
+        gate: &'a CalGateRecords,
+        esc: &'a LayaQuestions,
+        cal_cases: &'a [SuiteCase],
+    ) -> WorthinessInput<'a> {
+        WorthinessInput {
+            gate: Some(gate),
+            escalator: Some(esc),
+            cal_cases,
+            min_delta: 0.16,
+            min_probe_lcb: None,
+            collective_worth: true,
+        }
+    }
+
+    #[test]
+    fn collective_t1_agreement_on_error_arithmetic() {
+        // Rows (gold per case: q0→0, q1→1):
+        // c0: ml (0,1) both right; laya (0,1) both right → agree, 0 err.
+        // c1: ml (1,0) both wrong; laya (1,0) both wrong SAME picks →
+        //     both_err +2, agree_on_err +2.
+        // c2: ml (1,1): q0 wrong, q1 right; laya (0,0): q0 right, q1 wrong
+        //     → no both-err row (their errors are disjoint).
+        // c3: ml (1,1): q0 wrong/q1 right; laya (1,1): q0 wrong/q1 right
+        //     → both-err q0 only, SAME pick (1) → both_err +1, agree +1.
+        let (cal_cases, gate, esc) = collective_fixture(
+            &[&[0, 1], &[1, 0], &[1, 1], &[1, 1]],
+            &[&[false, false][..]; 4],
+            &[&[0, 1], &[1, 0], &[0, 0], &[1, 1]],
+        );
+        let w = collective_input(&gate, &esc, &cal_cases);
+        let v = w.probe().expect("probe");
+        let c = v.collective.as_ref().expect("collective block");
+        let p = &c.pairs[0];
+        assert_eq!(p.rows, 8);
+        assert_eq!(p.both_err, 3);
+        assert_eq!(p.agree_on_err, 3);
+        let aoe = p.agreement_on_error.expect("aoe defined");
+        assert!((aoe - 1.0).abs() < 1e-9);
+        assert!((p.both_wrong_rate - 3.0 / 8.0).abs() < 1e-9);
+        // Observed agreement: c0 (2), c1 (2), c3 q0 (1) = 5/8; marginals
+        // over labels — κ must be strictly below p_o here (the lanes
+        // agree often because BOTH are right, not by chance alone).
+        let k = p.kappa.expect("kappa defined");
+        assert!(k < 5.0 / 8.0 && k > 0.0);
+    }
+
+    #[test]
+    fn collective_t1_no_both_err_reads_none_not_zero() {
+        // Every wrong row is wrong by exactly one lane — both_err = 0 →
+        // agreement_on_error is None (never a fake 0-or-1).
+        // c1: ml (1,0) both wrong, laya (0,1) both right; c2: laya (1,1)
+        // wrong on q0 only; c3: laya (0,0) wrong on q1 only.
+        let (cal_cases, gate, esc) = collective_fixture(
+            &[&[0, 1], &[1, 0], &[0, 1], &[0, 1]],
+            &[&[false, false][..]; 4],
+            &[&[0, 1], &[0, 1], &[1, 1], &[0, 0]],
+        );
+        let w = collective_input(&gate, &esc, &cal_cases);
+        let v = w.probe().expect("probe");
+        let p = &v.collective.as_ref().expect("block").pairs[0];
+        assert_eq!(p.both_err, 0);
+        assert!(p.agreement_on_error.is_none());
+    }
+
+    #[test]
+    fn collective_t2_committee_is_the_deployed_cascade_pick() {
+        // 20 cases × 2 q (n=40 rows — above the thin floor). The gate picks
+        // are correct everywhere EXCEPT c4-c6 (both wrong), and the gate
+        // abstains on those three where the escalator is right. Committee =
+        // cascade pick: 40/40 = 1.0; floor (modelless-only) = 34/40 = 0.85;
+        // Wilson LCB(40/40) ≈ 0.912 > 0.85 → worth_committee.
+        let picks: Vec<&[usize]> = (0..20)
+            .map(|ci| {
+                if (4..7).contains(&ci) {
+                    &[1usize, 0][..]
+                } else {
+                    &[0usize, 1][..]
+                }
+            })
+            .collect();
+        let abstains: Vec<&[bool]> = (0..20)
+            .map(|ci| {
+                if (4..7).contains(&ci) {
+                    &[true, true][..]
+                } else {
+                    &[false, false][..]
+                }
+            })
+            .collect();
+        let laya: Vec<&[usize]> = (0..20).map(|_| &[0usize, 1][..]).collect();
+        let (cal_cases, gate, esc) = collective_fixture(&picks, &abstains, &laya);
+        let w = collective_input(&gate, &esc, &cal_cases);
+        let v = w.probe().expect("probe");
+        let c = &v.collective.as_ref().expect("block").committee;
+        assert_eq!(c.n_lanes, 2);
+        assert_eq!(c.rows, 40);
+        assert!((c.committee_acc - 1.0).abs() < 1e-9);
+        assert!((c.floor_acc - 0.85).abs() < 1e-9);
+        assert!((c.improvement - 0.15).abs() < 1e-9);
+        assert_eq!(c.verdict, "worth_committee");
+        // The ceiling: every row has at least one lane right here.
+        assert!((c.ceiling_union.expect("union") - 1.0).abs() < 1e-9);
+        assert!(c.heuristics.is_none(), "n=2 carries no heuristics");
+    }
+
+    #[test]
+    fn collective_t2_not_worth_when_the_escalator_hurts() {
+        // Floor 1.0 (the gate is right everywhere); the escalator is wrong
+        // on the 4 abstained rows it takes over → committee 36/40 < floor
+        // → not_worth (the LCB never consulted on a non-positive gain).
+        let picks: Vec<&[usize]> = (0..20).map(|_| &[0usize, 1][..]).collect();
+        let abstains: Vec<&[bool]> = (0..20)
+            .map(|ci| {
+                if ci < 2 {
+                    &[true, true][..]
+                } else {
+                    &[false, false][..]
+                }
+            })
+            .collect();
+        let laya: Vec<&[usize]> = (0..20)
+            .map(|ci| {
+                if ci < 2 {
+                    &[1usize, 0][..]
+                } else {
+                    &[0usize, 1][..]
+                }
+            })
+            .collect();
+        let (cal_cases, gate, esc) = collective_fixture(&picks, &abstains, &laya);
+        let w = collective_input(&gate, &esc, &cal_cases);
+        let v = w.probe().expect("probe");
+        let c = &v.collective.as_ref().expect("block").committee;
+        assert!((c.committee_acc - 0.9).abs() < 1e-9);
+        assert!((c.improvement - -0.1).abs() < 1e-9);
+        assert_eq!(c.verdict, "not_worth");
+        assert!(c.undecidable_reason.is_none());
+    }
+
+    #[test]
+    fn collective_t2_undecidable_on_thin_rows() {
+        // 1 cal case × 2 questions → below PROBE_MIN_QUESTIONS.
+        let cal_cases = vec![case("cal0", 2)];
+        let gate = CalGateRecords {
+            picks: vec![vec![0, 1]],
+            abstained: vec![vec![true, false]],
+        };
+        let esc = lq(vec![0], vec![vec![1, 1]]);
+        let w = collective_input(&gate, &esc, &cal_cases);
+        let v = w.probe().expect("probe");
+        let c = &v.collective.as_ref().expect("block").committee;
+        assert_eq!(c.verdict, "undecidable");
+        assert!(c.undecidable_reason.as_deref().unwrap().contains("thin"));
+    }
+
+    #[test]
+    fn collective_t2_undecidable_on_zero_straddling_improvement() {
+        // improvement +0.05 (committee 38/40 vs floor 36/40) — positive
+        // but Wilson LCB(38/40) ≈ 0.835 does not clear the 0.9 floor →
+        // the zero-straddling undecidable (esc_voi discipline).
+        let picks: Vec<&[usize]> = (0..20)
+            .map(|ci| {
+                if ci < 2 {
+                    &[1usize, 0][..]
+                } else {
+                    &[0usize, 1][..]
+                }
+            })
+            .collect();
+        let abstains: Vec<&[bool]> = (0..20)
+            .map(|ci| {
+                if ci < 2 {
+                    &[true, true][..]
+                } else {
+                    &[false, false][..]
+                }
+            })
+            .collect();
+        let laya: Vec<&[usize]> = (0..20)
+            .map(|ci| {
+                if ci == 0 {
+                    &[0usize, 0][..]
+                } else if ci == 1 {
+                    &[1usize, 1][..]
+                } else {
+                    &[0usize, 1][..]
+                }
+            })
+            .collect();
+        // Committee on the abstained rows: c0 laya (0,0) → 1 right;
+        // c1 laya (1,1) → 1 right; held rows all correct → 38/40.
+        // Floor: gate picks wrong on c0+c1 (4 rows) → 36/40.
+        let (cal_cases, gate, esc) = collective_fixture(&picks, &abstains, &laya);
+        let w = collective_input(&gate, &esc, &cal_cases);
+        let v = w.probe().expect("probe");
+        let c = &v.collective.as_ref().expect("block").committee;
+        assert!((c.improvement - 0.05).abs() < 1e-9);
+        assert_eq!(c.verdict, "undecidable");
+        assert!(
+            c.undecidable_reason
+                .as_deref()
+                .unwrap()
+                .contains("zero-straddling")
+        );
+    }
+
+    #[test]
+    fn collective_flag_off_keeps_the_row_clean() {
+        // collective_worth = false → no block, and the serialized verdict
+        // carries no collective key (the additive-only law).
+        let (cal_cases, gate, esc) = collective_fixture(
+            &[&[0, 1][..]; 4],
+            &[&[true, false][..]; 4],
+            &[&[0, 1][..]; 4],
+        );
+        let w = WorthinessInput {
+            collective_worth: false,
+            ..collective_input(&gate, &esc, &cal_cases)
+        };
+        let v = w.probe().expect("probe");
+        assert!(v.collective.is_none());
+        let json = serde_json::to_value(&v).expect("serialize");
+        assert!(json.get("collective").is_none());
+    }
+
+    #[test]
+    fn ab_counters_are_arming_blind_and_mcnemar_exact() {
+        // Compose reads the TEST-side abstains (this fixture's cases ARE
+        // the test slice): c1 + c3 abstain, escalator serves all 4.
+        // Covered abstains = 4 questions regardless of arming.
+        // laya picks: c1 (0,1) both right; c3 (1,0) q0 wrong/q1 right.
+        // ml picks: c1 (1,0) both wrong; c3 (0,1) both right.
+        // McNemar: c1 q0 a=1; c1 q1 a=1; c3 q0 b=1; c3 q1 — laya right,
+        // ml right → neither. (a, b) = (2, 1).
+        let (cal_cases, gate, esc) = collective_fixture(
+            &[&[0, 1], &[1, 0], &[0, 1], &[0, 1]],
+            &[
+                &[false, false],
+                &[true, true],
+                &[false, false],
+                &[true, true],
+            ],
+            &[&[0, 1], &[0, 1], &[0, 1], &[1, 1]],
+        );
+        let cal_modelless = mq_with_cal(
+            vec![vec![0, 1], vec![1, 0], vec![0, 1], vec![0, 1]],
+            vec![
+                vec![false, false],
+                vec![true, true],
+                vec![false, false],
+                vec![true, true],
+            ],
+            Some(CalGateRecords {
+                picks: gate.picks.clone(),
+                abstained: gate.abstained.clone(),
+            }),
+        );
+        let w = collective_input(&gate, &esc, &cal_cases);
+        let extras = CascadeExtras { ab_counts: true };
+        let rep =
+            compose(&cal_cases, &cal_modelless, &esc, Some(&w), Some(&extras)).expect("compose");
+        let ab = rep.ab.as_ref().expect("ab counters");
+        assert_eq!(ab.covered_abstains, 4);
+        assert_eq!(ab.laya_correct_covered, 3);
+        assert_eq!(ab.ml_correct_covered, 2);
+        assert_eq!(ab.mcnemar, (2, 1));
+        // Arm-equivalence: delta = (3-2)/4 = 0.25 ≥ margin 0.16 → armed,
+        // so the run's live escalated set IS the covered set — the
+        // counters must match the report's own fields.
+        let v = rep.worthiness.as_ref().expect("verdict");
+        assert!(!v.disarmed);
+        assert_eq!(rep.n_escalated, ab.covered_abstains);
+        assert_eq!(rep.escalated_laya_correct, ab.laya_correct_covered);
+        assert_eq!(rep.escalated_modelless_correct, ab.ml_correct_covered);
+    }
+
+    #[test]
+    fn ab_counters_absent_when_extras_off() {
+        let (cal_cases, gate, esc) = collective_fixture(
+            &[&[0, 1][..]; 4],
+            &[&[true, false][..]; 4],
+            &[&[0, 1][..]; 4],
+        );
+        let w = collective_input(&gate, &esc, &cal_cases);
+        let rep = compose(
+            &cal_cases,
+            &mq(vec![vec![0, 1]; 4], vec![vec![true, false]; 4]),
+            &esc,
+            Some(&w),
+            None,
+        )
+        .expect("compose");
+        assert!(rep.ab.is_none());
+        let json = serde_json::to_value(&rep).expect("serialize");
+        assert!(json.get("ab").is_none());
+    }
+
+    #[test]
+    fn majority_committee_n3_heuristics_from_correlated_pair() {
+        // 3 lanes, 20 rows (gold = row % 2). Lane 0 perfect, lanes 1+2 all
+        // wrong with the SAME wrong picks (fully correlated errors).
+        // Majority: gold loses 2-1 everywhere → committee acc 0, best
+        // single lane 1.0 → not_worth — a correlated pair drags the
+        // committee DOWN, exactly the dcog failure mode.
+        let golds: Vec<usize> = (0..20).map(|i| i % 2).collect();
+        let lane0: Vec<usize> = golds.clone(); // perfect
+        let lane1: Vec<usize> = golds.iter().map(|g| 1 - g).collect(); // all wrong
+        let lane2: Vec<usize> = golds.iter().map(|g| 1 - g).collect(); // same wrong
+        let v = majority_committee_verdict(&[&lane0, &lane1, &lane2], &golds).expect("verdict");
+        assert!((v.committee_acc - 0.0).abs() < 1e-9);
+        assert!((v.floor_acc - 1.0).abs() < 1e-9);
+        assert_eq!(v.verdict, "not_worth");
+        assert_eq!(v.n_lanes, 3);
+        let h = v.heuristics.expect("heuristics");
+        // Pair (1,2): both wrong on all 20 rows, SAME wrong pick → aoe 1.0.
+        // Pairs (0,1)/(0,2): 0 never errs → no defined denominator.
+        assert!((h.rho_hat - 1.0).abs() < 1e-9);
+        assert_eq!(h.n_prime_predictions.len(), 2);
+        let (size, n_prime) = h.n_prime_predictions[0];
+        assert_eq!(size, 4);
+        // n′ = 4/(1+3·1.0) = 1.0 — the degenerate-correlated prediction.
+        assert!((n_prime - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn majority_committee_wins_when_errors_are_decorrelated() {
+        // Coverage-complementary lanes over 20 rows: lane0 right on rows
+        // 0..14, lane1 on 6..20, lane2 on 0..6 and 14..20. Every row has
+        // ≥2 lanes right → committee 20/20 vs best single lane 14/20 =
+        // 0.7 → improvement +0.3, Wilson LCB(20/20) ≈ 0.839 > 0.7 →
+        // worth_committee. NO pair shares an error (decorrelated) →
+        // ρ̂ is undefined (None) — the complementarity the delta gate
+        // cannot see.
+        let golds: Vec<usize> = (0..20).map(|i| i % 2).collect();
+        let right = |i: usize, lo: usize, hi: usize| {
+            if i >= lo && i < hi {
+                golds[i]
+            } else {
+                1 - golds[i]
+            }
+        };
+        let lane0: Vec<usize> = (0..20).map(|i| right(i, 0, 14)).collect();
+        let lane1: Vec<usize> = (0..20).map(|i| right(i, 6, 20)).collect();
+        let lane2: Vec<usize> = (0..20)
+            .map(|i| {
+                if !(6..14).contains(&i) {
+                    golds[i]
+                } else {
+                    1 - golds[i]
+                }
+            })
+            .collect();
+        let v = majority_committee_verdict(&[&lane0, &lane1, &lane2], &golds).expect("verdict");
+        assert!((v.committee_acc - 1.0).abs() < 1e-9);
+        assert!((v.floor_acc - 0.7).abs() < 1e-9);
+        assert!((v.improvement - 0.3).abs() < 1e-9);
+        assert_eq!(v.verdict, "worth_committee");
+        assert!(v.heuristics.is_none(), "decorrelated lanes share no error");
+    }
+
+    #[test]
+    fn majority_committee_tie_resolves_first_index() {
+        // 3 lanes all disagreeing on a row: one votes 2, one 1, one 0 →
+        // all counts 1 → first-index rule picks 0 (the min pick index).
+        let golds = vec![3usize];
+        let lanes = [&[2usize][..], &[1usize][..], &[0usize][..]];
+        let v = majority_committee_verdict(&lanes, &golds).expect("verdict");
+        // Committee pick = 0 ≠ gold 3 → committee_acc 0. Floor 0.
+        assert!((v.committee_acc - 0.0).abs() < 1e-9);
+        // Every pair is both-wrong with differing picks → ρ̂ = 0 (defined,
+        // not absent) — the heuristic still reports, predictions n/(n).
+        let h = v.heuristics.expect("rho defined at 0");
+        assert!((h.rho_hat - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn majority_committee_refuses_two_lanes_and_shape_drift() {
+        let golds = vec![0usize, 1];
+        let lanes = [&[0usize, 1][..], &[1, 0][..]];
+        assert!(majority_committee_verdict(&lanes, &golds).is_err());
+        let lanes3 = [&[0usize, 1][..], &[1, 0][..], &[0, 1][..]];
+        assert!(majority_committee_verdict(&lanes3, &[0]).is_err());
+        assert!(majority_committee_verdict(&lanes3, &[]).is_err());
     }
 }

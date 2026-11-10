@@ -136,6 +136,58 @@ pub fn render_markdown(out: &RunOutput, errors: &[String]) -> String {
         s.push('\n');
     }
 
+    // Issue 111 T3: the matched-cost worthiness A/B, when it ran — a
+    // run-level block (the arming decision spans suites), one table per
+    // checkpoint.
+    if let Some(blocks) = &out.worth_ab {
+        s.push_str("## Worth-ab (issue 111 T3, matched-cost A/B — report-only)\n\n");
+        s.push_str("The GOAT question, pre-registered in `.issues/111` BEFORE any run: at equal test-side escalation spend, does committee-informed arming beat delta-only arming on serving accuracy? Accuracy alone can never pass — every posture reports its accuracy/cost PAIR; the paired LB95 reads the flipped suites' escalated rows on ONE frozen test read.\n\n");
+        for (ck, block) in blocks {
+            s.push_str(&format!(
+                "### checkpoint `{ck}` (cost-match tolerance {:.0}%)\n\n",
+                block.cost_match_tolerance * 100.0
+            ));
+            s.push_str("| posture | armed | cost (esc q) | esc rate | correct | accuracy |\n");
+            s.push_str("|---|---|---|---|---|---|\n");
+            for p in &block.postures {
+                s.push_str(&format!(
+                    "| {} | {} | {} | {:.3} | {} | {} |\n",
+                    p.rule,
+                    p.armed_suites.len(),
+                    p.cost,
+                    p.escalation_rate,
+                    p.correct,
+                    fmt4(p.accuracy),
+                ));
+            }
+            s.push('\n');
+            match &block.matched {
+                Some(m) => {
+                    s.push_str(&format!(
+                        "**Matched** at t={:.2}: worth cost {} vs delta {} (gap {:.1}%, tolerance {:.0}%) · \
+                         acc {} vs {} · paired (worth − delta) {:+.5} LB95 {:+.5} (a={} b={}, n={}) → **{}**\n\n",
+                        m.worth_t,
+                        m.worth_cost,
+                        m.delta_cost,
+                        m.cost_gap_rel * 100.0,
+                        block.cost_match_tolerance * 100.0,
+                        fmt4(m.worth_accuracy),
+                        fmt4(m.delta_accuracy),
+                        m.paired_mean,
+                        m.paired_lb95,
+                        m.n_worth_right_delta_wrong,
+                        m.n_worth_wrong_delta_right,
+                        m.n_questions,
+                        m.verdict,
+                    ));
+                }
+                None => {
+                    s.push_str("**Matched**: none — delta_only cost 0 (nothing armed), the sweep's worth postures are priced in the table above.\n\n");
+                }
+            }
+        }
+    }
+
     for suite in &out.suites {
         s.push_str(&format!(
             "## {} — {} cases / {} questions\n\n",
@@ -531,6 +583,47 @@ pub fn render_markdown(out: &RunOutput, errors: &[String]) -> String {
                         lcb_cell,
                         w.min_delta,
                         w.unprobed_reason.as_deref().unwrap_or("—"),
+                    ));
+                }
+                s.push('\n');
+            }
+            // Issue 111 T1/T2: the collective-worth block, when the probe
+            // ran — the cross-lane error-correlation read + the committee
+            // verdict per checkpoint.
+            if suite.cascade.values().any(|r| {
+                r.worthiness
+                    .as_ref()
+                    .and_then(|w| w.collective.as_ref())
+                    .is_some()
+            }) {
+                s.push_str("\n**Collective worth** (issue 111, cal-slice probe): agreement-on-error = among rows where BOTH lanes err, the share emitting the SAME wrong pick (arXiv:2506.07962; definition carried in every results.json row). The committee verdict is the size-aware empirical read — at the 2-lane gate shape the committee IS the deployed cascade pick, measured on the cal rows against the modelless floor; the union bound is a ceiling only. Bars pre-registered in `.issues/111` BEFORE the run.\n\n");
+                s.push_str("| escalator | rows | both err | agree on err | AoE | both-wrong | κ | committee acc | Wilson LCB | floor | Δ | verdict | ceiling |\n");
+                s.push_str("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+                for (ck, rep) in &suite.cascade {
+                    let Some(c) = rep.worthiness.as_ref().and_then(|w| w.collective.as_ref())
+                    else {
+                        continue;
+                    };
+                    let p = &c.pairs[0];
+                    let cm = &c.committee;
+                    let cell = |v: Option<f64>, f: &dyn Fn(f64) -> String| {
+                        v.map(f).unwrap_or_else(|| "—".to_string())
+                    };
+                    s.push_str(&format!(
+                        "| cascade · {} | {} | {} | {} | {} | {:.3} | {} | {} | {} | {} | {:+.4} | {} | {} |\n",
+                        ck,
+                        p.rows,
+                        p.both_err,
+                        p.agree_on_err,
+                        cell(p.agreement_on_error, &|x| format!("{x:.3}")),
+                        p.both_wrong_rate,
+                        cell(p.kappa, &|x| format!("{x:+.3}")),
+                        fmt4(cm.committee_acc),
+                        fmt4(cm.committee_wilson_lcb),
+                        fmt4(cm.floor_acc),
+                        cm.improvement,
+                        cm.verdict,
+                        cell(cm.ceiling_union, &|x| format!("{x:.3}")),
                     ));
                 }
                 s.push('\n');

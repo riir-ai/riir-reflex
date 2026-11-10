@@ -475,19 +475,7 @@ fn support_reading(v: &JudgeVerdict, context: &str, options: &[String]) -> &'sta
 
 // ───────────────────────────────────────────── stats ──
 
-/// The Wilson score interval at 95% (z = 1.959964); n = 0 → (0, 1).
-fn wilson95(k: usize, n: usize) -> (f64, f64) {
-    if n == 0 {
-        return (0.0, 1.0);
-    }
-    let z = 1.959_964_f64;
-    let p = k as f64 / n as f64;
-    let z2 = z * z;
-    let denom = 1.0 + z2 / n as f64;
-    let center = (p + z2 / (2.0 * n as f64)) / denom;
-    let half = z / denom * ((p * (1.0 - p) / n as f64 + z2 / (4.0 * n as f64 * n as f64)).sqrt());
-    ((center - half).max(0.0), (center + half).min(1.0))
-}
+use crate::harness::metrics::wilson95;
 
 /// Kish's approximate design effect over the strata: deff = 1 + cv² of
 /// the stratum weight shares (proportional allocation → ≈ 1, disclosed).

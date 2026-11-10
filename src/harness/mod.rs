@@ -82,6 +82,10 @@ pub mod probe_delta;
 // test/cal/pool slices (overlaps, test-sample label coverage) + the raw
 // slice-identity digests the board publish path compares. Ungated + pure.
 pub mod slice_guard;
+// Issue 111 T3 — the matched-cost worthiness A/B evaluator (pure core;
+// report-only, opt-in `--worth-ab`). Reads the cascade reports' per-suite
+// records; no engine dep, no serving change.
+pub mod worth_ab;
 // Near-duplicate leak report (Issue 024): opt-in, zero-dep, native-only.
 #[cfg(feature = "modelless")]
 pub mod runner;

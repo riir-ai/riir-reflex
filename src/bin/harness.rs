@@ -31,6 +31,9 @@
 //!                              [--clm] [--gliner] [--agentjev] [--openthai] [--drex]
 //!                                      [--d1] [--pplx] [--d3] [--jeva] [--startlux] [--mammoth] [--elephant] [--opendecider] [--paw] [--paw-local]
 //!                                      [--cascade] [--cascade-worthiness-lcb F]
+//!                                      [--collective-worth] [--worth-ab] (Issue 111 — the
+//!                                       collective-worth probe + the matched-cost A/B,
+//!                                       report-only; both need --cascade --cascade-worthiness)
 //!                                      [--gate-fit-selection] [--gate-distance-only]
 //!                                      [--gate-risk-target <alpha>] (Issue 112 T4 — the
 //!                                       certified-abstention REPORT lever; delta pinned 0.05;
@@ -259,6 +262,25 @@
 //! conservative on paired data; the Bench-063 preregistered floor is
 //! 0.05).
 //!
+//! `--collective-worth` (needs `--cascade --cascade-worthiness`, issue
+//! 111 T1/T2, report-only) adds the collective-worth block to each
+//! worthiness verdict: per-lane-pair agreement-on-error (among rows where
+//! BOTH lanes err, the share emitting the SAME wrong pick — the
+//! arXiv:2506.07962 convention; definition carried in every row) plus
+//! Cohen's κ and the both-wrong rate, and the size-aware committee
+//! verdict — the committee pick's measured cal accuracy + Wilson LCB
+//! against the modelless floor, verdict bars pre-registered in
+//! `.issues/111`. Default off = byte-identical.
+//! `--worth-ab` (implies `--collective-worth`, issue 111 T3, report-only)
+//! runs the pre-registered matched-cost A/B: at equal test-side escalation
+//! spend, does committee-informed arming beat delta-only arming on
+//! serving accuracy? Accuracy alone can NEVER pass — every posture
+//! reports its accuracy/cost PAIR, the nearest worth_only(t*) posture to
+//! delta_only's cost is matched within the 5% tolerance, and the paired
+//! LB95 over the frozen test read decides
+//! WORTH_BEATS_DELTA / NEGATIVE / UNDECIDABLE_*. The flags stay opt-in
+//! whatever the verdict.
+//!
 //! `--gate-fit-selection` (issue 042 lever 1) fits the fused-gate
 //! thresholds on the STRATIFIED selection slice instead of the train-tail
 //! cal slice — the shared held-out instrument, with the probe corpus
@@ -441,6 +463,8 @@ fn harness_main() {
             "--label-smooth-ab" => opts.label_smooth_ab = true,
             "--cascade" => opts.cascade = true,
             "--cascade-worthiness" => opts.cascade_worthiness = true,
+            "--collective-worth" => opts.collective_worth = true,
+            "--worth-ab" => opts.worth_ab = true,
             "--gate-fit-selection" => opts.gate_fit_selection = true,
             "--gate-distance-only" => opts.gate_distance_only = true,
             "--gate-fit-calibrated" => opts.gate_fit_calibrated = true,

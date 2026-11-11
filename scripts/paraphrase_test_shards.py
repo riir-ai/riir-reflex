@@ -58,7 +58,10 @@ EVAL_PREFIX = os.environ.get("PARA_EVAL_PREFIX", "test")
 # Per-suite paraphrase surfaces; suites absent from the map use ["text"] with
 # no preserve gate (the 089 posture).
 FIELD_MAP = {
-    "winogrande_jdi": {"sentence": {"preserve": ["_"]}},
+    "winogrande_jdi": {"sentence": {"preserve": ["_"],
+                                      "hint": (" Keep the single '_' blank character "
+                                               "exactly as it is - never fill it in, "
+                                               "never remove it.")}},
     "hellaswag_jdi": {"ctx_join": {"a": "ctx_a", "b": "ctx_b", "into": "ctx"}},
 }
 SYSTEM = (
@@ -71,11 +74,13 @@ MAX_ATTEMPTS = 3
 MAX_TOKENS = 120
 
 
-def chat(text, stronger, temp):
+def chat(text, stronger, temp, hint=""):
     user = "Paraphrase this utterance: " + text
     if stronger:
         user = ("Paraphrase this utterance using completely different words "
                 "where possible: " + text)
+    if hint:
+        user += " " + hint
     body = json.dumps({
         "model": "gemma-3-4b-it",
         "temperature": temp,
@@ -135,13 +140,13 @@ def _gates(orig, para, preserve, flags):
     return True
 
 
-def paraphrase_one(orig, preserve=()):
+def paraphrase_one(orig, preserve=(), hint=""):
     flags, attempts = [], 0
     for attempt in range(MAX_ATTEMPTS):
         attempts += 1
         stronger = attempt == 1
         temp = 0.0 if attempt < 2 else 0.7
-        para = chat(orig, stronger, temp)
+        para = chat(orig, stronger, temp, hint)
         if not para:
             continue
         verdict = _gates(orig, para, preserve, flags)
@@ -213,11 +218,11 @@ def main():
             if kind == "ctx_join":
                 a, b = wrapper_orig_a_b(item)
                 return paraphrase_ctx_join(a, b)
-            preserve = FIELD_MAP.get(suite, {}).get(payload, {}).get("preserve", ()) if suite in FIELD_MAP else ()
-            return paraphrase_one(orig, preserve)
+            cfg = FIELD_MAP.get(suite, {}).get(payload, {}) if suite in FIELD_MAP else {}
+            return paraphrase_one(orig, cfg.get("preserve", ()), cfg.get("hint", ""))
 
         # capture the row's original stem halves for the join job
-        page_by_fi = {fi: p for fi, p in pages}
+        page_by_fi = {fi: p[1] for fi, p in enumerate(pages)}
 
         def wrapper_orig_a_b(item):
             fi, ri, ji, _, cfg, _ = item

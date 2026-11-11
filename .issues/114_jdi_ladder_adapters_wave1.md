@@ -289,3 +289,7 @@ side owner-gated booking. Never force the wire.
       any p50). The feed cells + the rethink fold (060 R1d/R2a) stay the
       rethink-side booking, gated on the T3/T4/T5 corpus decisions + owner-gated
       amo hours.
+
+### Landscape note (2026-11-12, amo idle lane zed-c21902cf — wave-2/3 candidate, recorded not restated)
+
+**PolyRoute (arXiv:2611.13843, 2026-11-10)** — a 12-language + code-mixed benchmark for TYPED-DECISION ROUTING with baselines and a leaderboard. Adjacent to the JDI family's typed_decisions lane (multilingual + code-mixed axes the current board rows don't carry). Not a wave-1/wave-2 adapter candidate as recorded (no fetch stanza scored, no licence read yet); the decision-index-beat lane owns any future board/lane read. Recorded here because this file is the adapters' triage home.

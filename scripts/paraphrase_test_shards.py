@@ -38,6 +38,12 @@ DST = Path(os.environ["PARA_DST"]) if os.environ.get("PARA_DST") else REPO / ".r
 MANIFEST_DIR = Path(os.environ["PARA_MANIFEST_DIR"]) if os.environ.get("PARA_MANIFEST_DIR") else REPO / ".raw" / "para-model"
 SERVER = os.environ.get("PARA_SERVER", "http://127.0.0.1:8097")
 SUITES = [s.strip() for s in os.environ.get("PARA_SUITES", "massive_intent_en,banking77").split(",") if s.strip()]
+# The eval-shard prefix: the JDI suites (winogrande_jdi, hellaswag_jdi) seat
+# on the CANONICAL datasets' VALIDATION shards (runner.rs SuiteSpec
+# eval_split: "validation" — HF test is unlabeled for winogrande), so the
+# shadow read paraphrases validation-*.json there. Default "test" keeps the
+# Bench 089 posture byte-identical.
+EVAL_PREFIX = os.environ.get("PARA_EVAL_PREFIX", "test")
 SYSTEM = (
     "You paraphrase single utterances. Rewrite with different wording and "
     "sentence structure while preserving the exact same meaning and intent. "
@@ -128,7 +134,8 @@ def main():
     for suite in SUITES:
         src_dir, dst_dir = SRC / suite, DST / suite
         dst_dir.mkdir(parents=True, exist_ok=True)
-        test_files = sorted(src_dir.glob("test-*.json"))
+        eval_glob = "%s-*.json" % EVAL_PREFIX
+        test_files = sorted(src_dir.glob(eval_glob))
         pages = []
         for f in test_files:
             pages.append((f, json.loads(f.read_text(encoding="utf-8"))))
@@ -196,12 +203,12 @@ def main():
     for suite in SUITES:
         src_dir, dst_dir = SRC / suite, DST / suite
         for f in sorted(src_dir.iterdir()):
-            if f.name.startswith("test-"):
+            if f.name.startswith(EVAL_PREFIX + "-"):
                 continue
             target = dst_dir / f.name
             if not target.exists():
                 shutil.copy2(f, target)
-        print("[%s] non-test files copied verbatim" % suite, flush=True)
+        print("[%s] non-eval files copied verbatim" % suite, flush=True)
     print("ALL DONE in %.0fs" % (time.time() - t0), flush=True)
 
 

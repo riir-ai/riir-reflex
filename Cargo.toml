@@ -77,7 +77,7 @@ modelless = [
 # (arXiv:2610.39302 Thm 3 ρ + alignment_floor) and `basis_split` (the public
 # ZCA whitener builder) — no new dep edge: katgpt-core is already the ONE
 # foreign code-level dep. Measurement-only; never in RELEASE_FEATURES.
-rho_probe = ["katgpt-core/nuisance_fraction", "katgpt-core/basis_split"]
+rho_probe = ["katgpt-core/diagnostics"]
 # Issue 115 T2 — the synth-pool diversity correlation cell. Forwards
 # katgpt-core `diffusion_diversity` (Plan 634's `SimGraph::div_tau`, arXiv
 # 2606.01861) for the REPORT-ONLY `--synth-div` correlation probe (the
@@ -91,7 +91,7 @@ synth_div = ["katgpt-core/diffusion_diversity"]
 # pre-argmax score vector), never a fork. Opt-in, PROMOTE-ONLY until the
 # issue's G3 GOAT passes; feature-off is the byte-identical posture (the
 # route seat compiles to the bare `pick_domain` call).
-pick_latch = ["katgpt-core/pick_latch"]
+pick_latch = ["katgpt-core/compute_control"]
 # Issue 038 T1/T3: per-label naive-Bayes count tables (katgpt-core
 # `contrastive_scope`, GOAT-passed at katgpt-rs Bench 669 — frozen counts,
 # log2-odds, BLAKE3-committed). PROMOTED default-on at Bench 051 (G1–G4
@@ -167,7 +167,7 @@ probe_delta_ab = ["modelless"]
 # agreement column rides the probe's own control lane when present.
 # Opt-in; never in default. The first wired consumer of `basis_split` —
 # the data unblocking the katgpt-rs-side promotion decision.
-basis_cert = ["katgpt-core/basis_split"]
+basis_cert = ["katgpt-core/diagnostics"]
 # Plan 627 / Issue 090 C2 — the `set_refine` engine seam: set-conditioned
 # state refinement over the routed domain directions (katgpt-core
 # `set_refine`, the Plan-354 `set_attention` composition). Opt-in; the
@@ -270,7 +270,7 @@ slice_leak = []
 # two-signal fused gate at matched coverage ⇒ record the negative and stay
 # opt-in (the set_rerank / differential_anchor precedent). Default config
 # is McConfig::disabled() — byte-identical to the unarmed engine.
-mc_ensemble = ["modelless", "katgpt-core/perturbation_ensemble"]
+mc_ensemble = ["modelless", "katgpt-core/estimators"]
 # Issue 019 T1: the CLM comparison lane (`src/lanes/clm.rs`) — the external
 # Apache-2.0 Contrastive-LM reference served over HTTP (`clm-serve` + vLLM
 # pooling), measured in the arena's comparison tables. NEVER a product
@@ -286,7 +286,7 @@ clm-lane = ["katgpt-core/decision_wire"]
 # fit on sparse hashed-bag features can only be adjudicated on the real
 # embedding populations. Measurement-only (the example); never a product
 # lane, never in the release set.
-gaussianity_probe = ["modelless", "katgpt-core/gaussianity_probe"]
+gaussianity_probe = ["modelless", "katgpt-core/diagnostics"]
 
 [[bin]]
 name = "reflex"

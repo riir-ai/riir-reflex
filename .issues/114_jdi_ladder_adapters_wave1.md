@@ -21,6 +21,29 @@ rethink 060 R1a: adapters are FILED here and built here — rethink never edits 
 
 Home appliances (chance 0) and ToolRet (0.1341) stay TRIAGE-LATER per rethink 060 R1
 (the shapes are weakest fits; the decision-shaped three carry the rung's points).
+**TRIAGE LANDED 2026-11-11 (amo-idle, the R1a tail + rethink 060 R2b) — see "The wave-2
+triage" below.**
+
+## The wave-2 triage (the ranking + case-exact rows; R1a tail + 060 R2b, 2026-11-11)
+
+Grounded in the board's own release record
+(`riir-rethink/.research/data/jdi_index_release-v4_2026-10-22_da1586d5.json`, rows 2/9/36)
+and the harness's question grammar (`src/harness/suites.rs`: Choice = object-as-ordered-labels,
+Score = array-as-levels, Noul; the engine scores `k = options.len()` per question, option-name
+routing needs `options.len() <= N` = 8):
+
+| board row | chance | metric + shape (the board's own explainer) | wire verdict |
+|---|---|---|---|
+| BRIGHT (id 36) | 0.116 | **nDCG@10 over 32 candidate documents per query**, answerable queries only (≥1 of the 32 relevant), 220 sampled cases (arXiv:2407.12883, xlangai/BRIGHT) | **scoreable-partial — wave 2.** The wire speaks it as per-(query, doc) `Score` questions over a pinned relevance ladder, ranked by level with the identity order as the deterministic tie-break; the harness needs ONE new scorer (nDCG@10 — every existing scorer is accuracy/F1-class) + the fetch stanza + the answerable filter. NOT wave 1: the machinery is real, and the honest expectation is weak — BRIGHT is reasoning-intensive retrieval by construction (the gold docs share little vocabulary with the query), so the modelless half lands near the lexical floor; the laya encoder half is the real read. Corpus decision (paths (a)/(d)) rides the same owner-gated rethink booking as T3/T4/T5 |
+| ToolRet (id 2) | 0.1341 | **nDCG@10 over 32 candidate tools per request**, answerable queries only, 685 cases (arXiv:2503.01763) | **scoreable-partial — wave 2, the SAME shape and the SAME new nDCG scorer as BRIGHT** (rank the 32 tools per request). One scorer buys both rows; the suites differ only in the fetch stanza + the candidate text renderer |
+| Home appliances (id 9) | 0 | **case exact accuracy**: given a simulated home + a command, answer ~18 handling questions, ALL must be right; duplicate + dev rows removed | **scoreable-partial — wave 2.** The wire speaks it: the multi-question envelope carries the ~18 sub-questions (each Choice/Noul over the sim state as the case's `state` JSON); the new machinery is an all-sub-answers-exact case scorer (the current scorers grade per question). The kept-rows rule (duplicate + dev removed) rides the fetch stanza's dedupe | 
+
+Why wave 2 and never forced: every one of the three needs new harness machinery (an nDCG
+scorer for the two ranking rows; an all-exact case scorer for the case-exact row) — wave 1's
+law was "no new machinery invented", and the decision-shaped three + CLINC150 already carry
+the tools rung's points. The triage is a shape verdict ONLY: the licence + contamination
+probes remain build-time gates (the T1 pattern), and the corpus decision stays the rethink-
+side owner-gated booking. Never force the wire.
 
 ## The adapter recipe (exactly what banking77 got — no new machinery invented)
 

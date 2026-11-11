@@ -18,6 +18,7 @@ the ESC contamination shadow read).
 """
 import concurrent.futures as cf
 import json
+import os
 import re
 import shutil
 import sys
@@ -25,12 +26,18 @@ import time
 import urllib.request
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-SRC = REPO / ".raw" / "datasets_t20k"
-DST = REPO / ".raw" / "datasets_t20k_para"
-MANIFEST_DIR = REPO / ".raw" / "para-model"
-SERVER = "http://127.0.0.1:8097"
-SUITES = ["massive_intent_en", "banking77"]
+REPO = Path(__file__).resolve().parents[1]
+# Env overrides (rethink Issue 063): the wino/hswag shadow read runs the same
+# instrument on a different box against the CANONICAL datasets seat (the JDI
+# suites are absent from datasets_t20k). Defaults are the Bench 089 posture.
+# parents[1] is the repo root from the tracked scripts/ home — the original
+# .raw/para-model copy sat one level deeper, which is where parents[2] came
+# from; the tracked move never re-ran the script until this issue.
+SRC = Path(os.environ["PARA_SRC"]) if os.environ.get("PARA_SRC") else REPO / ".raw" / "datasets_t20k"
+DST = Path(os.environ["PARA_DST"]) if os.environ.get("PARA_DST") else REPO / ".raw" / "datasets_t20k_para"
+MANIFEST_DIR = Path(os.environ["PARA_MANIFEST_DIR"]) if os.environ.get("PARA_MANIFEST_DIR") else REPO / ".raw" / "para-model"
+SERVER = os.environ.get("PARA_SERVER", "http://127.0.0.1:8097")
+SUITES = [s.strip() for s in os.environ.get("PARA_SUITES", "massive_intent_en,banking77").split(",") if s.strip()]
 SYSTEM = (
     "You paraphrase single utterances. Rewrite with different wording and "
     "sentence structure while preserving the exact same meaning and intent. "

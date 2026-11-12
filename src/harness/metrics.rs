@@ -672,6 +672,153 @@ mod subset_accuracy_tests {
     }
 }
 
+/// Issue 114 T11 (the JDI ladder wave-2 machinery; board rows 9 + 38) —
+/// the board's all-sub-answers-exact case scorer (`scoring/index.py` n==1
+/// arm): a case passes iff EVERY question's forced pick is exact, scored
+/// as the fraction of passing cases; the case chance is the EXACT
+/// EXPECTATION ∏(1/kᵢ) over the case's option counts, averaged over cases
+/// (the board's `random_exact_case` baseline — chance-baselines.json's
+/// kind for both rows; never interchanged with the per-question majority
+/// chance [`chance_majority` carries]). The pick is the first-index
+/// argmax ([`argmax_first`] — the house tie rule), the fold is sequential
+/// in case order, and the option counts ride the questions' own criteria
+/// (choice: the criteria entry count; noul/score: 2). Empty input is
+/// `None` (nothing measured, never a fabricated rate); misaligned rows
+/// refuse loud like [`subset_accuracy`].
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CaseExactMetrics {
+    /// Evaluated cases (the `questions_per_case.len()` the caller handed
+    /// over — restated so results.json carries its own denominator).
+    pub cases: usize,
+    /// Fraction of cases where every question's pick is exact.
+    pub exact_accuracy: f64,
+    /// Mean over cases of ∏(1/kᵢ) — the board's random whole-case guess
+    /// expectation, re-derived from the actual presented options (the §B3
+    /// re-derivation law; the board's pinned value stays a reference).
+    pub exact_chance: f64,
+}
+
+#[must_use]
+pub fn case_exact_metrics(
+    rows: &[(usize, Vec<f64>)],
+    questions_per_case: &[usize],
+    options_per_question: &[usize],
+) -> Option<CaseExactMetrics> {
+    assert_eq!(
+        questions_per_case.iter().sum::<usize>(),
+        rows.len(),
+        "case_exact_metrics: the case question counts sum to {} but {} \
+         forced rows were handed over — the walk would silently mis-align",
+        questions_per_case.iter().sum::<usize>(),
+        rows.len()
+    );
+    assert_eq!(
+        options_per_question.len(),
+        rows.len(),
+        "case_exact_metrics: {} per-question option counts vs {} forced \
+         rows — the k array must pair 1:1 with the rows or the walk would \
+         silently mis-align",
+        options_per_question.len(),
+        rows.len()
+    );
+    if rows.is_empty() {
+        return None;
+    }
+    let (mut exact_cases, mut chance_sum) = (0usize, 0.0_f64);
+    let mut row = 0usize;
+    for &q in questions_per_case {
+        let mut all_exact = true;
+        let mut chance = 1.0_f64;
+        for _ in 0..q {
+            let (gold, probs) = &rows[row];
+            let k = options_per_question[row];
+            assert!(
+                k >= 1,
+                "case_exact_metrics: question {row} carries k={k} — an \
+                 option count below 1 cannot be scored"
+            );
+            let (pick, _) = argmax_first(probs);
+            if pick != *gold {
+                all_exact = false;
+            }
+            chance /= k as f64;
+            row += 1;
+        }
+        if all_exact {
+            exact_cases += 1;
+        }
+        chance_sum += chance;
+    }
+    let cases = questions_per_case.len();
+    Some(CaseExactMetrics {
+        cases,
+        exact_accuracy: exact_cases as f64 / cases as f64,
+        exact_chance: chance_sum / cases as f64,
+    })
+}
+
+#[cfg(test)]
+mod case_exact_metrics_tests {
+    use super::case_exact_metrics;
+
+    #[test]
+    fn all_exact_only_when_every_question_is_right() {
+        // Case 0: 2 questions, both exact → passes. Case 1: 1 question,
+        // wrong → fails. Case 2: 2 questions, one wrong → fails.
+        let rows = vec![
+            (0, vec![0.9, 0.1]), // case 0 q0 exact
+            (1, vec![0.2, 0.8]), // case 0 q1 exact
+            (1, vec![0.9, 0.1]), // case 1 q0 WRONG (argmax 0, gold 1)
+            (1, vec![0.3, 0.7]), // case 2 q0 exact
+            (1, vec![0.8, 0.2]), // case 2 q1 WRONG (argmax 0, gold 1)
+        ];
+        let got = case_exact_metrics(&rows, &[2, 1, 2], &[2, 2, 2, 2, 2]).expect("non-empty");
+        assert_eq!(got.cases, 3);
+        assert!((got.exact_accuracy - 1.0 / 3.0).abs() < 1e-12);
+        // chance: case 0 = 1/4, case 1 = 1/2, case 2 = 1/4 → 1/3.
+        assert!((got.exact_chance - 1.0 / 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn chance_folds_the_option_counts_not_a_flat_half() {
+        // One case of two questions: k=4 then k=2 → chance 1/8 regardless
+        // of correctness (an exact case here, so accuracy 1.0).
+        let rows = vec![(3, vec![0.1, 0.2, 0.3, 0.4]), (1, vec![0.3, 0.7])];
+        let got = case_exact_metrics(&rows, &[2], &[4, 2]).expect("non-empty");
+        assert!((got.exact_accuracy - 1.0).abs() < 1e-12);
+        assert!((got.exact_chance - 0.125).abs() < 1e-12);
+    }
+
+    #[test]
+    fn first_index_ties_pick_the_first_option() {
+        // Tied probs → argmax lands on index 0; gold 0 passes, gold 1 does
+        // not (the house first-index tie rule, no tolerance band). Two
+        // one-question cases.
+        let rows = vec![(0, vec![0.5, 0.5]), (1, vec![0.5, 0.5])];
+        let got = case_exact_metrics(&rows, &[1, 1], &[2, 2]).expect("non-empty");
+        assert!((got.exact_accuracy - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn empty_input_is_none_never_a_zero() {
+        assert!(case_exact_metrics(&[], &[], &[]).is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "mis-align")]
+    fn misaligned_case_counts_refuse_loudly() {
+        let rows = vec![(0, vec![1.0, 0.0])];
+        let _ = case_exact_metrics(&rows, &[2], &[2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "mis-align")]
+    fn misaligned_option_counts_refuse_loudly() {
+        let rows = vec![(0, vec![1.0, 0.0])];
+        let _ = case_exact_metrics(&rows, &[1], &[2, 2]);
+    }
+}
+
 /// Plan 011 C2 — the macro-F1 law over `(gold, pick)` index vectors, the
 /// ONE home of the computation `hard_metrics` uses (§5.1: classes =
 /// sorted(set(gold) | set(pred)); F1_c = 2tp / max(1, 2tp+fp+fn); the mean

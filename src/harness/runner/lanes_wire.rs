@@ -437,6 +437,9 @@ pub(super) fn assemble_laya_lane_result(
     // forced rows `hard` read (never folded into `hard.accuracy`).
     let jdi_chance = chance_majority(&forced.iter().map(|(g, _)| *g).collect::<Vec<usize>>());
     let jdi_skill = chance_corrected_skill(hard.accuracy, jdi_chance);
+    // Issue 114 T11: the case-exact scorer — the SAME arm gate + walk the
+    // modelless lane runs (one home: `case_exact_of`).
+    let case_exact = super::case_exact_of(suite_name, &forced, cases);
     let acc_deleaked = leak_flags.and_then(|keep| {
         let per_case: Vec<usize> = cases.iter().map(|c| c.as_ref().questions.len()).collect();
         subset_accuracy(&forced, keep, &per_case)
@@ -561,6 +564,7 @@ pub(super) fn assemble_laya_lane_result(
         acc_deleaked,
         jdi_chance: Some(jdi_chance),
         jdi_skill: Some(jdi_skill),
+        case_exact,
         score_threshold: f32::NAN, // laya exposes no abstain knob — N/A
         distance_threshold: f32::NAN,
         threshold_recommendation: None,

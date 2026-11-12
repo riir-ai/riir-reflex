@@ -970,6 +970,164 @@ pub fn build_isarcasmeval(rows_file: &Value, max_rows: usize) -> Suite {
     }
 }
 
+/// Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer (board
+/// row 9, the home-appliance simulator; MIT, board-generated, seed
+/// 2026091807). One case per kept household request (88 — the release-v2.1
+/// subset's pinned kept set; the fetch lane verifies the pin and the
+/// regeneration census), each carrying ~18 choice questions (1,590 total)
+/// whose option KEYS are opaque `k_<hash>` tokens and whose option TEXTS
+/// ride the criteria values (the engine renders `{key}: {value}` —
+/// render_options; the texts are the signal). The board's index metric is
+/// CASE EXACT ACCURACY (a request passes iff every question's answer is
+/// exact; chance 2.1e-07 exact expectation) — read off the runner's
+/// `case_exact` column ([`crate::harness::metrics::case_exact_metrics`]),
+/// never the per-question accuracy `hard` carries.
+///
+/// The gold is the criteria KEY the board's `expected` names — mapped to
+/// its position in the criteria object's insertion order (serde_json
+/// `preserve_order`; python json round-trips dict order — the pair IS the
+/// label order the engine renders and scores). CORPUS-OPTIONAL
+/// (`modelless_lane: false`): the board publishes no train/dev pool for
+/// the track (the dev split is the DEDUPE reference, never a corpus —
+/// grammar-not-answers), so only the LLM lanes answer.
+#[must_use]
+pub fn build_home_appliance(rows_file: &Value, max_rows: usize) -> Suite {
+    const EXPECTED_CASES: usize = 88;
+    const EXPECTED_QUESTIONS: usize = 1_590;
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    let mut total_questions = 0usize;
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(id), Some(state), Some(questions), Some(expected)) = (
+            row_str(row, "id"),
+            row.get("state"),
+            row.get("questions"),
+            row.get("expected"),
+        ) else {
+            continue; // malformed row — fails the rule, the row drops
+        };
+        let Some(qmap) = questions.as_object() else {
+            panic!(
+                "home_appliance: row {pos} ({id}) carries non-object questions — \
+                 the fetched envelope drifted from the board's row shape"
+            );
+        };
+        let Some(emap) = expected.as_object() else {
+            panic!(
+                "home_appliance: row {pos} ({id}) carries non-object expected — \
+                 the fetched envelope drifted from the board's row shape"
+            );
+        };
+        if qmap.is_empty() {
+            continue;
+        }
+        let mut qs = Vec::with_capacity(qmap.len());
+        let mut gold = Vec::with_capacity(qmap.len());
+        for (qid, qdef) in qmap {
+            let kind = match qdef.get("type").and_then(Value::as_str) {
+                Some("choice") => QKind::Choice,
+                Some("noul") => QKind::Noul,
+                other => panic!(
+                    "home_appliance: row {pos} ({id}) question {qid} carries type \
+                     {other:?} — the board track is choice/noul only (score was \
+                     never adapted); the envelope drifted"
+                ),
+            };
+            let Some(instructions) = qdef.get("instructions").and_then(Value::as_str) else {
+                panic!(
+                    "home_appliance: row {pos} ({id}) question {qid} carries no \
+                     instructions — the envelope drifted"
+                );
+            };
+            let criteria = qdef.get("criteria").cloned().unwrap_or(Value::Null);
+            let idx = match kind {
+                QKind::Choice => {
+                    let Some(ck) = choice_keys(&criteria) else {
+                        panic!(
+                            "home_appliance: row {pos} ({id}) question {qid} carries \
+                             non-object criteria — the envelope drifted"
+                        );
+                    };
+                    let g = emap.get(qid).and_then(Value::as_str);
+                    match g.and_then(|g| ck.iter().position(|k| k == g)) {
+                        Some(i) => i,
+                        _ => panic!(
+                            "home_appliance: row {pos} ({id}) question {qid} gold \
+                             {g:?} is not a criteria key — the expected/criteria \
+                             join drifted"
+                        ),
+                    }
+                }
+                QKind::Noul => match emap.get(qid).and_then(Value::as_bool) {
+                    Some(b) => usize::from(b), // the [false, true] law
+                    _ => panic!(
+                        "home_appliance: row {pos} ({id}) question {qid} noul gold \
+                         is not a bool — the envelope drifted"
+                    ),
+                },
+                QKind::Score => unreachable!("refused above"),
+            };
+            let k = crate::harness::runner::question_option_count(&SuiteQuestion {
+                qid: qid.clone(),
+                kind,
+                instructions: instructions.to_string(),
+                criteria: criteria.clone(),
+            });
+            qs.push(SuiteQuestion {
+                qid: qid.clone(),
+                kind,
+                instructions: instructions.to_string(),
+                criteria,
+            });
+            gold.push(GoldAnswer {
+                idx,
+                soft: vec![0.0; k],
+                gold_score: None,
+            });
+        }
+        total_questions += qs.len();
+        cases.push(SuiteCase {
+            id: format!("home_appliance:{id}"),
+            state: state.clone(),
+            questions: qs,
+            gold,
+        });
+    }
+    // The population pin binds the FULL fetched envelope (max_rows 0 — the
+    // eval posture). A partial fetch reds loud instead of misreporting the
+    // board row (the when2call form).
+    if max_rows == 0 {
+        assert_eq!(
+            cases.len(),
+            EXPECTED_CASES,
+            "home_appliance: the fetched population drifted from the pinned \
+             kept set (88 requests — the release-v2.1 subset's run_ids pin \
+             f76d0ef2) — a partial or revised fetch; refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+        assert_eq!(
+            total_questions, EXPECTED_QUESTIONS,
+            "home_appliance: the fetched question census drifted from the \
+             pinned 1,590 — the kept rows' fields changed; refetch and \
+             re-pin"
+        );
+    }
+    Suite {
+        name: "home_appliance",
+        cases,
+        option_counts_note: "per-case variable option universes (the resolution question \
+                             carries k=9, the target-member questions k=2, the outcome/\
+                             state/post questions k=3-6; the option KEYS are opaque \
+                             k_<hash> tokens, the TEXTS ride the criteria values and are \
+                             what the engine renders); one case per kept request (88 = \
+                             the release-v2.1 subset's pinned kept set, 1,590 questions); \
+                             the board metric is CASE EXACT ACCURACY (chance 2.103e-07 \
+                             exact expectation) read off the case_exact column; \
+                             corpus-optional (the board publishes no train pool — the dev \
+                             split is the dedupe reference, never a corpus)",
+    }
+}
+
 /// Issue 114 T4 — the BFCL abstain option, APPENDED LAST on the
 /// irrelevance-tier rows only (the board row's "or irrelevance-detect";
 /// the pick tier never carries it — the official pick eval always has a
@@ -4300,5 +4458,92 @@ mod isarcasmeval_builder_tests {
     fn isarcasmeval_refuses_a_drifted_label_universe() {
         let env = envelope(vec![a_row("x", "2", "test")]);
         let _ = build_isarcasmeval(&env, 1);
+    }
+}
+
+// ── Issue 114 T11: the home_appliance builder tests ────────────────────────
+#[cfg(test)]
+mod home_appliance_builder_tests {
+    use super::build_home_appliance;
+    use crate::harness::runner::question_option_count;
+    use serde_json::json;
+
+    /// One board-shaped row: two questions (the 9-option resolution
+    /// universe + a 2-option target-member), opaque k_ keys, the texts in
+    /// the criteria values, expected naming the gold KEY.
+    fn board_row(id: &str, gold_key: &str, member_gold: &str) -> serde_json::Value {
+        json!({
+            "id": id,
+            "group_id": id,
+            "split": "test",
+            "state": {"request": "Start the evening group, please.", "rooms": ["kitchen", "den"]},
+            "questions": {
+                "q_res": {"type": "choice", "instructions": "How should the assistant handle the request?",
+                    "criteria": {"k_a": "execute now", "k_b": "execute available parts now", "k_c": "schedule for later",
+                                 "k_d": "save an automation rule", "k_e": "ask a clarifying question", "k_f": "make no change because already satisfied",
+                                 "k_g": "reject as unsupported", "k_h": "block under household policy", "k_i": "answer a state query"}},
+                "q_member": {"type": "choice", "instructions": "Is kitchen_light in the justified device target set for this request?",
+                    "criteria": {"k_y": "yes, this device is in the justified target set",
+                                 "k_n": "no, this device is not in the justified target set"}}
+            },
+            "expected": {"q_res": gold_key, "q_member": member_gold}
+        })
+    }
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        json!({"rows": rows.into_iter().map(|r| json!({"row": r})).collect::<Vec<_>>()})
+    }
+
+    #[test]
+    fn home_appliance_maps_the_board_row_to_a_multi_question_case() {
+        let env = envelope(vec![board_row(
+            "home-appliance:test:indigo:00",
+            "k_e",
+            "k_y",
+        )]);
+        let s = build_home_appliance(&env, 1); // nonzero cap: the census asserts rest
+        assert_eq!(s.name, "home_appliance");
+        assert_eq!(s.cases.len(), 1);
+        let c = &s.cases[0];
+        assert_eq!(c.id, "home_appliance:home-appliance:test:indigo:00");
+        assert_eq!(c.questions.len(), 2);
+        // The k walk: resolution 9, member 2 (the case-exact chance input).
+        let ks: Vec<usize> = c.questions.iter().map(question_option_count).collect();
+        assert_eq!(ks, vec![9, 2]);
+        // The gold is the criteria KEY's position (k_e = the 5th inserted).
+        assert_eq!(c.gold[0].idx, 4);
+        assert_eq!(c.gold[1].idx, 0); // k_y = first inserted
+        // Soft vectors are zero-sum (soft_metrics reads None — the convention).
+        assert!(c.gold[0].soft.iter().all(|&v| v == 0.0));
+        // State rides verbatim (the engine reads the request from it).
+        assert_eq!(c.state["request"], "Start the evening group, please.");
+        // The criteria objects carry the opaque keys + the texts (the
+        // engine renders "{key}: {value}" — insertion order preserved).
+        let crit = c.questions[0].criteria.as_object().unwrap();
+        assert_eq!(crit.len(), 9);
+        assert_eq!(crit.values().next().unwrap(), "execute now");
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a criteria key")]
+    fn home_appliance_refuses_a_gold_key_outside_the_criteria() {
+        let env = envelope(vec![board_row("r1", "k_MISSING", "k_y")]);
+        let _ = build_home_appliance(&env, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "choice/noul only")]
+    fn home_appliance_refuses_a_score_question() {
+        let mut row = board_row("r1", "k_a", "k_y");
+        row["questions"]["q_res"]["type"] = json!("score");
+        let env = envelope(vec![row]);
+        let _ = build_home_appliance(&env, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the pinned kept set")]
+    fn home_appliance_full_load_pins_the_population() {
+        let env = envelope(vec![board_row("r1", "k_a", "k_y")]);
+        let _ = build_home_appliance(&env, 0); // the census fires at max_rows 0
     }
 }

@@ -938,6 +938,124 @@ fetch_isarcasmeval() {
     done
 }
 
+# fetch_home_appliance <suite> <clone>
+#   Issue 114 T11 (the JDI ladder wave-2 machinery's first consumer; board
+#   row 9, the home-appliance simulator — MIT, board-generated). The
+#   board's hub rows file is PRIVATE (the HF lane refuses anonymous
+#   reads), so this lane regenerates the rows with the BOARD'S OWN
+#   generator (`decision_index/suite/build/home_appliance.py`, stdlib-only
+#   and deterministic at seed 2026091807) and filters to the release-v2.1
+#   kept set — the 88 run_ids the subset file pins, verified against the
+#   file's own `run_ids_sha256` (sha256 of the newline-joined list;
+#   verified matching at the landing). Regeneration proofs at the landing:
+#   240 rows (160 test / 80 dev), the duplicate-state census 24 = the
+#   subset's `duplicate_rows_dropped`, kept∩test = 88/88, kept∩dev-state
+#   collisions 0, 1,590 questions over the kept rows. <clone> is the
+#   board's decision-index checkout (default
+#   .raw/mammoth-local/decision-index; its commit sha is the generator's
+#   provenance pin). Envelope = one row per kept case, the board's
+#   `id`/`state`/`questions`/`expected` carried verbatim (plus
+#   `split: "test"` + `group_id: <id>` — each request is its own case).
+#   Idempotent like every lane (skip on a valid cached page, FORCE
+#   refetches).
+fetch_home_appliance() {
+    suite=$1; clone=$2
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    file="$dir/test-000.json"
+    if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+        n=$(rows_count "$file" 2>/dev/null || echo 0)
+        if [ "$n" -gt 0 ]; then
+            log "  skip   $suite/test-000 ($n rows)"
+            return 0
+        fi
+    fi
+    [ -d "$clone" ] || {
+        log "  FAIL   $suite (the board's decision-index clone is missing at $clone — clone it or set HOME_APPLIANCE_CLONE)"
+        FAILED=$((FAILED + 1))
+        return 1
+    }
+    if [ -z "$PY3" ]; then
+        if have python3 && python3 -c pass >/dev/null 2>&1; then
+            PY3="python3"
+        elif have py && py -3 -c pass >/dev/null 2>&1; then
+            PY3="py -3"
+        fi
+    fi
+    if [ -z "$PY3" ]; then
+        log "  FAIL   $suite (no working python3 — the generator lane cannot run)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    if $PY3 - "$clone" "$file.tmp" <<'PYEOF'
+import hashlib, importlib.util, json, sys
+from pathlib import Path
+
+clone, dst = Path(sys.argv[1]), sys.argv[2]
+sub_path = clone / "decision_index/data/release-v2.1/home-appliances-subset.json"
+gen_path = clone / "decision_index/suite/build/home_appliance.py"
+sub = json.loads(sub_path.read_text(encoding="utf-8"))
+ids = sub["run_ids"]
+# The kept set is cryptographically pinned: sha256 of the newline-joined
+# run_id list (verified against the subset file's own pin — a drift here
+# means the clone's subset file changed under us; refuse loud).
+pin = hashlib.sha256("\n".join(ids).encode()).hexdigest()
+if pin != sub["run_ids_sha256"]:
+    sys.exit(f"subset run_ids_sha256 drift: computed {pin} != pinned {sub['run_ids_sha256']}")
+spec_ = importlib.util.spec_from_file_location("home_appliance_gen", gen_path)
+mod = importlib.util.module_from_spec(spec_)
+spec_.loader.exec_module(mod)
+rows = [mod.make_row(h, i) for h in range(len(mod.HOUSEHOLDS)) for i in range(10)]
+test = [r for r in rows if r["split"] == "test"]
+dev = [r for r in rows if r["split"] != "test"]
+# Regeneration proofs — the census the builder's population pin rests on.
+if len(rows) != 240 or len(test) != 160 or len(dev) != 80:
+    sys.exit(f"generator census drift: {len(rows)} rows / {len(test)} test / {len(dev)} dev")
+
+def canon(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+dup = len(test) - len({canon({k: v for k, v in r["state"].items()}) for r in test})
+if dup != sub["duplicate_rows_dropped"]:
+    sys.exit(f"duplicate-state census drift: {dup} != pinned {sub['duplicate_rows_dropped']}")
+dev_states = {canon({k: v for k, v in r["state"].items()}) for r in dev}
+by_id = {r["id"]: r for r in test}
+kept_ids = [rid[len("9:Home-Appliance:"):] for rid in ids if rid.startswith("9:Home-Appliance:")]
+missing = [i for i in kept_ids if i not in by_id]
+if missing:
+    sys.exit(f"{len(missing)} kept run_ids regenerated no test row (first: {missing[0]})")
+collisions = [i for i in kept_ids if canon(by_id[i]["state"]) in dev_states]
+if collisions:
+    sys.exit(f"{len(collisions)} kept rows collide with a dev state (first: {collisions[0]})")
+qcount = sum(len(by_id[i]["questions"]) for i in kept_ids)
+if qcount != 1590:
+    sys.exit(f"kept question census drift: {qcount} != pinned 1590")
+out = []
+for rid in kept_ids:
+    r = by_id[rid]
+    out.append({"row": {
+        "id": r["id"],
+        "group_id": r["id"],  # each request is its own case (the board's group grammar)
+        "split": "test",
+        "state": r["state"],
+        "questions": r["questions"],
+        "expected": r["expected"],
+    }})
+Path(dst).write_text(json.dumps({"rows": out}, ensure_ascii=False), encoding="utf-8")
+print(f"rows={len(out)} questions={qcount} pin={pin[:12]}")
+PYEOF
+    then
+        n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
+        mv "$file.tmp" "$file"
+        FILES=$((FILES + 1))
+        ROWS=$((ROWS + n))
+        log "  fetch  $suite/test-000 rows=$n (generator @ clone $(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?') + the pinned kept set)"
+    else
+        rm -f "$file.tmp"
+        log "  FAIL   $suite/test-000 (the generator/verify lane refused — see the error above)"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
 main() {
     if have b3sum; then
         digest_tool="b3sum (blake3)"
@@ -1466,6 +1584,14 @@ main() {
     if want_suite isarcasmeval; then
         log "[suite] isarcasmeval — track-A English CSVs at the board's pinned sha (the recorded transform)"
         fetch_isarcasmeval isarcasmeval "iabufarha/iSarcasmEval" "dfc708b53bde1bb571abfb5692f63231c2232195"
+    fi
+
+    # 25. home_appliance — Issue 114 T11 (the JDI ladder wave-2 machinery's
+    #     first consumer; board row 9). The generator + pinned-kept-set
+    #     lane (the hub rows file is private; see the function's header).
+    if want_suite home_appliance; then
+        log "[suite] home_appliance — the board's own generator + the release-v2.1 pinned kept set (the board's hub rows are private)"
+        fetch_home_appliance home_appliance "${HOME_APPLIANCE_CLONE:-$ROOT/.raw/mammoth-local/decision-index}"
     fi
 
     log ""

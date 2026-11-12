@@ -47,9 +47,9 @@ use crate::engine::{
 use crate::harness::families::SynthData;
 use crate::harness::latency::{LatencyExtremes, fmt_p99_cell};
 use crate::harness::metrics::{
-    CalibrationPair, ConfusionRow, G1Verdict, HardMetrics, brier_of, conformal_naive_floor,
-    confusion_top, ece_of, g1_verdict_of, hard_metrics, score_metrics, soft_metrics,
-    subset_accuracy,
+    CalibrationPair, CaseExactMetrics, ConfusionRow, G1Verdict, HardMetrics, brier_of,
+    case_exact_metrics, conformal_naive_floor, confusion_top, ece_of, g1_verdict_of, hard_metrics,
+    score_metrics, soft_metrics, subset_accuracy,
 };
 use crate::harness::metrics::{chance_corrected_skill, chance_majority};
 use crate::harness::pair_heads::{
@@ -61,11 +61,12 @@ use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
     SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
     build_bfcl, build_clinc150, build_contractnli, build_emotion, build_emotion_syn,
-    build_finentity, build_hellaswag_jdi, build_isarcasmeval, build_massive_intent_en,
-    build_mmlupro_jdi, build_prompt_injections, build_ragtruth, build_s1mb_choice, build_s1mb_noul,
-    build_s1mb_score, build_sst5, build_sst5_syn, build_thai_sib200, build_thai_wisesight,
-    build_typed_decisions, build_wanli_en, build_when2call, build_winogrande_jdi, build_xnli_en,
-    stratified_selection_slices, stratified_split, train_docs, train_row_label,
+    build_finentity, build_hellaswag_jdi, build_home_appliance, build_isarcasmeval,
+    build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_ragtruth,
+    build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5, build_sst5_syn,
+    build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
+    build_when2call, build_winogrande_jdi, build_xnli_en, stratified_selection_slices,
+    stratified_split, train_docs, train_row_label,
 };
 use crate::pyjson::serialize_state;
 use crate::readout::ReadoutMode;
@@ -845,6 +846,37 @@ const SUITES: &[SuiteSpec] = &[
         synthetic: None,
         modelless_lane: true,
     },
+    // Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer
+    // (board row 9, the home-appliance simulator; MIT, board-generated —
+    // the fetch lane regenerates the rows with the board's own generator
+    // and filters to the release-v2.1 pinned kept set; the board's hub
+    // rows file is private). ONE case per kept request (88), ~18 choice
+    // questions each (1,590), opaque k_<hash> option keys with the option
+    // TEXTS in the criteria values. The board index metric is CASE EXACT
+    // ACCURACY — the `case_exact` column arms for this suite
+    // (CASE_EXACT_SUITES); the per-question `hard` accuracy is the
+    // field-level reference, never the board number. LICENCE: MIT (this
+    // repository) — the board's own generated track, the cleanest source
+    // on the ladder. CORPUS-OPTIONAL (`modelless_lane: false`): the board
+    // publishes no train pool (the dev split is the dedupe reference,
+    // never a corpus) — only the LLM lanes answer. named_only like every
+    // ladder suite. (The board's ACOS row 38 — the other case-exact
+    // consumer — was REFUSED at the T11 licence probe: NUSTM/ACOS carries
+    // no licence at any authoritative surface; the verdict lives in
+    // issue 114.)
+    SuiteSpec {
+        name: "home_appliance",
+        dataset_dir: "home_appliance",
+        test_cap: 0,
+        cal_cap: 0, // corpus-optional: no train pool exists (asserted in prepare)
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: false, // per-case option universes (the s1mb variable-breadth posture)
+        build: build_home_appliance,
+        synthetic: None,
+        modelless_lane: false,
+    },
     // ── RETIRED (owner call, 2026-10-02): the six Issue-004 harness
     // decision-point families (`harness_visibility` · `harness_permissions`
     // · `harness_tool_fit` · `harness_routing` · `harness_sensitivity` ·
@@ -914,6 +946,45 @@ fn laya_checkpoints_for(suite: &str) -> &'static [&'static str] {
     } else {
         &["english"]
     }
+}
+
+/// Issue 114 T11: the suites whose board index metric is CASE EXACT
+/// ACCURACY — the `case_exact` column arms for these and only these (the
+/// home-appliance simulator row 9 first; the ACOS row 38 was REFUSED at
+/// the licence probe, never built). A suite joins by appending its
+/// registry name here in the same commit its spec lands.
+const CASE_EXACT_SUITES: &[&str] = &["home_appliance"];
+
+/// The option count one suite question presents — k for the case-exact
+/// chance fold (choice: the criteria entry count; score: the level array;
+/// noul: always 2, `[false, true]`). A malformed criteria shape reads 0
+/// and [`case_exact_metrics`] refuses loud at the walk.
+pub(crate) fn question_option_count(q: &SuiteQuestion) -> usize {
+    match q.kind {
+        QKind::Choice => q.criteria.as_object().map_or(0, |m| m.len()),
+        QKind::Score => q.criteria.as_array().map_or(0, |a| a.len()),
+        QKind::Noul => 2,
+    }
+}
+
+/// The case-exact metrics for one lane's eval, or None off the arm list
+/// (`CASE_EXACT_SUITES`). One home for the per-case + per-question-count
+/// walks BOTH lanes share (the modelless assembly and the laya
+/// assembler); the forced rows are the caller's — they are lane-shaped.
+pub(crate) fn case_exact_of(
+    suite_name: &str,
+    forced: &[(usize, Vec<f64>)],
+    cases: &[impl AsRef<SuiteCase>],
+) -> Option<CaseExactMetrics> {
+    if !CASE_EXACT_SUITES.contains(&suite_name) {
+        return None;
+    }
+    let per_case: Vec<usize> = cases.iter().map(|c| c.as_ref().questions.len()).collect();
+    let per_q_k: Vec<usize> = cases
+        .iter()
+        .flat_map(|c| c.as_ref().questions.iter().map(question_option_count))
+        .collect();
+    case_exact_metrics(forced, &per_case, &per_q_k)
 }
 
 // ── RETIRED (owner call, 2026-10-11): the code_fixtures builders
@@ -1204,6 +1275,15 @@ pub struct LaneResult {
     pub jdi_chance: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jdi_skill: Option<f64>,
+    /// Issue 114 T11 — the board's all-sub-answers-exact case scorer, for
+    /// the suites whose board index metric is `case exact accuracy` (the
+    /// JDI wave-2 machinery; [`CASE_EXACT_SUITES`] is the arm list). A case
+    /// passes iff EVERY question's forced pick is exact; `exact_chance` is
+    /// the exact-expectation ∏(1/k) whole-case chance. None on every other
+    /// suite — an absence, never a fabricated zero (the leak-field wire
+    /// law).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub case_exact: Option<CaseExactMetrics>,
     /// Issue 039 T4: the confidence-readout CANDIDATE table on the cal
     /// slice — REPORT-ONLY (the arming lever was demoted at Bench 052; the
     /// shipped Dispatch law runs everywhere). None = thin cal.
@@ -4225,6 +4305,8 @@ fn run_modelless<const N: usize>(
     // Plan 011 §B3: the JDI reference columns from the same forced rows.
     let jdi_chance = chance_majority(&forced.iter().map(|(g, _)| *g).collect::<Vec<usize>>());
     let jdi_skill = chance_corrected_skill(hard.accuracy, jdi_chance);
+    // Issue 114 T11: the case-exact scorer, on the arm-list suites only.
+    let case_exact = case_exact_of(spec.name, &forced, &suite.cases);
     // Issue 024 T3: the same walk restricted to the unflagged cases. None
     // (feature off / out of scope) stays an absence in results.json.
     let acc_deleaked = inp.leak_flags.and_then(|keep| {
@@ -4447,6 +4529,7 @@ fn run_modelless<const N: usize>(
             acc_deleaked,
             jdi_chance: Some(jdi_chance),
             jdi_skill: Some(jdi_skill),
+            case_exact,
             readout_report,
             corpus_fallbacks,
             latency_extremes: lat.extremes,
@@ -4959,6 +5042,19 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
              downstream-API rows dropped) — a partial or revised fetch; \
              refetch via scripts/fetch_datasets.sh and re-pin the manifest \
              digest"
+        );
+    }
+    // Issue 114 T11: the home-appliance population pin (the builder also
+    // asserts 88 cases / 1,590 questions at max_rows 0 — this arm adds the
+    // question-census crosscheck at the prepare layer so a builder drift
+    // cannot hide behind a count-only pin).
+    if spec.name == "home_appliance" {
+        let nq: usize = suite.cases.iter().map(|c| c.questions.len()).sum();
+        assert_eq!(
+            nq, 1_590,
+            "home_appliance: the fetched question census drifted from the \
+             pinned 1,590 (the kept rows' fields changed) — refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
         );
     }
     // Issue 114 T8: the FinEntity gold-coverage pin — all three sentiment

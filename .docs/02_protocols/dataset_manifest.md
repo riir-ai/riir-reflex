@@ -53,6 +53,8 @@ the mint surface (riir-rethink Issue 024 v1 — the Plan 007 P0 hosted lane;
 | finentity | `yixuantt/FinEntity` (the AUTHORS' OWN HF dataloader, linked from the GitHub readme at the board's pinned sha `yixuantt/FinEntity@3b6cedc`; issue 114 T8 — `FinEntity.json` fetched whole via the /resolve lane, the raw JSON array the datasets-server /rows also serves as default/train; the HF file is BYTE-IDENTICAL to the GitHub `data/FinEntity.json` at that sha — blake3 pinned in §23) | **ODC-BY** (the authors' readme AT THE PIN states "FinEntity is licensed under ODC-BY" verbatim, read 2026-11-12; the authors' own HF card tag `license:odc-by` agrees — two authoritative surfaces, the mirror-tag-alone lesson never bites: the card IS the authors'. Attribution licence, database-content grant — the board's suite.md row predates the readme's licence section and said "not stated in the repository") | Tang, Yang, Huang, Tam, Tang, "FinEntity: Entity-level Sentiment Classification for Financial Texts", EMNLP 2023 main.956 | ✓ |
 | contractnli | `stanfordnlp/contract-nli` (the AUTHORS' canonical repo — the EMNLI-2021 authors' org, default branch gh-pages; the T8-note's "theainswer" spelling 404s; issue 114 T9 — `resources/contract-nli.zip` at the board's pinned sha `eced652`, fetched via the GitHub raw lane (the hub /resolve does not serve GitHub), ONE 65 MB download reused for both splits; the kiddothe2b HF mirror's `cc-by-nc-sa-4.0` tag is a THIRD-PARTY curator contradiction of the upstream — that mirror is never a source, the flowaicom-witness pattern; the mteb/legalbench `cc-by-4.0` curation tag was right) | **CC-BY-4.0** (three authoritative surfaces agreeing, read 2026-11-12: the repo's LICENSE file is the full Attribution 4.0 text (18,656 bytes); the zip's own bundled TERMS grants rights "in accordance with the terms and conditions of the Creative Commons Attribution 4.0 International Public License"; the dataset site's §License names it verbatim — no NC/ShareAlike anywhere upstream. The board's suite.md row said only "see repository LICENSE and dataset page terms") | Koreeda, Manning, "ContractNLI: A Dataset for Document-level Natural Language Inference for Contracts", EMNLP 2021 | ✓ |
 | isarcasmeval | `iabufarha/iSarcasmEval` (the AUTHORS' canonical repo — the SemEval-2022 Task 6 authors'; issue 114 T10 — the track-A English CSVs at the board's pinned tree sha `dfc708b`, fetched via the GitHub raw lane; the tree sha read live at the licence probe matches the board's pin EXACTLY, so the MIT read below sits AT the pin; the `third-party annotations/` dir is a supplementary release, NOT the board track — never fetched) | **MIT** (two authoritative surfaces agreeing, read 2026-11-12: the repo's LICENSE file is the full MIT text (1,074 bytes, "Copyright (c) 2022 Ibrahim Abu Farha"); GitHub's repo API independently reports `spdx_id: MIT`. The recursive tree shows NO separate data-terms file — the CSV data dirs ride the repo licence. The board's suite.md row said "see repository LICENSE") | Abu Farha, Oprea, Wilson, Magdy, "SemEval-2022 Task 6: iSarcasmEval, Intended Sarcasm Detection in English and Arabic", SemEval-2022 | ✓ |
+| home_appliance | the BOARD'S OWN generated track (issue 114 T11 — board row 9, the home-appliance simulator: `decision_index/suite/build/home_appliance.py` at the decision-index clone sha `f5a6e4fd`, seed 2026091807, stdlib-only and deterministic; the rows file is regenerated locally and filtered to the release-v2.1 subset's pinned kept set — 88 run_ids whose newline-joined list hashes to the file's `run_ids_sha256` pin `f76d0ef2`, verified matching. The board's hub HF lane is PRIVATE, so no board download exists; the regeneration proofs are pinned in §26) | **MIT (this repository)** — the board's suite.md row 9 names it verbatim; the generator + subset files are the decision-index repo's own content at that licence, read at the clone sha 2026-11-12 | Cai, Xia, Yu, "Aspect-Category-Opinion-Sentiment Quadruple Extraction with Implicit Aspects and Opinions", ACL 2021 (the board's suite context; the track itself is board-authored) | ✓ |
+| acos | `NUSTM/ACOS` @45d179a (the authors' repo — the ACL 2021 ACOS datasets; issue 114 T11 probe, NO build) | **REFUSED — no licence exists to clear** (three authoritative surfaces agreeing, read 2026-11-12: GitHub's repo API reports `license: null`; the README at the pinned sha carries a CITATION REQUEST only, no licence grant; the repo tree at that sha has NO LICENSE or terms file at any level. The board's own suite.md row 38 independently records "not stated in the repository". The underlying data compounds it — Restaurant-ACOS extends the SemEval-2014 set, Laptop-ACOS is collected from the Amazon domain. Same verdict class as VAST; the named re-open is an AUTHORS' STATEMENT, an owner call, never filed unilaterally) | Cai, Xia, Yu, "Aspect-Category-Opinion-Sentiment Quadruple Extraction with Implicit Aspects and Opinions", ACL 2021 | ⛔ benchmark-only even if a suite ever lands (no grant exists); NO suite built |
 | sst5_syn | first-party synthetic — `scripts/synth_suite.py --suite sst5_syn` (plan 013 T1b) | **Apache-2.0 (ours)** — same posture as emotion_syn (generated rows, no scraped or third-party text; the same two Apache-2.0 generator grants verified 2026-10-27 govern). The five-level scale follows SST-5's label VOCABULARY only — no SST review text is copied (the sst5 row above stays ⛔ benchmark-only for the real corpus; this suite is the licence-clean re-entry) | none required (ours) | ✓ |
 | emotion | `dair-ai/emotion` | **research/educational only** (card §Licensing — not the hub's `license:other` tag alone) | Saravia et al., 2018 | ⛔ benchmark-only |
 | winogrande_jdi | `allenai/winogrande` | **none on the hub** (no licence tag, no `cardData.license` — probe 2026-10-13; the manifest law applies: resolved by the card/repo, never guessed — resolve before any paid lane) | Sakaguchi et al., 2021 (WinoGrande) | ⚠ resolve before any paid lane |
@@ -1471,6 +1473,79 @@ Per-file digests (blake3):
 (The digest pins the OUTPUT envelopes — the recorded transform's
 products. The upstream CSVs are re-derivable from the raw URLs at
 the pinned sha; digests re-pinned on refetch.)
+
+### 26. home_appliance — the board's own home-appliance simulator — the JDI ladder wave-2 machinery (issue 114 T11)
+
+The wave-2 machinery's first consumer (board row 9): the
+all-sub-answers-exact case scorer + the board-rows builder, consumed
+by a track the board itself authored. THE LANE: the board's hub rows
+file (`multimodalart/decision-index-suite-0.3`) is PRIVATE (the HF
+lane refuses anonymous reads — probed 2026-11-12), so the fetch
+regenerates the rows with the BOARD'S OWN generator
+(`decision_index/suite/build/home_appliance.py` at the clone sha
+`f5a6e4fd`, stdlib-only, deterministic at seed 2026091807) and
+filters to the release-v2.1 subset's kept set. THE KEPT SET IS
+CRYPTOGRAPHICALLY PINNED: the subset file's 88 run_ids newline-join
+to sha256 `f76d0ef2…` = the file's own `run_ids_sha256` pin
+(verified matching at the landing). REGENERATION PROOFS (all
+verified live 2026-11-12): 240 rows generated (160 test / 80 dev =
+the suite.md census); the duplicate-state census 24 = the subset's
+`duplicate_rows_dropped: 24` exactly; kept∩test = 88/88; kept∩
+dev-state collisions = 0; 1,590 questions over the kept rows.
+
+**The shape** (C_semantic_options, board id 9): one case per kept
+household request (88), ~18 choice questions each (1,590 total).
+The questions are the board's OWN wire: the resolution decision
+(k=9), per-device target-membership (k=2), the outcome summary,
+the state-read, and the post-handling field reads (k=3–6). The
+option KEYS are opaque `k_<hash>` tokens; the option TEXTS ride the
+criteria values (the engine renders `{key}: {value}` —
+`render_options`; the texts are the signal). Gold = the criteria
+KEY the board's `expected` names, mapped to its insertion-order
+position. State = the household JSON + the request text, verbatim.
+The board's index metric is CASE EXACT ACCURACY (a request passes
+iff EVERY question's answer is exact) — read off the runner's
+`case_exact` column (the wave-2 scorer, `case_exact_metrics`);
+the per-question `hard` accuracy is the field-level reference,
+never the board number. Chance = the exact expectation ∏(1/kᵢ)
+per case, averaged — the board's `random_exact_case` kind
+(pin 2.103e-07 over the full 160-row population; the kept-set
+re-derivation reads 2.158e-07, Δ 2.6% — the §B3 re-derivation law:
+the actual presented options win).
+
+CORPUS-OPTIONAL (`modelless_lane: false`): the board publishes no
+train pool for the track (the dev split is the DEDUPE reference,
+never a corpus — grammar-not-answers); only the LLM lanes answer.
+(LAYA-ONLY also because the modelless engine has no KV cache for a
+sim-state wire — the corpus-optional posture covers it.)
+
+Fetch census (2026-11-12 build, verified live): 88 cases / 1,590
+questions; the builder + prepare layers pin both counts (a drifted
+refetch fails loud, the when2call form). No cal slice (cal_cap 0).
+
+Per-file digests (blake3):
+
+| file | rows | blake3 |
+|---|---|---|
+| `test-000.json` (the kept-set envelope) | 88 | `52572e3451649d7a1ec034ebb401790a1b911f34c4c3fad988dee2919ab19556` |
+
+(The digest pins the OUTPUT envelope — the generator run filtered
+through the pinned kept set. Re-derivable from the clone at the
+pinned sha + the subset file; digests re-pinned on refetch.)
+
+**The ACOS refusal (the claim's other half, recorded here because
+the licence ledger row above names this section):** the board's row
+38 (ACOS — the OTHER case-exact consumer) was REFUSED at the T11
+licence probe: `NUSTM/ACOS @45d179a` carries no licence at any
+authoritative surface (GitHub API `license: null`; the README at
+the pinned sha = citation-request only; no LICENSE/terms file in
+the tree), the board's own suite.md records "not stated in the
+repository", and the underlying data compounds it (SemEval-2014
+extension + Amazon-sourced reviews). Same verdict class as VAST;
+no ACOS suite exists; the named re-open is an AUTHORS' STATEMENT
+(an owner call, never filed unilaterally). The wave-2 machinery
+lands with home_appliance as its consumer-proof; ACOS joins VAST
+in the refused residue of issue 114.
 
 iSarcasmEval's fetch envelopes carry no ClassLabel features (the csv
 transform has none); the option universe is pinned by the runner's

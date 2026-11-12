@@ -2,7 +2,7 @@
 
 > **Source:** XERJ Query-1 announcement — <https://xerj.org/blog/xerj-query-ai-model> (published 2026-11-05; fetched 2026-11-06 via webReader) + <https://github.com/xerj-org/xerj> (Apache-2.0 engine; release `66fbc1d85423b7ef9c401fc25fc546dff9abf7f3` from the GitHub page metadata; the model bundles and the train/serve crates for the model are PROPRIETARY per their §08)
 > **Date:** 2026-11-06
-> **Status:** Active — **Gain** verdict; two adoption issues filed (this repo `.issues/110`, `../riir-infer/.issues/1182`)
+> **Status:** Gain verdict — adoptions resolved 2026-11-12: `.issues/110` (typed CONFLICT + evidence pointers) **CLOSED NEGATIVE** (Bench 177: the second reader is degenerate at served corpus caps, 16–51% in-band accuracy — the conflict band does not predict error; T3 evidence pointers stayed unwired as a consequence, not separately measured); `../riir-infer/.issues/1182` (drift guard) **LANDED** — T1–T4 `110f242`, T5 league cell `df10b6d3` (Bench 966: retention 48/48 byte-identical, PROVISIONAL PASS), feature opt-in, promotion owner-gated
 > **Related Research:** 004 (Program-as-Weights serving landscape), 005 (Clef/Jev decision index), 013 (JevAct decision gate)
 > **Classification:** Public — public mechanism + our public contract ideas only; no rethink-class content
 
@@ -84,3 +84,5 @@ Method-discipline items worth recording (they mirror ours): scoring rules + Net 
 
 - Every accuracy/cost/latency figure in §1 is **their** claim, cited as such; we re-ran nothing and did not audit their harness.
 - The engine source was **not cloned** (§0.5 of the skill not triggered — the distillation is over the product description + README; no byte-quotes from their source are cited). A later mining pass over the executor/verifier design would clone at the pinned release sha `66fbc1d85423b7ef9c401fc25fc546dff9abf7f3` and re-verify.
+
+> **PASS-Redirects (synthesis):** XERJ Reader-1 [xerj.org/blog/xerj-reader-1-waitlist "XERJ Reader-1. Our first verifiable neurosymbolic data extraction model."] (2026-11-12, preview by waitlist; self-described, no published accuracy) — the family's document-domain sibling: neural formula-writer over SPAN-grounded document operands + symbolic executor (PAL class, arXiv:2211.10435 "Program-Aided Language models"). Verdict PASS: no span-grounded document lane exists in the family (row-6 re-open trigger still unfired), so there is no consumer for any of it; supporting evidence only — the conflict half of the Query-1 adoption was measured and closed NEGATIVE (Bench 177: second reader degenerate at served corpus caps), evidence pointers unwired as a consequence, never separately measured — a Bench-177 re-open (a corpus-posture move) would NOT re-open Reader-1's case.

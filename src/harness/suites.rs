@@ -414,6 +414,143 @@ pub fn build_when2call(rows_file: &Value, max_rows: usize) -> Suite {
     }
 }
 
+/// Issue 114 T7 — the RAGTruth option universe: the binary hallucination
+/// decision the board's row scores (chance row 59: "Always `hallucinated`
+/// · F1"). Index 1 is the POSITIVE side — [`binary_f1_of`] is pinned to
+/// it (the board metric is the single-class F1, never the two-class
+/// macro-F1).
+pub(crate) const RAGTRUTH_KEYS: [&str; 2] = ["grounded", "hallucinated"];
+
+/// Issue 114 T7 — RAGTruth (board id 59, added edition 0.3; rethink 060
+/// R3a): the JDI language rung's response-level hallucination decision —
+/// "does the response contain unsupported or contradictory claims relative
+/// to its context?" The eval population is ALL 2,700 upstream test
+/// responses (the chance arithmetic pins the population: 2·943/(943+2700)
+/// = 0.51771 = the board's 0.5177 always-hallucinated F1 — no quality
+/// filtering, the truncation/incorrect-refusal rows stay), fetched from
+/// the parquet-backed flowaicom/RAGTruth_test mirror (response-level
+/// binary labels "as described in the paper"; upstream
+/// ParticleMedia/RAGTruth LICENSE verified MIT, rethink 060 R1c residue
+/// 2026-11-12) across its three task-type splits (qa / summarization /
+/// data2txt, 900 rows each — the comma-list merge). Gold = the mirror's
+/// `score` column (1 = ≥1 annotated hallucination span, 0 = none).
+/// Corpus-ON: the lawful pool is the upstream TRAIN split (15,090
+/// response rows, fetched from the wandb/RAGTruth-processed mirror — the
+/// 060 R1c scan proved wandb-train ≡ upstream-train at the response
+/// level); the corpus row text is the RESPONSE alone (the discriminative
+/// side — the context is shared per source article and would drown the
+/// per-label signal in article noise), labelled through
+/// `hallucination_labels_processed` (any count > 0 = "hallucinated"). The
+/// jev_* prediction columns are never read (the 060 record's
+/// provider-terms caveat).
+#[must_use]
+pub fn build_ragtruth(rows_file: &Value, max_rows: usize) -> Suite {
+    let keys: Vec<String> = RAGTRUTH_KEYS.iter().map(|k| (*k).to_string()).collect();
+    let all = rows_of(rows_file);
+    // Two row schemas reach this ONE builder: the EVAL rows
+    // ({response, source_info, score} — the upstream-direct transform) and
+    // the CAL/POLLY front rows ({output, context, hallucination_labels
+    // _processed} — the same train rows the corpus pool reads, the cal
+    // slice being the stratified front of the train split). Project both
+    // to the same case shape: the eval fields win; a pool row reads its
+    // own columns.
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (response, context, gold) = if let Some(score) = eval_gold(row) {
+            match (row_str(row, "response"), row_str(row, "source_info")) {
+                (Some(r), Some(c)) => (r, c, score),
+                _ => continue, // malformed eval row — fails the rule, drops
+            }
+        } else if let Some(label) = pool_gold(row) {
+            match (row_str(row, "output"), row_str(row, "context")) {
+                (Some(r), Some(c)) => (r, c, label),
+                _ => continue, // malformed pool row — fails the rule, drops
+            }
+        } else {
+            continue; // neither schema — fails the rule, the row drops
+        };
+        let source = row_str(row, "source").unwrap_or("");
+        let task = row_str(row, "task_type").unwrap_or("");
+        cases.push(SuiteCase {
+            id: format!("ragtruth:{pos}"),
+            state: json!({
+                "context": context,
+                "response": response,
+                "source": source,
+                "task_type": task,
+            }),
+            questions: vec![choice_q(
+                "grounding",
+                "Given `context` and the model's `response`, decide whether the response is \"grounded\" \
+                 (every factual claim is supported by or directly follows from the context) or \
+                 \"hallucinated\" (it contains at least one claim that contradicts the context or is \
+                 not supported by it).",
+                &keys,
+                None,
+            )],
+            gold: vec![GoldAnswer {
+                idx: gold,
+                soft: vec![0.0; RAGTRUTH_KEYS.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    // The 2,700 population pin binds the EVAL posture only: the cal front
+    // (a train-schema slice) and any future partial read are exempt — the
+    // caller signals eval by carrying the `score` column on every row. A
+    // drifted EVAL fetch still reds here (the eval rows all carry score;
+    // 900-class partials fail this assert exactly as before).
+    let eval_rows = all.iter().filter(|r| eval_gold(r).is_some()).count();
+    let built_eval = all.iter().take(cases.len()).filter(|r| eval_gold(r).is_some()).count();
+    if eval_rows > 0 {
+        assert_eq!(
+            eval_rows, 2_700,
+            "ragtruth: the fetched population drifted from the board's 2,700 test \
+             responses (the chance arithmetic 2·943/(943+2700)=0.51771 pins it) — \
+             a drifted mirror reds here, never silently"
+        );
+        assert_eq!(
+            cases.len(), eval_rows,
+            "ragtruth: rows that carry the eval schema must all build (skipped \
+             rows would silently shrink the scored population)"
+        );
+        let _ = built_eval;
+    } else {
+        assert!(
+            !cases.is_empty(),
+            "ragtruth: the cal/pool front produced no cases — the train-schema \
+             rows failed their parse; refusing a silent empty cal slice"
+        );
+    }
+    Suite {
+        name: "ragtruth",
+        cases,
+        option_counts_note: "2 fixed options (grounded / hallucinated); the board metric is the hallucinated-class F1 (HardMetrics.positive_f1)",
+    }
+}
+
+/// The EVAL-schema gold: `score` ∈ {0, 1} names the class directly
+/// (1 = ≥1 annotated span). None = not an eval-schema row.
+fn eval_gold(row: &Value) -> Option<usize> {
+    match row_i64(row, "score") {
+        Some(0) => Some(0),
+        Some(1) => Some(1),
+        _ => None,
+    }
+}
+
+/// The POOL/CAL-schema gold: the processed hallucination-label counts (any
+/// > 0 = the "hallucinated" class). None = not a pool-schema row.
+fn pool_gold(row: &Value) -> Option<usize> {
+    let counts = row
+        .get("hallucination_labels_processed")
+        .and_then(Value::as_object)?;
+    let any_span = counts
+        .values()
+        .any(|v| v.as_i64().is_some_and(|n| n > 0));
+    Some(usize::from(any_span))
+}
+
 /// Issue 114 T4 — the BFCL abstain option, APPENDED LAST on the
 /// irrelevance-tier rows only (the board row's "or irrelevance-detect";
 /// the pick tier never carries it — the official pick eval always has a
@@ -2041,6 +2178,38 @@ pub fn train_row_label(suite: &str, row: &Value) -> Option<String> {
         "clinc150" => row_i64(row, "intent")
             .and_then(|l| CLINC150_KEYS.get(l as usize))
             .map(|k| (*k).to_string()),
+        // Issue 114 T7: RAGTruth's TWO row schemas encode the same binary
+        // class — the EVAL rows carry `score` (1 = ≥1 annotated span), the
+        // POOL/CAL rows (the wandb-style train projection) carry
+        // `hallucination_labels_processed` = {"evident_conflict": N,
+        // "baseless_info": N} where ANY positive count = the
+        // "hallucinated" class. The slice-integrity audit labels every
+        // slice through THIS one rule, so it must read both — an eval row
+        // that fell through to the pool arm would label None and the
+        // coverage law would refuse the suite.
+        "ragtruth" => {
+            if let Some(s) = row_i64(row, "score") {
+                if s != 0 && s != 1 {
+                    return None;
+                }
+                return Some(if s == 1 { "hallucinated" } else { "grounded" }.to_string());
+            }
+            let counts = row
+                .get("hallucination_labels_processed")
+                .and_then(Value::as_object);
+            let counts = counts?;
+            let any_span = counts
+                .values()
+                .any(|v| v.as_i64().is_some_and(|n| n > 0));
+            Some(
+                if any_span {
+                    "hallucinated"
+                } else {
+                    "grounded"
+                }
+                .to_string(),
+            )
+        }
         // Issue 077: the int-ClassLabel choice suites name their engine
         // domains by the OPTION KEY at the class index (content binding —
         // the doc comment on AG_NEWS_KEYS). The class index must be in
@@ -2409,6 +2578,20 @@ pub fn train_docs(train_rows_file: &Value, suite: &str) -> Vec<TrainDoc> {
                 Some(TrainDoc {
                     label: train_row_label(suite, r)?,
                     text: row_str(r, "text")?.to_string(),
+                })
+            })
+            .collect(),
+        // Issue 114 T7: the RAGTruth corpus pool — the corpus text is the
+        // RESPONSE alone (`output` in the pool rows; the discriminative
+        // side — the context is shared per source article and would drown
+        // the per-label signal in article noise), the label through
+        // train_row_label's processed-counts arm.
+        "ragtruth" => rows
+            .iter()
+            .filter_map(|r| {
+                Some(TrainDoc {
+                    label: train_row_label(suite, r)?,
+                    text: row_str(r, "output")?.to_string(),
                 })
             })
             .collect(),

@@ -21,6 +21,12 @@ pub struct HardMetrics {
     pub n: usize,
     pub accuracy: f64,
     pub macro_f1: f64,
+    /// Issue 114 T7 (RAGTruth): the positive-class (index 1) F1 over the
+    /// SAME picks — the board's binary rows score the single-class F1
+    /// ("always hallucinated · F1"), which macro_f1 does not carry.
+    /// Defined only for two-option suites; 0.0 whenever any row carries
+    /// ≠2 options (never surfaced for those suites).
+    pub positive_f1: f64,
     pub ece: f64,
     pub brier: f64,
     pub nll: f64,
@@ -101,6 +107,14 @@ pub fn hard_metrics(rows: &[(usize, Vec<f64>)]) -> HardMetrics {
 
     let macro_f1 = macro_f1_of(&golds, &preds);
 
+    // Issue 114 T7: single-class F1 for the binary suites (2-option rows
+    // only — the field is meaningless elsewhere and reads 0.0).
+    let positive_f1 = if rows.iter().all(|(_, probs)| probs.len() == 2) {
+        binary_f1_of(&golds, &preds, 1)
+    } else {
+        0.0
+    };
+
     let pairs: Vec<(f64, bool)> = confs.iter().copied().zip(correct.iter().copied()).collect();
     let ece = ece_of(&pairs);
 
@@ -139,6 +153,7 @@ pub fn hard_metrics(rows: &[(usize, Vec<f64>)]) -> HardMetrics {
         n: rows.len(),
         accuracy,
         macro_f1,
+        positive_f1,
         ece,
         brier,
         nll,
@@ -695,6 +710,36 @@ pub fn macro_f1_of(golds: &[usize], preds: &[usize]) -> f64 {
     f1_sum / classes.len() as f64
 }
 
+/// Issue 114 T7 (the JDI ladder wave-3 RAGTruth row) — the SINGLE-class
+/// F1 the board's row scores by ("always hallucinated · F1": the
+/// positive-class F1 of the binary hallucination decision, NOT the
+/// two-class macro-F1 `hard_metrics` carries). `positive` names the
+/// class whose F1 is reported (the board's "hallucinated" side);
+/// denominator floors at 1 like [`macro_f1_of`] so all-negative or
+/// all-positive predictions read a defined 0/1 instead of dividing by
+/// zero. Exported beside [`macro_f1_of`] for the same crosswalk reason.
+#[must_use]
+pub fn binary_f1_of(golds: &[usize], preds: &[usize], positive: usize) -> f64 {
+    assert!(!golds.is_empty(), "binary_f1_of: non-empty golds required");
+    assert_eq!(
+        golds.len(),
+        preds.len(),
+        "binary_f1_of: picks must pair with gold"
+    );
+    let mut tp = 0.0_f64;
+    let mut fp = 0.0_f64;
+    let mut fnegative = 0.0_f64;
+    for (&g, &p) in golds.iter().zip(preds.iter()) {
+        match (g == positive, p == positive) {
+            (true, true) => tp += 1.0,
+            (false, true) => fp += 1.0,
+            (true, false) => fnegative += 1.0,
+            (false, false) => {}
+        }
+    }
+    2.0 * tp / 1.0_f64.max(2.0 * tp + fp + fnegative)
+}
+
 /// Plan 011 §B3 — the JDI chance level for one evaluated slice: the
 /// MAJORITY gold-class share (the no-skill classifier's expected score),
 /// computed from the label distribution ACTUALLY EVALUATED — a stratified
@@ -729,6 +774,48 @@ pub fn chance_corrected_skill(score: f64, chance: f64) -> f64 {
         return 0.0;
     }
     ((score - chance) / denom).clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod binary_f1_tests {
+    use super::{binary_f1_of, hard_metrics};
+
+    #[test]
+    fn positive_class_f1_matches_hand_computation() {
+        // golds/preds over {0=grounded, 1=hallucinated}: tp=2 (rows 0,1),
+        // fp=1 (row 2 predicted 1, gold 0), fn=1 (row 3 predicted 0, gold 1)
+        // → F1 = 2*2 / (2*2 + 1 + 1) = 0.666…, the "hallucinated" class only.
+        let got = binary_f1_of(&[1, 1, 0, 1], &[1, 1, 1, 0], 1);
+        assert!((got - 2.0 / 3.0).abs() < 1e-12);
+        // The negative side of the same picks: tp=0, fp=1, fn=0 → 0.0
+        // (every negative was missed; the floor guard keeps it defined).
+        let got = binary_f1_of(&[1, 1, 0, 1], &[1, 1, 1, 0], 0);
+        assert_eq!(got, 0.0);
+    }
+
+    #[test]
+    fn perfect_and_degenerate_postures() {
+        // Perfect → 1.0; always-positive over half-positives → the chance
+        // row the board pins: 2*P*R/(P+R) with R=1, P=share positives.
+        assert_eq!(binary_f1_of(&[1, 0, 1, 0], &[1, 0, 1, 0], 1), 1.0);
+        let always_one = binary_f1_of(&[1, 0, 1, 0], &[1, 1, 1, 1], 1);
+        assert!((always_one - 2.0 * 0.5 / 1.5).abs() < 1e-12);
+        // Always-negative → 0.0 (floor at 1, the macro_f1_of convention).
+        assert_eq!(binary_f1_of(&[1, 0, 1, 0], &[0, 0, 0, 0], 1), 0.0);
+    }
+
+    #[test]
+    fn hard_metrics_carries_positive_f1_for_binary_rows_only() {
+        // 2-option rows → positive_f1 populated (index 1 side).
+        let rows = vec![(1usize, vec![0.2, 0.8]), (0, vec![0.9, 0.1]), (1, vec![0.3, 0.7])];
+        let m = hard_metrics(&rows);
+        let expected = binary_f1_of(&[1, 0, 1], &[1, 0, 1], 1);
+        assert!((m.positive_f1 - expected).abs() < 1e-12);
+        // 3-option rows → the field stays 0.0 (never surfaced).
+        let rows3 = vec![(2usize, vec![0.1, 0.2, 0.7]), (0, vec![0.8, 0.1, 0.1])];
+        let m3 = hard_metrics(&rows3);
+        assert_eq!(m3.positive_f1, 0.0);
+    }
 }
 
 #[cfg(test)]

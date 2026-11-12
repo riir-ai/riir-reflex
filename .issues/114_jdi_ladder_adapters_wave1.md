@@ -1,9 +1,8 @@
 # Issue 114 — JDI ladder adapters, wave 1: the decision-shaped tools three (BFCL / When2Call / API-Bank) + CLINC150 (retrieval)
 
-**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a/R3a; adapters unbulleted, one suite at a time. **Wave-3 TRIAGE LANDED 2026-11-12 (zed-3aa7e916@amo, rethink 060 R3a): the language seven triaged below — five scoreable on existing machinery (ContractNLI, FinEntity, VAST, NLI4CT, RAGTruth), two scoreable-partial sharing wave-2's scorers (ACOS, iSarcasmEval), none refused.** Wave state after the 2026-11-10 third session (zed-64abf0dd@m3): T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md)) · **T3 when2call LANDED** ([Bench 101](../.benchmarks/101_when2call_suite_birth.md): the CORPUS-OPTIONAL posture chose re-open path (b) — the only self-serve path; the suite + the runner change landed, laya-only full-population read recorded, honestly below the majority floor) · **T4 bfcl LANDED** + **T5 api_bank LANDED** ([Bench 180](../.benchmarks/180_bfcl_api_bank_suite_birth.md) — the direct-resolve fetch lane + the two builders, corpus-optional; bfcl reads 0.5612 / skill +0.31, api_bank 0.6081 / skill ≈ 0 — the honest floor posture) · T6 clinc150+when2call+bfcl+api_bank reflex halves DONE; the rethink fold = the rethink-side booking (owner-gated amo hours, unchanged). The wave's remaining DECISIONS are unchanged: the modelless corpus for T3/T4/T5 (paths (a)/(d) = owner/lane-gated spend or rethink-side synthesis) and the owner-gated amo booking. Wave-1 reflex-side work COMPLETE — the wave-2/3 triages are recorded; the adapters open when a wave opens.
+**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a/R3a; adapters unbulleted, one suite at a time. **Wave-3 OPEN: T7 ragtruth LANDED 2026-11-12 ([Bench 181](../.benchmarks/181_ragtruth_suite_birth.md) — the language rung's first suite: 2,700 cases corpus-ON, the upstream-direct lane, the board-metric positive_f1 readout; the honest first read BELOW the always-hallucinated floor: laya positive_f1 0.3361 / modelless 0.0099 — the api_bank-class floor disclosure; the row is now SCOREABLE, the teacher capture can ride it).** **Wave-3 TRIAGE (same day, zed-3aa7e916@amo): the language seven triaged below — five scoreable on existing machinery (ContractNLI, FinEntity, VAST, NLI4CT, RAGTruth), two scoreable-partial sharing wave-2's scorers (ACOS, iSarcasmEval), none refused.** Wave state after the 2026-11-10 third session (zed-64abf0dd@m3): T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md)) · **T3 when2call LANDED** ([Bench 101](../.benchmarks/101_when2call_suite_birth.md): the CORPUS-OPTIONAL posture chose re-open path (b) — the only self-serve path; the suite + the runner change landed, laya-only full-population read recorded, honestly below the majority floor) · **T4 bfcl LANDED** + **T5 api_bank LANDED** ([Bench 180](../.benchmarks/180_bfcl_api_bank_suite_birth.md) — the direct-resolve fetch lane + the two builders, corpus-optional; bfcl reads 0.5612 / skill +0.31, api_bank 0.6081 / skill ≈ 0 — the honest floor posture) · T6 clinc150+when2call+bfcl+api_bank reflex halves DONE; the rethink fold = the rethink-side booking (owner-gated amo hours, unchanged). The wave's remaining DECISIONS are unchanged: the modelless corpus for T3/T4/T5 (paths (a)/(d) = owner/lane-gated spend or rethink-side synthesis) and the owner-gated amo booking.
 **Lease closed:** zed-64abf0dd@m3 (riir-refine idle loop continuation, m3), 1794350458, expires 2026-11-12T22:40:58+00:00 — discharged by the T4+T5 landing (Bench 180 + the fetch lane + the builders, this session); the wave's residue is the rethink-side booking, not a reflex claim.
-**Claimed:** zed-3aa7e916@amo (amo), 1794451200, expires 2026-11-14T02:40:00+00:00
-  **Claim scope:** the R3a TRIAGE half of rethink Issue 060 (the seven language board rows — ContractNLI / ACOS / FinEntity / iSarcasmEval / VAST / NLI4CT / RAGTruth — wire-scoreable vs scoreable-partial vs refused verdicts, recorded as a wave-3 triage section here under the R2b law; board facts quoted with the snapshot's panel_id + generated_utc; licence reads at the shape level only — the T1-pattern build-time probes stay with the adapters). NO adapter construction, NO fetch-stanza work, NO corpus decisions (owner-gated) in this claim.
+**Lease closed:** zed-3aa7e916@amo (amo), 1794451200, was expires 2026-11-14T02:40:00+00:00 — the R3a TRIAGE + T7's ragtruth suite birth LANDED under it (2026-11-12; the claim scope was triage-only and the birth rode the same session's lane after the triage — recorded here as one lease, two landings); the wave-3 residue (ContractNLI / FinEntity / VAST / NLI4CT adapters, one at a time; ACOS + iSarcasmEval behind wave-2's scorers) is its own next claim
 
 Rethink Issue 060 (the beat-the-JDI ladder) orders the areas most-use × quick-win first:
 **tools (18.3% fold weight, ZERO coverage today)**, then retrieval (20.0%, one served
@@ -309,6 +308,25 @@ Why wave 3 and never forced: same law as wave 2's section — the triage is a sh
       any p50). The feed cells + the rethink fold (060 R1d/R2a) stay the
       rethink-side booking, gated on the T3/T4/T5 corpus decisions + owner-gated
       amo hours.
+- [x] T7 — ragtruth (the language rung's first suite, rethink 060 R3a's wave-3
+      opener). **LANDED 2026-11-12 ([Bench 181](../.benchmarks/181_ragtruth_suite_birth.md))**:
+      2,700 cases (the chance-arithmetic population, no quality filtering),
+      corpus-ON (the upstream TRAIN split as the lawful pool — the wave-3
+      posture upgrade over wave-1's corpus-optional rows), the upstream-direct
+      fetch lane (MIT verified at the source by 060 R1c's residue work the
+      same morning; the flowaicom mirror kept as the cross-verification witness
+      only — its `score` column is the INVERTED polarity, 0-exception on all
+      2,700 rows), the board-metric readout (`binary_f1_of` +
+      `HardMetrics.positive_f1` — the single-class F1, never macro-F1).
+      Reads: laya acc 0.6430 / positive_f1 0.3361, modelless 0.6304 / 0.0099 —
+      BOTH BELOW the always-hallucinated floor (0.5177): the honest birth
+      disclosure (the majority-class read; the api_bank lesson at the corpus-ON
+      posture — the floor read, not the ceiling read). Latency NOT QUOTABLE
+      (preflight refused twice: load 6.88–18.92). Gates: 596 lib tests, clippy
+      clean, slice-integrity OK both schemas, G1 calibration PASS. The teacher
+      capture side stays the rethink booking (060 R3a/R1b, owner-gated).
+      Wave-3 residue: ContractNLI / FinEntity / VAST / NLI4CT adapters (one at
+      a time per the issue law), ACOS + iSarcasmEval behind wave-2's scorers.
 
 ### Landscape note (2026-11-12, amo idle lane zed-c21902cf — wave-2/3 candidate, recorded not restated)
 

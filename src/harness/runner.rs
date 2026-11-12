@@ -61,7 +61,7 @@ use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, QKind, Suite, SuiteCase, SuiteQuestion, TrainDoc,
     build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb, build_bfcl,
     build_clinc150, build_emotion, build_emotion_syn, build_hellaswag_jdi, build_massive_intent_en,
-    build_mmlupro_jdi, build_prompt_injections, build_s1mb_choice, build_s1mb_noul,
+    build_mmlupro_jdi, build_prompt_injections, build_ragtruth, build_s1mb_choice, build_s1mb_noul,
     build_s1mb_score, build_sst5, build_sst5_syn, build_thai_sib200, build_thai_wisesight,
     build_typed_decisions, build_wanli_en, build_when2call, build_winogrande_jdi, build_xnli_en,
     stratified_selection_slices, stratified_split, train_docs, train_row_label,
@@ -739,6 +739,30 @@ const SUITES: &[SuiteSpec] = &[
         build: build_api_bank,
         synthetic: None,
         modelless_lane: false,
+    },
+    // Issue 114 T7 — the JDI ladder wave-3 RAGTruth row (the language
+    // rung's first suite; rethink 060 R3a): the response-level
+    // hallucination decision (grounded / hallucinated — board id 59,
+    // chance 0.5177 = "always hallucinated · F1"; the population pin in
+    // the builder reds on a drifted mirror). The board metric is the
+    // SINGLE-class F1 (HardMetrics.positive_f1, index 1), never macro-F1.
+    // CORPUS-ON: the lawful pool is the upstream TRAIN split (wandb
+    // mirror, 15,090 response rows — the 060 R1c scan proved
+    // wandb-train ≡ upstream-train), clinc150's per-class caps (40/label
+    // over 2 classes). cal_cap 200 at the clinc150 ratio. named_only like
+    // every ladder suite.
+    SuiteSpec {
+        name: "ragtruth",
+        dataset_dir: "ragtruth",
+        test_cap: 0,
+        cal_cap: 200,
+        corpus_cap_per_label: 40,
+        eval_split: "test_qa,test_summarization,test_data2txt",
+        named_only: true,
+        coverage_audit: true,
+        build: build_ragtruth,
+        synthetic: None,
+        modelless_lane: true,
     },
     // ── RETIRED (owner call, 2026-10-02): the six Issue-004 harness
     // decision-point families (`harness_visibility` · `harness_permissions`
@@ -4705,6 +4729,9 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             // category names in the answers-object key order (the gold-index
             // order; the verify-at-port in the builder pins it per row).
             "when2call" => Some(crate::harness::suites::WHEN2CALL_KEYS.to_vec()),
+            // Issue 114 T7: the binary hallucination decision — index 1 is
+            // the positive side `binary_f1_of` is pinned to.
+            "ragtruth" => Some(crate::harness::suites::RAGTRUTH_KEYS.to_vec()),
             "prompt_injections" => Some(vec!["0", "1"]),
             _ => None,
         };
@@ -4845,6 +4872,11 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
              digest"
         );
     }
+
+    // Issue 114 T7 — the RAGTruth population pin lives in the builder (the
+    // 2,700 assert covers the comma-list merge across the three task-type
+    // splits), so there is no separate prepare arm here — a drifted fetch
+    // reds at build, never silently.
 
     // Issue 114 T3 — the CORPUS-OPTIONAL path (`modelless_lane: false` on a
     // dataset suite): no lawful train pool exists, so the train/cal/pool
@@ -6789,3 +6821,4 @@ mod corpus_digest_tests {
         );
     }
 }
+

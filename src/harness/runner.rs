@@ -58,12 +58,12 @@ use crate::harness::pair_heads::{
 #[cfg(feature = "option_cond")]
 use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
-    BFCL_ABSTAIN_KEY, CLINC150_KEYS, QKind, Suite, SuiteCase, SuiteQuestion, TrainDoc,
-    build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb, build_bfcl,
-    build_clinc150, build_emotion, build_emotion_syn, build_finentity, build_hellaswag_jdi,
-    build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_ragtruth,
-    build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5, build_sst5_syn,
-    build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
+    BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, QKind, Suite, SuiteCase, SuiteQuestion,
+    TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb, build_bfcl,
+    build_clinc150, build_contractnli, build_emotion, build_emotion_syn, build_finentity,
+    build_hellaswag_jdi, build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections,
+    build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5,
+    build_sst5_syn, build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
     build_when2call, build_winogrande_jdi, build_xnli_en, stratified_selection_slices,
     stratified_split, train_docs, train_row_label,
 };
@@ -790,6 +790,34 @@ const SUITES: &[SuiteSpec] = &[
         build: build_finentity,
         synthetic: None,
         modelless_lane: false,
+    },
+    // Issue 114 T9 — the JDI ladder wave-3 ContractNLI row (the language
+    // rung's third suite; the T8-note licence conflict RESOLVED upstream:
+    // the authors' canonical repo stanfordnlp/contract-nli carries the
+    // full CC-BY-4.0 LICENSE + the bundled TERMS grants rights "in
+    // accordance with" CC-BY-4.0; the kiddothe2b mirror's cc-by-nc-sa-4.0
+    // tag is a third-party curator contradiction — never a source).
+    // A_direct: contract + hypothesis → entailment relation, one case per
+    // (document, hypothesis) pair (123 × 17 = 2,091 = the board's fields
+    // count; the population pin keys on the split column). The board
+    // metric is pair-level macro-F1 (chance 0.3085 Monte Carlo — analytic
+    // 0.30793 over the same distribution, Δ 6e-4 MC noise). CORPUS-ON:
+    // the upstream train split (423 × 17 = 7,191 pairs) is the task's own
+    // released training data; clinc150's per-class caps (40/label, 120
+    // docs of ~10 KB contract text) + cal_cap 200. named_only like every
+    // ladder suite.
+    SuiteSpec {
+        name: "contractnli",
+        dataset_dir: "contractnli",
+        test_cap: 0,
+        cal_cap: 200,
+        corpus_cap_per_label: 40,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: true,
+        build: build_contractnli,
+        synthetic: None,
+        modelless_lane: true,
     },
     // ── RETIRED (owner call, 2026-10-02): the six Issue-004 harness
     // decision-point families (`harness_visibility` · `harness_permissions`
@@ -4762,6 +4790,10 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             // Issue 114 T8: the FinEntity sentiment universe (sorted unique
             // upstream labels; the gold index is the position in this order).
             "finentity" => Some(crate::harness::suites::FINENTITY_KEYS.to_vec()),
+            // Issue 114 T9: the ContractNLI entailment universe (sorted
+            // unique upstream choices — the gold index is the position in
+            // this order).
+            "contractnli" => Some(CONTRACTNLI_KEYS.to_vec()),
             "prompt_injections" => Some(vec!["0", "1"]),
             _ => None,
         };
@@ -4921,6 +4953,36 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             assert!(
                 gold_classes.contains(required),
                 "finentity: gold class {required:?} absent from the fetched \
+                 population (gold classes: {gold_classes:?}) — the board row \
+                 would misreport its macro-F1"
+            );
+        }
+    }
+    // Issue 114 T9: the ContractNLI population + gold-coverage pins —
+    // 123 × 17 = 2,091 pairs (the board's own fields count) and all three
+    // entailment classes present (a fetch that lost a class would misreport
+    // the macro-F1 the board scores).
+    if spec.name == "contractnli" {
+        assert_eq!(
+            suite.cases.len(),
+            2_091,
+            "contractnli: the fetched test split drifted from the pinned \
+             population (123 documents × 17 hypotheses = 2,091 pairs) — a \
+             partial or revised fetch; refetch via scripts/fetch_datasets.sh \
+             and re-pin the manifest digest"
+        );
+        let mut gold_classes: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        for case in &suite.cases {
+            if let Some(g) = case.gold.first()
+                && let Some(k) = labels.get(g.idx)
+            {
+                gold_classes.insert(k.as_str());
+            }
+        }
+        for required in ["Contradiction", "Entailment", "NotMentioned"] {
+            assert!(
+                gold_classes.contains(required),
+                "contractnli: gold class {required:?} absent from the fetched \
                  population (gold classes: {gold_classes:?}) — the board row \
                  would misreport its macro-F1"
             );

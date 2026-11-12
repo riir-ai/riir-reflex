@@ -719,6 +719,132 @@ fetch_bfcl_join() {
     sleep "$SLEEP"
 }
 
+# _pairs_flatten <in-json> <out-json> <split>
+#   The ContractNLI recorded transform (issue 114 T9): the authors' nested
+#   per-document JSON (documents[].annotation_sets[].annotations keyed by
+#   hypothesis id + a top-level labels map carrying the hypothesis texts)
+#   flattens to ONE pair row per (document, hypothesis) annotation:
+#   {contract, hypothesis, choice, split}. Emits a JSON ARRAY (the
+#   _raw_convert input shape). python3-only (the flatten is a real
+#   program, not a jq one-liner — the script's PY3 resolution gates it).
+_pairs_flatten() {
+    in=$1; out=$2; split=$3
+    # PY3 is only pre-resolved on jq-less boxes; the flatten is a real
+    # program (python3-only), so resolve it here when empty.
+    if [ -z "$PY3" ]; then
+        if have python3 && python3 -c pass >/dev/null 2>&1; then
+            PY3="python3"
+        elif have py && py -3 -c pass >/dev/null 2>&1; then
+            PY3="py -3"
+        fi
+    fi
+    if [ -z "$PY3" ]; then
+        log "  FAIL   pairs flatten (no working python3 — the ContractNLI lane cannot convert)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    $PY3 - "$in" "$out" "$split" <<'PYEOF'
+import json, sys
+src, dst, split = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(src, encoding="utf-8") as f:
+    d = json.load(f)
+labels = d["labels"]
+rows = []
+for doc in d["documents"]:
+    for s in doc.get("annotation_sets", []):
+        for hyp_id, a in s.get("annotations", {}).items():
+            rows.append({
+                "contract": doc["text"],
+                "hypothesis": labels[hyp_id]["hypothesis"],
+                "choice": a["choice"],
+                "split": split,
+            })
+with open(dst, "w", encoding="utf-8") as f:
+    json.dump(rows, f, ensure_ascii=False)
+print(f"pairs={len(rows)}")
+PYEOF
+}
+
+# fetch_contractnli_pairs <suite> <owner/repo> <sha> <zip-path>
+#   The ContractNLI fetch (issue 114 T9): ONE zip from the authors'
+#   canonical GitHub repo at the board's pinned sha (raw.githubusercontent
+#   — the hub /resolve lane does not serve GitHub), extracted to both
+#   split envelopes via the recorded flatten transform. The zip downloads
+#   ONCE (65 MB) and is reused for both splits; each envelope is
+#   idempotent (skip on a valid cached page, FORCE refetches).
+fetch_contractnli_pairs() {
+    suite=$1; owner_repo=$2; sha=$3; zippath=$4
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    zipf="$dir/src.zip"
+    need_zip=0
+    for split in test train; do
+        file="$dir/$split-000.json"
+        if [ "$FORCE" = "1" ] || ! [ -s "$file" ] || ! rows_valid "$file"; then
+            need_zip=1
+        fi
+    done
+    if [ "$need_zip" = "0" ]; then
+        for split in test train; do
+            n=$(rows_count "$dir/$split-000.json" 2>/dev/null || echo 0)
+            log "  skip   $suite/$split-000 ($n rows)"
+        done
+        return 0
+    fi
+    if ! [ -s "$zipf" ] || [ "$FORCE" = "1" ]; then
+        url="https://raw.githubusercontent.com/$owner_repo/$sha/$zippath"
+        ok=0
+        if http_get "$url" "$zipf.tmp"; then ok=1; fi
+        if [ "$ok" -eq 0 ]; then
+            sleep 5
+            if http_get "$url" "$zipf.tmp"; then ok=1; fi
+        fi
+        if [ "$ok" -eq 0 ]; then
+            rm -f "$zipf.tmp"
+            log "  FAIL   $suite/src.zip (http error, $url)"
+            FAILED=$((FAILED + 1))
+            return 0
+        fi
+        mv "$zipf.tmp" "$zipf"
+        log "  fetch  $suite/src.zip ($(wc -c < "$zipf" | tr -d ' ') bytes)"
+    fi
+    for split in test train; do
+        file="$dir/$split-000.json"
+        if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+            n=$(rows_count "$file" 2>/dev/null || echo 0)
+            log "  skip   $suite/$split-000 ($n rows)"
+            continue
+        fi
+        inner="contract-nli/$split.json"
+        raw="$dir/$split.raw.json"
+        if ! unzip -p "$zipf" "$inner" > "$raw" 2>/dev/null || ! [ -s "$raw" ]; then
+            rm -f "$raw"
+            log "  FAIL   $suite/$split-000 (unzip $inner)"
+            FAILED=$((FAILED + 1))
+            continue
+        fi
+        pairs="$dir/$split.pairs.json"
+        if ! _pairs_flatten "$raw" "$pairs" "$split"; then
+            rm -f "$raw" "$pairs"
+            continue
+        fi
+        rm -f "$raw"
+        if _raw_convert "$pairs" "array" "$file.tmp" "$suite/$split-000"; then
+            rm -f "$pairs"
+            n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
+            mv "$file.tmp" "$file"
+            FILES=$((FILES + 1))
+            ROWS=$((ROWS + n))
+            log "  fetch  $suite/$split-000 rows=$n (zip $inner, pairs flatten)"
+        else
+            rm -f "$pairs"
+        fi
+        sleep "$SLEEP"
+    done
+    # The zip stays on disk (the manifest pins its blake3; a re-extract
+    # needs no second download).
+}
+
 main() {
     if have b3sum; then
         digest_tool="b3sum (blake3)"
@@ -1200,6 +1326,43 @@ main() {
     if want_suite finentity; then
         log "[suite] finentity — the authors' own dataloader, fetched whole (byte-identical to the board's pinned GitHub sha)"
         fetch_raw_json finentity "yixuantt/FinEntity" "FinEntity.json" test array
+    fi
+
+    # 22. contractnli — Issue 114 T9 (the JDI ladder wave-3; the language
+    #     rung's third suite; rethink 060 R3a): the A_direct entailment row
+    #     (board id 11 — macro-F1, chance 0.3085 "Random choices · F1",
+    #     Monte Carlo; the analytic value over the same distribution is
+    #     0.30793, Δ 6e-4 MC noise). LICENCE RESOLVED 2026-11-12: the
+    #     authors' canonical repo stanfordnlp/contract-nli (gh-pages; the
+    #     board's suite.md pins @eced652) carries the full CC-BY-4.0
+    #     LICENSE (18,656 bytes), the bundled TERMS grants rights "in
+    #     accordance with the terms and conditions of the Creative Commons
+    #     Attribution 4.0 International Public License", and the dataset
+    #     site's License section names it — no NC/ShareAlike anywhere
+    #     upstream. The kiddothe2b HF mirror's cc-by-nc-sa-4.0 tag is a
+    #     THIRD-PARTY curator contradiction of the upstream — that mirror
+    #     is never a source (the flowaicom-witness pattern); the
+    #     mteb/legalbench cc-by-4.0 curation tag was right. SOURCE = the
+    #     authors' zip at the board's pinned sha (resources/contract-
+    #     nli.zip), the GitHub raw lane (the hub /resolve does not serve
+    #     GitHub), ONE 65 MB download reused for both splits. THE
+    #     RECORDED TRANSFORM (the digest pins the OUTPUT envelopes): the
+    #     nested per-document JSON flattens to pair rows {contract,
+    #     hypothesis, choice, split} — test 123×17 = 2,091 rows = the
+    #     board's fields count; train 423×17 = 7,191 rows. The board
+    #     metric is pair-level macro-F1 (its chance arithmetic pins the
+    #     frame; the catalog's requests=123 documents bookkeeping repeats
+    #     the finentity note — disclosed, never inherited).
+    #     CORPUS-ON: the upstream train split is the task's own released
+    #     training data (the SemEval-2024 paper documents systems
+    #     fine-tuning on it; the contrast interventions were withheld
+    #     from training only and are NOT in the board's track — the
+    #     original 2,091 test pairs). Corpus text = contract + hypothesis
+    #     (the contract is what flips the label; the ragtruth
+    #     response-alone rule does not transfer).
+    if want_suite contractnli; then
+        log "[suite] contractnli — the authors' zip at the board's pinned sha, both splits flattened (the recorded transform)"
+        fetch_contractnli_pairs contractnli "stanfordnlp/contract-nli" "eced652" "resources/contract-nli.zip"
     fi
 
     log ""

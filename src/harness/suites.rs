@@ -723,6 +723,129 @@ pub fn build_finentity(rows_file: &Value, max_rows: usize) -> Suite {
     }
 }
 
+/// Issue 114 T9 — the ContractNLI entailment universe (sorted unique
+/// upstream `choice` spellings — the CLINC150 mechanical-from-fetched law;
+/// the board's panel words supported/contradicted/unstated are DISPLAY
+/// names, never the wire keys).
+pub(crate) const CONTRACTNLI_KEYS: [&str; 3] = ["Contradiction", "Entailment", "NotMentioned"];
+
+/// Issue 114 T9 — ContractNLI (board id 11; the language rung's third
+/// suite; the T8-note's licence conflict RESOLVED upstream 2026-11-12:
+/// the authors' canonical repo `stanfordnlp/contract-nli` (gh-pages) —
+/// the T8-note's "theainswer" spelling 404s — carries the full CC-BY-4.0
+/// LICENSE, the bundled TERMS grants rights "in accordance with the terms
+/// and conditions of the Creative Commons Attribution 4.0 International
+/// Public License", and the dataset site's §License names it; the
+/// kiddothe2b HF mirror's cc-by-nc-sa-4.0 tag is a third-party curator's
+/// CONTRADICTION of the upstream and is never a source — the
+/// flowaicom-witness pattern).
+///
+/// The task (Koreeda & Manning, EMNLI 2021): contract + hypothesis →
+/// the inference relation. A_direct on the board ("original hypotheses
+/// and NLI labels"). The upstream test.json shape: 123 documents, each
+/// carrying ONE annotation set of 17 per-hypothesis annotations keyed
+/// `nda-N` — 2,091 (document, hypothesis) pairs = the board's own
+/// `fields` count (the reconciliation, the finentity pattern). Choices
+/// upstream: Entailment 968 / NotMentioned 903 / Contradiction 220. The
+/// board metric is pair-level macro-F1 — the frame its own chance
+/// arithmetic pins (analytic random-choice macro-F1 over this
+/// distribution = 0.30793 vs the catalog's Monte Carlo 0.30852, Δ 6e-4
+/// = MC noise at the 4.6/43.2/10.5% class split; the catalog's
+/// `requests=123` documents bookkeeping repeats the finentity note —
+/// disclosed, never inherited).
+///
+/// THE FETCH TRANSFORM (the recorded one — the digest pins the OUTPUT
+/// envelopes): the authors' zip (`resources/contract-nli.zip` at the
+/// board's pinned sha `eced652`) carries nested per-document JSON; the
+/// fetch flattens BOTH splits to the pair rows the builder reads:
+/// `{contract, hypothesis, choice, split}` (test 2,091 rows; train 423
+/// documents × 17 = 7,191 rows). ONE row schema reaches this builder —
+/// the `split` column tells eval from pool (the ragtruth schema
+/// dispatch, replaced by an explicit column; the eval population assert
+/// keys on every row carrying split=test).
+///
+/// CORPUS-ON (the wave-3 posture): the upstream TRAIN split is the
+/// task's own released training data (the SemEval-2024 paper documents
+/// systems fine-tuning on it — the interventions were withheld from
+/// training only, and the interventions are NOT part of the board's
+/// track: the track is the original 2,091 test pairs). The corpus doc
+/// text = contract + hypothesis (the contract is exactly what flips the
+/// label — 17 hypotheses repeat across documents, so the hypothesis
+/// alone cannot carry the signal; the ragtruth response-alone rule does
+/// NOT transfer, disclosed here). corpus_cap_per_label 40 → ≤120 docs
+/// (~1–2 MB of contract text), cal_cap 200 at the clinc150 ratio.
+#[must_use]
+pub fn build_contractnli(rows_file: &Value, max_rows: usize) -> Suite {
+    let keys: Vec<String> = CONTRACTNLI_KEYS.iter().map(|k| (*k).to_string()).collect();
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(contract), Some(hypothesis), Some(choice)) = (
+            row_str(row, "contract"),
+            row_str(row, "hypothesis"),
+            row_str(row, "choice"),
+        ) else {
+            continue; // malformed row — fails the rule, the row drops
+        };
+        let Some(gold_idx) = keys.iter().position(|k| k == choice) else {
+            panic!(
+                "contractnli: choice {choice:?} (row {pos}) is outside \
+                 CONTRACTNLI_KEYS — the fetched universe drifted from the \
+                 pinned three-label entailment set"
+            );
+        };
+        cases.push(SuiteCase {
+            id: format!("contractnli:{pos}"),
+            state: json!({
+                "contract": contract,
+                "hypothesis": hypothesis,
+            }),
+            questions: vec![choice_q(
+                "inference",
+                "Does the NDA in `contract` entail, contradict, or not mention the \
+                 claim in `hypothesis`?",
+                &keys,
+                None,
+            )],
+            gold: vec![GoldAnswer {
+                idx: gold_idx,
+                soft: vec![0.0; CONTRACTNLI_KEYS.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    // The eval population assert binds the FULL fetched test envelope
+    // (the eval posture loads every pair; `max_rows` is 0 in the eval
+    // path and the prepare pin rests on this). A partial test envelope
+    // (the cal front reads the TRAIN envelope) carries a nonzero cap or
+    // train rows and skips the census — the split column is the eval
+    // discriminator (the ragtruth schema-dispatch law, explicit form).
+    let eval_rows = all
+        .iter()
+        .filter(|r| row_str(r, "split") == Some("test"))
+        .count();
+    if max_rows == 0 && eval_rows == all.len() && eval_rows > 0 {
+        assert_eq!(
+            cases.len(),
+            2_091,
+            "contractnli: the fetched test population drifted from the board's \
+             fields count (123 documents × 17 hypotheses = 2,091 pairs) — a \
+             partial or revised fetch; refetch via scripts/fetch_datasets.sh \
+             and re-pin the manifest digest"
+        );
+    }
+    Suite {
+        name: "contractnli",
+        cases,
+        option_counts_note: "3 fixed entailment options (Contradiction / Entailment / \
+                             NotMentioned, sorted unique upstream choices); one case per \
+                             (document, hypothesis) pair (123 × 17 = 2,091 = the board's \
+                             fields count); the board metric is pair-level macro-F1 (chance \
+                             0.3085 Monte Carlo, analytic 0.30793); corpus-ON (the upstream \
+                             train split is the task's own released training data)",
+    }
+}
+
 /// Issue 114 T4 — the BFCL abstain option, APPENDED LAST on the
 /// irrelevance-tier rows only (the board row's "or irrelevance-detect";
 /// the pick tier never carries it — the official pick eval always has a
@@ -2373,6 +2496,12 @@ pub fn train_row_label(suite: &str, row: &Value) -> Option<String> {
             let any_span = counts.values().any(|v| v.as_i64().is_some_and(|n| n > 0));
             Some(if any_span { "hallucinated" } else { "grounded" }.to_string())
         }
+        // Issue 114 T9: the fetched pair rows carry `choice` already in
+        // the option-KEY spelling (the wanli pattern — the recorded
+        // transform flattened both splits to one schema), so no index
+        // mapping is needed; an unknown string fails the rule and the
+        // row drops, like a malformed label.
+        "contractnli" => row_str(row, "choice").map(str::to_string),
         // Issue 077: the int-ClassLabel choice suites name their engine
         // domains by the OPTION KEY at the class index (content binding —
         // the doc comment on AG_NEWS_KEYS). The class index must be in
@@ -2755,6 +2884,23 @@ pub fn train_docs(train_rows_file: &Value, suite: &str) -> Vec<TrainDoc> {
                 Some(TrainDoc {
                     label: train_row_label(suite, r)?,
                     text: row_str(r, "output")?.to_string(),
+                })
+            })
+            .collect(),
+        // Issue 114 T9: the ContractNLI corpus pool — the corpus text is
+        // the (contract, hypothesis) PAIR (the xnli pair-as-unit shape,
+        // but with the contract FIRST: 17 hypotheses repeat across
+        // documents, so the hypothesis alone cannot carry the signal —
+        // the contract is exactly what flips the label; the ragtruth
+        // response-alone rule does NOT transfer, disclosed in the
+        // builder doc). The per-label caps (40/label) bound the ~10 KB
+        // contracts to ≤120 docs.
+        "contractnli" => rows
+            .iter()
+            .filter_map(|r| {
+                Some(TrainDoc {
+                    label: train_row_label(suite, r)?,
+                    text: format!("{}\n{}", row_str(r, "contract")?, row_str(r, "hypothesis")?),
                 })
             })
             .collect(),
@@ -3881,5 +4027,74 @@ mod finentity_builder_tests {
         ]));
         let env = envelope(vec![doc]);
         let _ = build_finentity(&env, 1);
+    }
+}
+
+// Issue 114 T9: the ContractNLI builder — the (contract, hypothesis)
+// pair cases, the choice-key mapping, and the split-column eval
+// discriminator.
+#[cfg(test)]
+mod contractnli_builder_tests {
+    use super::{CONTRACTNLI_KEYS, build_contractnli};
+
+    fn pair(choice: &str, split: &str) -> serde_json::Value {
+        serde_json::json!({
+            "contract": "All Confidential Information shall be returned upon termination.",
+            "hypothesis": "Confidential information must be returned at the end.",
+            "choice": choice,
+            "split": split,
+        })
+    }
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    #[test]
+    fn contractnli_renders_the_pair_case_with_keys_and_gold() {
+        let env = envelope(vec![
+            pair("Entailment", "test"),
+            pair("NotMentioned", "test"),
+            pair("Contradiction", "test"),
+        ]);
+        let s = build_contractnli(&env, 3); // nonzero cap: the census assert rests
+        assert_eq!(s.name, "contractnli");
+        assert_eq!(s.cases.len(), 3);
+        let keys: Vec<_> = s.cases[0].questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, CONTRACTNLI_KEYS); // sorted unique upstream choices
+        assert_eq!(s.cases[0].gold[0].idx, 1); // Entailment
+        assert_eq!(s.cases[1].gold[0].idx, 2); // NotMentioned
+        assert_eq!(s.cases[2].gold[0].idx, 0); // Contradiction
+        // State = contract + hypothesis verbatim (the recorded transform's
+        // pair shape).
+        assert_eq!(
+            s.cases[0].state["hypothesis"],
+            "Confidential information must be returned at the end."
+        );
+    }
+
+    #[test]
+    fn contractnli_train_rows_build_the_cal_front_without_the_census() {
+        // The train envelope reads through the SAME builder (the corpus-
+        // ON posture): split=train rows never trip the eval census.
+        let env = envelope(vec![
+            pair("Entailment", "train"),
+            pair("Contradiction", "train"),
+        ]);
+        let s = build_contractnli(&env, 0); // full load, but split=train
+        assert_eq!(s.cases.len(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "outside CONTRACTNLI_KEYS")]
+    fn contractnli_refuses_a_drifted_choice_universe() {
+        let env = envelope(vec![pair("Maybe", "test")]);
+        let _ = build_contractnli(&env, 1);
     }
 }

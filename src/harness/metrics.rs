@@ -1104,6 +1104,151 @@ pub fn binary_f1_of(golds: &[usize], preds: &[usize], positive: usize) -> f64 {
     2.0 * tp / 1.0_f64.max(2.0 * tp + fp + fnegative)
 }
 
+/// The wave-2 residue's multilabel scorer (issue 114 T13 — the iSarcasm
+/// track-B envelope): one row per (LABEL, gold, probs) where the label
+/// names which per-case binary question the row answers (the
+/// multi-question envelope carries one binary question per technique;
+/// a case is the set of questions, so a text may carry SEVERAL positive
+/// labels — the multilabel law a single-choice scorer cannot express).
+/// Per label: pool its rows across all cases, pick by the house
+/// first-index argmax ([`argmax_first`]), and read the positive-class
+/// F1 through [`binary_f1_of`] (positive = 1 — the binary questions pin
+/// the positive option at index 1, the ISARCASM_KEYS convention).
+/// `macro_f1` is the sequential mean over the pinned label order
+/// (plain `+=` fold — the float-reduction determinism law). Every
+/// label must carry at least one row: a missing label is fetch drift,
+/// refused loud (a skipped label would silently inflate the macro).
+/// Empty input is `None` (nothing measured, never a fabricated rate).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MultilabelMetrics {
+    /// The label count (the per-case question count — restated so
+    /// results.json carries its own denominator).
+    pub labels: usize,
+    /// Per-label positive-class F1, in the pinned label order.
+    pub per_label_f1: Vec<f64>,
+    /// The sequential mean of `per_label_f1` over the labels.
+    pub macro_f1: f64,
+}
+
+#[must_use]
+pub fn multilabel_f1_metrics(
+    rows: &[(usize, usize, Vec<f64>)],
+    n_labels: usize,
+) -> Option<MultilabelMetrics> {
+    if rows.is_empty() {
+        return None;
+    }
+    assert_eq!(
+        rows.iter().filter(|(l, _, _)| *l >= n_labels).count(),
+        0,
+        "multilabel_f1_metrics: a row names a label past the pinned label \
+         order — the walk would silently index outside the label set"
+    );
+    let mut golds: Vec<Vec<usize>> = vec![Vec::new(); n_labels];
+    let mut preds: Vec<Vec<usize>> = vec![Vec::new(); n_labels];
+    for (label, gold, probs) in rows {
+        assert!(
+            *gold <= 1,
+            "multilabel_f1_metrics: gold {gold} on label {label} — the \
+             per-technique questions are binary, a ≠0/1 gold is fetch drift"
+        );
+        let (pick, _) = argmax_first(probs);
+        golds[*label].push(*gold);
+        preds[*label].push(pick);
+    }
+    let mut per_label_f1 = Vec::with_capacity(n_labels);
+    for label in 0..n_labels {
+        assert!(
+            !golds[label].is_empty(),
+            "multilabel_f1_metrics: label {label} carried no rows — a missing \
+             label is fetch drift and a skipped label would silently inflate \
+             the macro"
+        );
+        per_label_f1.push(binary_f1_of(&golds[label], &preds[label], 1));
+    }
+    let mut macro_sum = 0.0_f64;
+    for f1 in &per_label_f1 {
+        macro_sum += f1;
+    }
+    Some(MultilabelMetrics {
+        labels: n_labels,
+        macro_f1: macro_sum / n_labels as f64,
+        per_label_f1,
+    })
+}
+
+#[cfg(test)]
+mod multilabel_f1_metrics_tests {
+    use super::multilabel_f1_metrics;
+
+    #[test]
+    fn per_label_f1_pools_across_cases_and_macros_the_mean() {
+        // Two labels, three cases. Label 0: golds [1,1,0] preds [1,0,1]
+        // → tp=1 fp=1 fn=1 → F1 = 2/(2+1+1) = 1/2. Label 1:
+        // golds [0,1,1] preds [0,1,0] → tp=1 fp=0 fn=1 → F1 = 2/3.
+        let rows = vec![
+            (0, 1, vec![0.9, 0.1]), // label 0 case 0: pick 1 = gold → tp
+            (1, 0, vec![0.8, 0.2]), // label 1 case 0: pick 0 = gold
+            (0, 1, vec![0.2, 0.8]), // label 0 case 1: pick 0 ≠ gold → fn
+            (1, 1, vec![0.1, 0.9]), // label 1 case 1: pick 1 = gold → tp
+            (0, 0, vec![0.3, 0.7]), // label 0 case 2: pick 1 ≠ gold → fp
+            (1, 1, vec![0.9, 0.1]), // label 1 case 2: pick 0 ≠ gold → fn
+        ];
+        let got = multilabel_f1_metrics(&rows, 2).expect("non-empty");
+        assert_eq!(got.labels, 2);
+        assert!((got.per_label_f1[0] - 0.5).abs() < 1e-12);
+        assert!((got.per_label_f1[1] - 2.0 / 3.0).abs() < 1e-12);
+        assert!((got.macro_f1 - (0.5 + 2.0 / 3.0) / 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn all_negative_predictions_read_a_defined_zero_not_a_nan() {
+        // Label 1 never predicted positive: F1 = 2·0 / max(1, 0+0+2) = 0
+        // (the binary_f1_of denominator floor — the posture a
+        // rare-positive label like the 1-support technique lives in).
+        let rows = vec![
+            (0, 1, vec![0.1, 0.9]),
+            (1, 1, vec![0.9, 0.1]), // pick 0, gold 1 → fn
+            (1, 1, vec![0.8, 0.2]), // pick 0, gold 1 → fn
+        ];
+        let got = multilabel_f1_metrics(&rows, 2).expect("non-empty");
+        assert!((got.per_label_f1[0] - 1.0).abs() < 1e-12);
+        assert!((got.per_label_f1[1] - 0.0).abs() < 1e-12);
+        assert!((got.macro_f1 - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn first_index_ties_pick_the_negative_side_of_a_tied_pair() {
+        // Tied probs → argmax lands on index 0 (the house rule); with the
+        // positive pinned at index 1, a tie reads the NEGATIVE pick.
+        let rows = vec![
+            (0, 0, vec![0.5, 0.5]), // pick 0 = gold
+            (0, 1, vec![0.5, 0.5]), // pick 0 ≠ gold → fn
+        ];
+        let got = multilabel_f1_metrics(&rows, 1).expect("non-empty");
+        assert!((got.per_label_f1[0] - 0.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn empty_input_is_none_never_a_zero() {
+        assert!(multilabel_f1_metrics(&[], 6).is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "carried no rows")]
+    fn a_missing_label_refuses_loud_never_inflates_the_macro() {
+        let rows = vec![(0, 1, vec![0.9, 0.1])];
+        let _ = multilabel_f1_metrics(&rows, 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "past the pinned label order")]
+    fn a_label_index_out_of_range_refuses_loud() {
+        let rows = vec![(7, 1, vec![0.9, 0.1])];
+        let _ = multilabel_f1_metrics(&rows, 2);
+    }
+}
+
 /// Plan 011 §B3 — the JDI chance level for one evaluated slice: the
 /// MAJORITY gold-class share (the no-skill classifier's expected score),
 /// computed from the label distribution ACTUALLY EVALUATED — a stratified

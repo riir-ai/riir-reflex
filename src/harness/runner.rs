@@ -47,9 +47,9 @@ use crate::engine::{
 use crate::harness::families::SynthData;
 use crate::harness::latency::{LatencyExtremes, fmt_p99_cell};
 use crate::harness::metrics::{
-    CalibrationPair, CaseExactMetrics, ConfusionRow, G1Verdict, HardMetrics, brier_of,
-    case_exact_metrics, conformal_naive_floor, confusion_top, ece_of, g1_verdict_of, hard_metrics,
-    score_metrics, soft_metrics, subset_accuracy,
+    CalibrationPair, CaseExactMetrics, ConfusionRow, G1Verdict, HardMetrics, MultilabelMetrics,
+    brier_of, case_exact_metrics, conformal_naive_floor, confusion_top, ece_of, g1_verdict_of,
+    hard_metrics, multilabel_f1_metrics, score_metrics, soft_metrics, subset_accuracy,
 };
 use crate::harness::metrics::{chance_corrected_skill, chance_majority};
 use crate::harness::pair_heads::{
@@ -61,10 +61,10 @@ use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
     SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
     build_bfcl, build_clinc150, build_contractnli, build_emotion, build_emotion_syn,
-    build_finentity, build_hellaswag_jdi, build_home_appliance, build_isarcasmeval,
-    build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_ragtruth,
-    build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5, build_sst5_syn,
-    build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
+    build_finentity, build_hellaswag_jdi, build_home_appliance, build_isarcasm_b,
+    build_isarcasmeval, build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections,
+    build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5,
+    build_sst5_syn, build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
     build_when2call, build_winogrande_jdi, build_xnli_en, stratified_selection_slices,
     stratified_split, train_docs, train_row_label,
 };
@@ -846,6 +846,25 @@ const SUITES: &[SuiteSpec] = &[
         synthetic: None,
         modelless_lane: true,
     },
+    // Issue 114 T13: the track-B multilabel envelope (extension suite —
+    // the board does not score track B; the corpus-optional posture — the
+    // modelless router binds ONE domain per input and the case needs six
+    // per-technique reads, so the fake lane is refused, issue 114 T3).
+    // Shares isarcasmeval's dataset dir; the eval split is the fetched
+    // `test_b` transform of the same pinned sha.
+    SuiteSpec {
+        name: "isarcasm_b",
+        dataset_dir: "isarcasmeval",
+        test_cap: 0,
+        cal_cap: 0, // corpus-optional: no train pool is consulted (asserted in prepare)
+        corpus_cap_per_label: 0,
+        eval_split: "test_b",
+        named_only: true,
+        coverage_audit: false,
+        build: build_isarcasm_b,
+        synthetic: None,
+        modelless_lane: false,
+    },
     // Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer
     // (board row 9, the home-appliance simulator; MIT, board-generated —
     // the fetch lane regenerates the rows with the board's own generator
@@ -985,6 +1004,61 @@ pub(crate) fn case_exact_of(
         .flat_map(|c| c.as_ref().questions.iter().map(question_option_count))
         .collect();
     case_exact_metrics(forced, &per_case, &per_q_k)
+}
+
+/// The multilabel arm list (issue 114 T13): the suites whose metric is
+/// the per-label positive-class F1 pooled across cases (the track-B
+/// envelope). A suite joins by appending its registry name here in the
+/// same commit its spec lands — the CASE_EXACT_SUITES law.
+const MULTILABEL_SUITES: &[&str] = &["isarcasm_b"];
+
+/// The multilabel metrics for one lane's eval, or None off the arm list
+/// (`MULTILABEL_SUITES`). One home for the label walk BOTH lanes share
+/// (the modelless assembly and the laya assembler); the forced rows are
+/// the caller's — they are lane-shaped. The label index of a forced row
+/// is its POSITION WITHIN its case's question list (the builders emit
+/// one binary question per label in the pinned order), so the walk
+/// asserts the uniform per-case question grid the envelope contract is —
+/// a ragged grid would silently mislabel rows and the walk refuses
+/// loud instead.
+pub(crate) fn multilabel_f1_of(
+    suite_name: &str,
+    forced: &[(usize, Vec<f64>)],
+    cases: &[impl AsRef<SuiteCase>],
+) -> Option<MultilabelMetrics> {
+    if !MULTILABEL_SUITES.contains(&suite_name) {
+        return None;
+    }
+    let per_case: Vec<usize> = cases.iter().map(|c| c.as_ref().questions.len()).collect();
+    if per_case.is_empty() {
+        return None;
+    }
+    let grid = per_case[0];
+    assert!(
+        grid > 0 && per_case.iter().all(|&n| n == grid),
+        "multilabel_f1_of: the per-case question grid is ragged ({per_case:?}) — \
+         the multilabel envelope contract is one binary question per label \
+         in the pinned order on EVERY case; a ragged grid would silently \
+         mislabel the label walk"
+    );
+    assert_eq!(
+        per_case.iter().sum::<usize>(),
+        forced.len(),
+        "multilabel_f1_of: the case grids sum to {} but {} forced rows were \
+         handed over — the walk would silently mis-align",
+        per_case.iter().sum::<usize>(),
+        forced.len()
+    );
+    let mut rows: Vec<(usize, usize, Vec<f64>)> = Vec::with_capacity(forced.len());
+    let mut cursor = 0usize;
+    for &nq in &per_case {
+        for q in 0..nq {
+            let (gold, probs) = &forced[cursor];
+            rows.push((q, *gold, probs.clone()));
+            cursor += 1;
+        }
+    }
+    multilabel_f1_metrics(&rows, grid)
 }
 
 // ── RETIRED (owner call, 2026-10-11): the code_fixtures builders
@@ -1284,6 +1358,13 @@ pub struct LaneResult {
     /// law).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub case_exact: Option<CaseExactMetrics>,
+    /// Issue 114 T13 — the multilabel per-label-F1 scorer, for the suites
+    /// whose metric is per-label positive-class F1 pooled across cases
+    /// (the track-B envelope; [`MULTILABEL_SUITES`] is the arm list). The
+    /// board does not score track B — this is the extension suite's own
+    /// readout. None on every other suite (the leak-field wire law).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub multilabel: Option<MultilabelMetrics>,
     /// Issue 039 T4: the confidence-readout CANDIDATE table on the cal
     /// slice — REPORT-ONLY (the arming lever was demoted at Bench 052; the
     /// shipped Dispatch law runs everywhere). None = thin cal.
@@ -4307,6 +4388,8 @@ fn run_modelless<const N: usize>(
     let jdi_skill = chance_corrected_skill(hard.accuracy, jdi_chance);
     // Issue 114 T11: the case-exact scorer, on the arm-list suites only.
     let case_exact = case_exact_of(spec.name, &forced, &suite.cases);
+    // Issue 114 T13: the multilabel scorer, on the arm-list suites only.
+    let multilabel = multilabel_f1_of(spec.name, &forced, &suite.cases);
     // Issue 024 T3: the same walk restricted to the unflagged cases. None
     // (feature off / out of scope) stays an absence in results.json.
     let acc_deleaked = inp.leak_flags.and_then(|keep| {
@@ -4530,6 +4613,7 @@ fn run_modelless<const N: usize>(
             jdi_chance: Some(jdi_chance),
             jdi_skill: Some(jdi_skill),
             case_exact,
+            multilabel,
             readout_report,
             corpus_fallbacks,
             latency_extremes: lat.extremes,
@@ -4904,6 +4988,25 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             // this order).
             "contractnli" => Some(CONTRACTNLI_KEYS.to_vec()),
             "isarcasmeval" => Some(ISARCASM_KEYS.to_vec()),
+            // Issue 114 T13: the track-B union — the per-technique binary
+            // pairs (negative at 0, positive at 1) over the pinned header
+            // order; the builder emits them in exactly this order, so the
+            // union IS this literal (an exact-membership pin like its
+            // siblings, keeping the metric-convention order loud).
+            "isarcasm_b" => Some(vec![
+                "not sarcasm",
+                "sarcasm",
+                "not irony",
+                "irony",
+                "not satire",
+                "satire",
+                "not understatement",
+                "understatement",
+                "not overstatement",
+                "overstatement",
+                "not rhetorical_question",
+                "rhetorical_question",
+            ]),
             "prompt_injections" => Some(vec!["0", "1"]),
             _ => None,
         };

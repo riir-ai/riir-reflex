@@ -970,6 +970,160 @@ pub fn build_isarcasmeval(rows_file: &Value, max_rows: usize) -> Suite {
     }
 }
 
+/// Issue 114 T13 — the iSarcasmEval track-B technique universe: the six
+/// upstream CSV columns in the FILE'S OWN HEADER ORDER (mechanical-from-
+/// fetched — never re-sorted; the builder's question order and the
+/// multilabel scorer's label order both key THIS order).
+pub(crate) const ISARCASM_B_LABELS: [&str; 6] = [
+    "sarcasm",
+    "irony",
+    "satire",
+    "understatement",
+    "overstatement",
+    "rhetorical_question",
+];
+
+/// Issue 114 T13 — the iSarcasmEval track-B envelope suite (the wave-2
+/// residue's multilabel machinery consumer; the board does NOT score
+/// track B — board row 40's index metric is track-A sarcastic F1, already
+/// landed as `isarcasmeval` — so this suite is an EXTENSION suite in the
+/// home_appliance posture: corpus-optional, laya-only).
+///
+/// THE WIRE: one case per technique-CARRYING test tweet (the upstream
+/// task_B_En_test.csv's 200 rows that carry ≥1 of the six technique
+/// columns — verified against the file's full census at the landing;
+/// the 1,200 all-zero rows are the track-A negative population, DROPPED
+/// COUNTED — scoring them would dilute every per-label F1 with 1,200
+/// trivial negatives and the empty-gold multilabel case is degenerate).
+/// Each case carries SIX binary questions, one per technique in the
+/// header order, with the positive option PINNED at index 1 (the
+/// ISARCASM_KEYS/RAGTRUTH_KEYS convention `positive_f1` and the
+/// multilabel scorer read) — the pair order is the METRIC convention,
+/// deliberately not the sort order ("not X" vs "X" sorts inconsistently
+/// across the six spellings). A text carrying SEVERAL techniques is the
+/// point: 70 of the 200 carriers have >1 positive gold, which a
+/// single-choice question cannot express — the multi-question envelope
+/// (proven by home_appliance) is the multilabel law here.
+///
+/// THE METRIC: per-label positive-class F1 pooled across cases, then the
+/// macro over the six labels — [`crate::harness::metrics::
+/// multilabel_f1_metrics`], armed by the runner's `multilabel_f1_of`
+/// seam for this suite (`MULTILABEL_SUITES`). The modelless lane has no
+/// lawful signal on this suite: the router binds ONE domain per input
+/// while the case needs six per-technique reads — corpus-optional (the
+/// T3 declared-inability posture) refuses the fake lane instead of
+/// shipping a fabricated number.
+#[must_use]
+pub fn build_isarcasm_b(rows_file: &Value, max_rows: usize) -> Suite {
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    let mut dropped_no_technique = 0usize;
+    let mut label_support = [0usize; ISARCASM_B_LABELS.len()];
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let Some(text) = row_str(row, "text") else {
+            continue; // malformed row — fails the rule, the row drops
+        };
+        let mut golds = [0usize; ISARCASM_B_LABELS.len()];
+        let mut any = false;
+        for (i, label) in ISARCASM_B_LABELS.iter().enumerate() {
+            match row_str(row, label) {
+                Some("0") => {}
+                Some("1") => {
+                    golds[i] = 1;
+                    any = true;
+                }
+                other => panic!(
+                    "isarcasm_b: technique column {label} carries {other:?} (row {pos}) — \
+                     the fetched track-B universe drifted from the pinned 0/1 columns",
+                ),
+            }
+        }
+        if !any {
+            dropped_no_technique += 1;
+            continue; // the track-A negative population — dropped counted
+        }
+        let questions: Vec<SuiteQuestion> = ISARCASM_B_LABELS
+            .iter()
+            .map(|label| {
+                choice_q(
+                    label,
+                    &format!("Does the tweet in `tweet` use {label} as its sarcasm technique?"),
+                    &["not ".to_string() + label, (*label).to_string()],
+                    None,
+                )
+            })
+            .collect();
+        for (i, &g) in golds.iter().enumerate() {
+            label_support[i] += g;
+        }
+        cases.push(SuiteCase {
+            id: format!("isarcasm_b:{pos}"),
+            state: json!({
+                "tweet": text,
+            }),
+            questions,
+            gold: golds
+                .iter()
+                .map(|&idx| GoldAnswer {
+                    idx,
+                    soft: vec![0.0; 2],
+                    gold_score: None,
+                })
+                .collect(),
+        });
+    }
+    // The population pin binds the FULL fetched test_b envelope (the eval
+    // posture loads every row; `max_rows` is 0 there). A partial envelope
+    // (a builder test) skips the census — the same contractnli form.
+    let eval_rows = all
+        .iter()
+        .filter(|r| row_str(r, "split") == Some("test_b"))
+        .count();
+    if max_rows == 0 && eval_rows == all.len() && eval_rows > 0 {
+        assert_eq!(
+            cases.len(),
+            200,
+            "isarcasm_b: the fetched track-B technique-carrying population drifted \
+             from the pinned census (200 carriers of the 1,400 test tweets — \
+             the track-A sarcastic population with 20 irony-only carriers; \
+             70 of the 200 carry >1 technique) — a partial or revised fetch; \
+             refetch via scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+        assert_eq!(
+            dropped_no_technique, 1_200,
+            "isarcasm_b: the all-zero-technique population drifted from the \
+             pinned 1,200 (the track-A negatives) — the carrier filter is \
+             not reading the fetched columns"
+        );
+        let expected_support = [180usize, 20, 49, 1, 10, 11];
+        assert_eq!(
+            label_support, expected_support,
+            "isarcasm_b: the per-technique support drifted from the pinned \
+             census {expected_support:?} (sarcasm/irony/satire/understatement/\
+             overstatement/rhetorical_question) — the fetched track-B \
+             universe is not the pinned file"
+        );
+    }
+    Suite {
+        name: "isarcasm_b",
+        cases,
+        option_counts_note: "2 options per question (negative at 0, positive at 1 — the \
+                             metric convention, deliberately not sort order), SIX questions \
+                             per case (one per technique in the upstream header order: \
+                             sarcasm/irony/satire/understatement/overstatement/\
+                             rhetorical_question); one case per technique-carrying test \
+                             tweet (200 of the 1,400 — the track-A sarcastic population \
+                             with 20 irony-only carriers; 70 carriers hold >1 technique, \
+                             which the multi-question envelope expresses and a single-choice \
+                             question cannot); the 1,200 all-zero rows drop counted; the \
+                             metric is per-label positive F1 pooled across cases, macro over \
+                             the six labels (multilabel_f1_metrics); corpus-optional — the \
+                             modelless router binds ONE domain per input, the case needs six \
+                             per-technique reads, so the fake lane is refused (issue 114 T3 \
+                             posture)",
+    }
+}
+
 /// Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer (board
 /// row 9, the home-appliance simulator; MIT, board-generated, seed
 /// 2026091807). One case per kept household request (88 — the release-v2.1
@@ -4458,6 +4612,96 @@ mod isarcasmeval_builder_tests {
     fn isarcasmeval_refuses_a_drifted_label_universe() {
         let env = envelope(vec![a_row("x", "2", "test")]);
         let _ = build_isarcasmeval(&env, 1);
+    }
+}
+
+// ── Issue 114 T13: the isarcasm_b builder tests ────────────────────────────
+#[cfg(test)]
+mod isarcasm_b_builder_tests {
+    use super::{ISARCASM_B_LABELS, build_isarcasm_b};
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().enumerate().map(|(i, r)| serde_json::json!({"row_idx": i, "row": r})).collect::<Vec<_>>() })
+    }
+
+    // A track-B row: text + the six 0/1 technique columns in the header
+    // order (sarcasm, irony, satire, understatement, overstatement,
+    // rhetorical_question) + the split tag.
+    fn b_row(text: &str, techniques: &[usize]) -> serde_json::Value {
+        let cols = [
+            "sarcasm",
+            "irony",
+            "satire",
+            "understatement",
+            "overstatement",
+            "rhetorical_question",
+        ];
+        let mut row = serde_json::Map::new();
+        row.insert("text".into(), serde_json::json!(text));
+        for (i, c) in cols.iter().enumerate() {
+            // The recorded transform writes the CSV's own 0/1 STRINGS
+            // (the _csv_a_rows convention row_str reads).
+            row.insert(
+                (*c).into(),
+                serde_json::json!(if techniques.contains(&i) { "1" } else { "0" }),
+            );
+        }
+        row.insert("split".into(), serde_json::json!("test_b"));
+        serde_json::Value::Object(row)
+    }
+
+    #[test]
+    fn isarcasm_b_renders_six_binary_questions_with_positive_at_index_one() {
+        // One multi-technique carrier (sarcasm + irony): six questions in
+        // the header order, gold 1 exactly on the carried techniques.
+        let env = envelope(vec![b_row("Oh GREAT.", &[0, 1])]);
+        let s = build_isarcasm_b(&env, 1); // nonzero cap: the census asserts rest
+        assert_eq!(s.name, "isarcasm_b");
+        assert_eq!(s.cases.len(), 1);
+        assert_eq!(s.cases[0].questions.len(), 6);
+        assert_eq!(s.cases[0].gold.len(), 6);
+        let qids: Vec<&str> = s.cases[0]
+            .questions
+            .iter()
+            .map(|q| q.qid.as_str())
+            .collect();
+        assert_eq!(qids, ISARCASM_B_LABELS); // the upstream header order, pinned
+        for (i, q) in s.cases[0].questions.iter().enumerate() {
+            let keys: Vec<String> = q
+                .criteria
+                .as_object()
+                .expect("choice criteria")
+                .keys()
+                .cloned()
+                .collect();
+            let positive = ISARCASM_B_LABELS[i];
+            assert_eq!(keys, [format!("not {positive}"), positive.to_string()]);
+            // Positive option pinned at index 1 (the metric convention).
+            assert_eq!(s.cases[0].gold[i].idx, usize::from(i < 2));
+        }
+    }
+
+    #[test]
+    fn isarcasm_b_drops_the_all_zero_rows_counted() {
+        // A NON-eval split tag (the isarcasmeval cal-front escape) keeps the
+        // full-load census off this tiny fixture; the census itself is the
+        // real eval posture's guard.
+        let mut zero = b_row("plain news", &[]); // the track-A negative shape
+        let mut carrier = b_row("so funny", &[3]); // a carrier (understatement)
+        zero["split"] = serde_json::json!("cal");
+        carrier["split"] = serde_json::json!("cal");
+        let s = build_isarcasm_b(&envelope(vec![zero, carrier]), 0);
+        assert_eq!(s.cases.len(), 1); // the all-zero row dropped
+        assert_eq!(s.cases[0].gold[3].idx, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the pinned 0/1 columns")]
+    fn isarcasm_b_refuses_a_drifted_technique_column() {
+        let mut r = b_row("x", &[]);
+        r["irony"] = serde_json::json!("maybe");
+        let env = envelope(vec![r]);
+        let _ = build_isarcasm_b(&env, 1);
     }
 }
 

@@ -886,6 +886,57 @@ print(f"rows={len(rows)}")
 PYEOF
 }
 
+# _csv_b_rows <in-csv> <out-json> <split>
+#   The iSarcasmEval track-B recorded transform (issue 114 T13): the
+#   task-B CSV — text + the six 0/1 technique columns (sarcasm, irony,
+#   satire, understatement, overstatement, rhetorical_question) —
+#   projects to row dicts carrying the text, all six columns AS STRINGS
+#   (the _csv_a_rows convention row_str reads), and the split tag. ALL
+#   1,400 rows go through faithfully: the all-zero technique rows are
+#   the track-A negative population and the BUILDER's carrier filter
+#   drops them counted at the pinned census — the fetch stays
+#   mechanical-from-fetched, never pre-filtered.
+_csv_b_rows() {
+    in=$1; out=$2; split=$3
+    if [ -z "$PY3" ]; then
+        if have python3 && python3 -c pass >/dev/null 2>&1; then
+            PY3="python3"
+        elif have py && py -3 -c pass >/dev/null 2>&1; then
+            PY3="py -3"
+        fi
+    fi
+    if [ -z "$PY3" ]; then
+        log "  FAIL   csv b-rows (no working python3 — the isarcasm_b lane cannot convert)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    $PY3 - "$in" "$out" "$split" <<'PYEOF'
+import csv, json, sys
+src, dst, split = sys.argv[1], sys.argv[2], sys.argv[3]
+TECHNIQUES = ["sarcasm", "irony", "satire", "understatement",
+              "overstatement", "rhetorical_question"]
+with open(src, encoding="utf-8", newline="") as f:
+    reader = csv.DictReader(f)
+    rows = []
+    for r in reader:
+        text = (r.get("text") or "").strip()
+        if not text:
+            continue
+        row = {"text": text}
+        for c in TECHNIQUES:
+            v = (r.get(c) or "").strip()
+            if v not in ("0", "1"):
+                print(f"bad technique column {c}={v!r}", file=sys.stderr)
+                sys.exit(1)
+            row[c] = v
+        row["split"] = split
+        rows.append({"row": row})
+with open(dst, "w", encoding="utf-8") as f:
+    json.dump({"rows": rows}, f, ensure_ascii=False)
+print(f"rows={len(rows)}")
+PYEOF
+}
+
 # fetch_isarcasmeval <suite> <owner_repo> <sha>
 #   The iSarcasmEval fetch (issue 114 T10): the task-A English CSVs at the
 #   board's pinned sha via the GitHub raw lane (the hub /resolve does not
@@ -896,12 +947,21 @@ PYEOF
 #   the B/C/Arabic tracks are the recorded re-opens (issue 114 T10; the
 #   triage's English-first posture decision, never a silent drop). Each
 #   envelope is idempotent (skip on a valid cached page, FORCE refetches).
+#   Issue 114 T13: the lane ALSO takes the track-B test file
+#   (test/task_B_En_test.csv → the `test_b` split, the multilabel
+#   technique columns; the same pinned sha the T10 MIT read covers) when
+#   the caller names isarcasm_b — the B/C/Arabic re-open note narrows:
+#   track B is LANED, C/Arabic stay the recorded re-opens.
 fetch_isarcasmeval() {
     suite=$1; owner_repo=$2; sha=$3
     dir="$OUT/$suite"
     mkdir -p "$dir"
-    for spec in "test:test/task_A_En_test.csv" "train:train/train.En.csv"; do
-        split=${spec%%:*}; path=${spec#*:}
+    for spec in "test:test/task_A_En_test.csv" "train:train/train.En.csv" \
+                "test_b:test/task_B_En_test.csv:_csv_b_rows"; do
+        split=${spec%%:*}; rest=${spec#*:}
+        path=${rest%%:*}
+        transform=${rest#*:}
+        [ "$transform" = "$path" ] && transform=_csv_a_rows
         file="$dir/$split-000.json"
         if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
             n=$(rows_count "$file" 2>/dev/null || echo 0)
@@ -924,7 +984,7 @@ fetch_isarcasmeval() {
             FAILED=$((FAILED + 1))
             continue
         fi
-        if _csv_a_rows "$raw" "$file.tmp" "$split"; then
+        if "$transform" "$raw" "$file.tmp" "$split"; then
             rm -f "$raw"
             n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
             mv "$file.tmp" "$file"
@@ -1583,6 +1643,16 @@ main() {
     # recorded re-opens).
     if want_suite isarcasmeval; then
         log "[suite] isarcasmeval — track-A English CSVs at the board's pinned sha (the recorded transform)"
+        fetch_isarcasmeval isarcasmeval "iabufarha/iSarcasmEval" "dfc708b53bde1bb571abfb5692f63231c2232195"
+    fi
+
+    # Issue 114 T13 (the wave-2 residue): the track-B multilabel envelope —
+    # the SAME pinned sha (the T10 MIT read covers the whole repo tree;
+    # test/task_B_En_test.csv rides it), the SAME shared isarcasmeval
+    # dataset dir. The fetch lane takes the test_b split alongside the
+    # track-A files (idempotent skips on the cached pages).
+    if want_suite isarcasm_b; then
+        log "[suite] isarcasm_b — the track-B technique CSV at the same pinned sha (the T10 MIT read covers; the T13 multilabel envelope)"
         fetch_isarcasmeval isarcasmeval "iabufarha/iSarcasmEval" "dfc708b53bde1bb571abfb5692f63231c2232195"
     fi
 

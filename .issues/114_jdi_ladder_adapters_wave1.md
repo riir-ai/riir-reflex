@@ -64,6 +64,8 @@ Wave-3 verdict summary: **five scoreable on existing machinery** (ContractNLI, F
 
 Why wave 3 and never forced: same law as wave 2's section — the triage is a shape verdict ONLY. The five scoreable rows ride the banking77 recipe (fetch stanza → manifest digest + licence row → builder keyed on the track's real columns); the two partial rows wait on wave-2's scorers. Nothing here claims numbers.
 
+**T8 ordering note (the same day's licence probe, 2026-11-12, zed-continuation):** the first probe of the wave-3 residue FLIPPED the order — **ContractNLI's licence is CONFLICTED**: the canonical mirror `kiddothe2b/contract-nli` (1.3k downloads, the Koreeda & Manning EMNLI-2021 citation) tags **cc-by-nc-sa-4.0** (NC + ShareAlike) while the mteb/legalbench subset rows tag cc-by-4.0 (the legalbench CURATION's licence, not the corpus's own). UNDECIDED fail-closed pending an upstream-authoritative read (the theainswer/contract-nli GitHub README / the authors' statement) — the StartLux precedent (issue 095, DECLARED-NC RESTRICTED) binds any NC verdict. **The next suite is therefore FinEntity, VAST, or NLI4CT — whichever probe passes first** (all three: shape-clean choice rows; licence probes still owed). RAGTruth is DONE (T7). ACOS + iSarcasmEval stay behind wave-2's scorers.
+
 ## The adapter recipe (exactly what banking77 got — no new machinery invented)
 
 1. **`scripts/fetch_datasets.sh` stanza** — the `want_suite`/`fetch_suite`/

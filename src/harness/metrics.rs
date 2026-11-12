@@ -819,6 +819,223 @@ mod case_exact_metrics_tests {
     }
 }
 
+/// One retrieval case for [`ndcg_at_10_metrics`]: the candidate documents
+/// of one query, each as (`doc_id`, relevance gain, model score). The
+/// gains are the pinned relevance ladder's levels (0 = non-relevant);
+/// the score is whatever the lane produced (probability, similarity —
+/// the scorer only RANKS by it, never reads its scale).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct NdcgCase {
+    pub docs: Vec<(usize, u32, f64)>,
+}
+
+/// The board's retrieval scorer (`scoring/index.py` `score_query` +
+/// `random_ndcg_baseline`, ported — the wave-2 machinery item for the
+/// BRIGHT/ToolRet rows): documents are ranked by (score desc, doc_id
+/// asc) — the board's (-p, id) key, the identity order as the
+/// deterministic tie-break; DCG@10 folds the graded gain 2^g−1 over the
+/// discount 1/log2(rank+2) for the top 10 ranked docs; IDCG is the same
+/// fold over the gains sorted descending (also truncated at 10).
+/// `ndcg_at_10` is the mean over the ANSWERABLE cases — a case whose
+/// every gain is 0 has `idcg == 0` and is SKIPPED (the board's
+/// answerable-queries filter, ≥1 relevant of the candidates), counted
+/// in `skipped_zero_positive`, never folded as a fabricated 0.0.
+/// `random_baseline` is the board's CLOSED FORM for a uniform random
+/// permutation: E[gain at any rank] = mean gain over all n docs, so
+/// E[DCG@10] = mean_gain · Σ_{i<min(10,n)} 1/log2(i+2), divided by the
+/// case's IDCG (per the §B3 re-derivation law — the board's pinned
+/// chance values stay reference columns). Empty input or zero
+/// answerable cases is `None` (nothing measured, never a rate).
+/// NO lane seam carries this yet: the seam lands WITH a servable
+/// consumer — the BRIGHT lane verdict (Bench 186) found the current
+/// laya wire starves full-text candidates at the 512-token budget, so
+/// a seam without a lane would be a green-zero.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct NdcgMetrics {
+    /// Answerable cases scored (the mean's denominator, restated).
+    pub cases: usize,
+    /// Mean nDCG@10 over the answerable cases.
+    pub ndcg_at_10: f64,
+    /// Mean closed-form random-ranking nDCG@10 over the same cases —
+    /// the scorer's chance column.
+    pub random_baseline: f64,
+    /// Cases skipped for carrying no positive document (empty or
+    /// all-zero gains — the answerable filter's skip-and-count).
+    pub skipped_zero_positive: usize,
+}
+
+#[must_use]
+pub fn ndcg_at_10_metrics(cases: &[NdcgCase]) -> Option<NdcgMetrics> {
+    if cases.is_empty() {
+        return None;
+    }
+    let (mut ndcg_sum, mut baseline_sum) = (0.0_f64, 0.0_f64);
+    let (mut scored, mut skipped) = (0usize, 0usize);
+    for case in cases {
+        if case.docs.iter().all(|d| d.1 == 0) {
+            skipped += 1;
+            continue;
+        }
+        let (ndcg, baseline) = ndcg_case_of(&case.docs);
+        ndcg_sum += ndcg;
+        baseline_sum += baseline;
+        scored += 1;
+    }
+    if scored == 0 {
+        return None;
+    }
+    Some(NdcgMetrics {
+        cases: scored,
+        ndcg_at_10: ndcg_sum / scored as f64,
+        random_baseline: baseline_sum / scored as f64,
+        skipped_zero_positive: skipped,
+    })
+}
+
+/// One answerable case's (nDCG@10, random baseline). The idcg==0 arm is
+/// defensive (0.0 by definition) — the aggregate skips those cases
+/// before calling, so it never reaches a mean.
+fn ndcg_case_of(docs: &[(usize, u32, f64)]) -> (f64, f64) {
+    let mut ranked: Vec<&(usize, u32, f64)> = docs.iter().collect();
+    ranked.sort_by(|a, b| b.2.total_cmp(&a.2).then(a.0.cmp(&b.0)));
+    let mut dcg = 0.0_f64;
+    for (rank, (_, gain, _)) in ranked.iter().take(10).enumerate() {
+        dcg += dcg_gain(*gain) / log2_rank(rank);
+    }
+    let mut gains: Vec<u32> = docs.iter().map(|d| d.1).collect();
+    gains.sort_unstable_by(|a, b| b.cmp(a));
+    let mut idcg = 0.0_f64;
+    for (rank, gain) in gains.iter().take(10).enumerate() {
+        idcg += dcg_gain(*gain) / log2_rank(rank);
+    }
+    if idcg == 0.0 {
+        return (0.0, 0.0);
+    }
+    let mean_gain = gains.iter().sum::<u32>() as f64 / docs.len() as f64;
+    let mut random_dcg = 0.0_f64;
+    for rank in 0..docs.len().min(10) {
+        random_dcg += 1.0 / log2_rank(rank);
+    }
+    (dcg / idcg, mean_gain * random_dcg / idcg)
+}
+
+/// The graded DCG gain 2^g − 1 (binary gains are the g ∈ {0,1} case).
+fn dcg_gain(gain: u32) -> f64 {
+    2.0_f64.powi(gain as i32) - 1.0
+}
+
+/// The DCG discount 1/log2(rank + 2): rank 0 (the ideal position) gets
+/// the full 1.0.
+fn log2_rank(rank: usize) -> f64 {
+    (rank as f64 + 2.0).log2()
+}
+
+#[cfg(test)]
+mod ndcg_at_10_metrics_tests {
+    use super::{NdcgCase, ndcg_at_10_metrics};
+
+    // The discount constants, spelled as the hand derivation (not via
+    // the impl's helpers) so the tests stay independent of the code
+    // they pin.
+    fn d3() -> f64 {
+        1.0 / 3.0_f64.log2()
+    }
+
+    #[test]
+    fn perfect_ranking_is_one_and_the_baseline_sits_below_it() {
+        // Two relevant docs ranked first, one non-relevant last →
+        // nDCG exactly 1.0. Baseline = (2/3)·(1 + d3 + 1/2)/(1 + d3):
+        // the mean gain 2/3 times the full random-drawing discount
+        // sum, over the ideal DCG (the zero-gain tail contributes 0).
+        let case = NdcgCase {
+            docs: vec![(0, 1, 0.9), (1, 1, 0.8), (2, 0, 0.1)],
+        };
+        let got = ndcg_at_10_metrics(&[case]).expect("answerable");
+        assert_eq!(got.cases, 1);
+        assert_eq!(got.skipped_zero_positive, 0);
+        assert!((got.ndcg_at_10 - 1.0).abs() < 1e-12);
+        let expected = (2.0 / 3.0) * (1.0 + d3() + 0.5) / (1.0 + d3());
+        assert!((got.random_baseline - expected).abs() < 1e-12);
+        assert!(got.random_baseline < got.ndcg_at_10);
+    }
+
+    #[test]
+    fn inverted_ranking_scores_below_the_random_baseline() {
+        // The non-relevant doc ranked first: DCG = 0 + d3 + 1/2, so the
+        // nDCG lands BELOW the random baseline (the model did worse than
+        // chance — the disclosure a fabricated floor would hide). The
+        // baseline itself is score-independent (gains + n only).
+        let case = NdcgCase {
+            docs: vec![(0, 1, 0.1), (1, 1, 0.2), (2, 0, 0.9)],
+        };
+        let got = ndcg_at_10_metrics(&[case]).expect("answerable");
+        let expected = (d3() + 0.5) / (1.0 + d3());
+        assert!((got.ndcg_at_10 - expected).abs() < 1e-12);
+        let baseline = (2.0 / 3.0) * (1.0 + d3() + 0.5) / (1.0 + d3());
+        assert!((got.random_baseline - baseline).abs() < 1e-12);
+        assert!(got.ndcg_at_10 < got.random_baseline);
+    }
+
+    #[test]
+    fn score_ties_break_by_ascending_doc_id_not_input_order() {
+        // Equal scores: the (-p, id) key puts the LOWEST id first. Doc 0
+        // relevant → perfect (1.0); the same tie with the relevant doc
+        // at id 1 → the non-relevant doc 0 leads, nDCG = d3. Input order
+        // must not matter — only the identity order does.
+        let a = NdcgCase {
+            docs: vec![(0, 1, 0.5), (1, 0, 0.5)],
+        };
+        let got = ndcg_at_10_metrics(&[a]).expect("answerable");
+        assert!((got.ndcg_at_10 - 1.0).abs() < 1e-12);
+
+        let b = NdcgCase {
+            docs: vec![(1, 1, 0.5), (0, 0, 0.5)],
+        };
+        let got = ndcg_at_10_metrics(&[b]).expect("answerable");
+        assert!((got.ndcg_at_10 - d3()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn truncation_at_ten_holds_for_dcg_idcg_and_the_baseline_sum() {
+        // 12 relevant docs, all tied → ranked by id, so ranks 0..9 score;
+        // ranks 10..11 fall outside @10. DCG == IDCG (the top-10 truncation
+        // on both) → nDCG 1.0; baseline = 1.0 · Σ_{i<10} disc / IDCG = 1.0
+        // (the min(10, n) arm with n = 12 > 10).
+        let case = NdcgCase {
+            docs: (0..12).map(|i| (i, 1, 0.5)).collect(),
+        };
+        let got = ndcg_at_10_metrics(&[case]).expect("answerable");
+        assert!((got.ndcg_at_10 - 1.0).abs() < 1e-12);
+        assert!((got.random_baseline - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn unanswerable_cases_are_skipped_and_counted_never_folded() {
+        // Case 0 carries no positive → skipped + counted; the mean is
+        // over case 1 alone. A perfect ranking in case 1 → nDCG 1.0,
+        // and the baseline is case 1's alone.
+        let dead = NdcgCase {
+            docs: vec![(0, 0, 0.9), (1, 0, 0.1)],
+        };
+        let live = NdcgCase {
+            docs: vec![(0, 1, 0.9), (1, 0, 0.1)],
+        };
+        let got = ndcg_at_10_metrics(&[dead, live]).expect("one answerable");
+        assert_eq!(got.cases, 1);
+        assert_eq!(got.skipped_zero_positive, 1);
+        assert!((got.ndcg_at_10 - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn empty_input_and_all_unanswerable_are_none_never_a_zero() {
+        assert!(ndcg_at_10_metrics(&[]).is_none());
+        let dead = NdcgCase {
+            docs: vec![(0, 0, 0.9), (1, 0, 0.1)],
+        };
+        assert!(ndcg_at_10_metrics(&[dead]).is_none());
+    }
+}
+
 /// Plan 011 C2 — the macro-F1 law over `(gold, pick)` index vectors, the
 /// ONE home of the computation `hard_metrics` uses (§5.1: classes =
 /// sorted(set(gold) | set(pred)); F1_c = 2tp / max(1, 2tp+fp+fn); the mean

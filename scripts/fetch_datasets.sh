@@ -845,6 +845,99 @@ fetch_contractnli_pairs() {
     # needs no second download).
 }
 
+# _csv_a_rows <in-csv> <out-json> <split>
+#   The iSarcasmEval recorded transform (issue 114 T10): the task-A CSV
+#   (test: `text,sarcastic`; train: unnamed-index,tweet,sarcastic,rephrase,
+#   +6 category columns) projects to row dicts {text, sarcastic, split} —
+#   the A-track binary pair only (the sarcastic/rephrase columns; the
+#   category columns are track B's annotations, out of this suite's
+#   scope). Emits the {"rows": [...]} envelope directly (python3-only —
+#   a real CSV program: tweets carry embedded commas/newlines, so naive
+#   splitting is wrong).
+_csv_a_rows() {
+    in=$1; out=$2; split=$3
+    if [ -z "$PY3" ]; then
+        if have python3 && python3 -c pass >/dev/null 2>&1; then
+            PY3="python3"
+        elif have py && py -3 -c pass >/dev/null 2>&1; then
+            PY3="py -3"
+        fi
+    fi
+    if [ -z "$PY3" ]; then
+        log "  FAIL   csv a-rows (no working python3 — the isarcasmeval lane cannot convert)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    $PY3 - "$in" "$out" "$split" <<'PYEOF'
+import csv, json, sys
+src, dst, split = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(src, encoding="utf-8", newline="") as f:
+    reader = csv.DictReader(f)
+    rows = []
+    for r in reader:
+        text = (r.get("text") or r.get("tweet") or "").strip()
+        label = (r.get("sarcastic") or "").strip()
+        if not text or label not in ("0", "1"):
+            continue
+        rows.append({"row": {"text": text, "sarcastic": label, "split": split}})
+with open(dst, "w", encoding="utf-8") as f:
+    json.dump({"rows": rows}, f, ensure_ascii=False)
+print(f"rows={len(rows)}")
+PYEOF
+}
+
+# fetch_isarcasmeval <suite> <owner_repo> <sha>
+#   The iSarcasmEval fetch (issue 114 T10): the task-A English CSVs at the
+#   board's pinned sha via the GitHub raw lane (the hub /resolve does not
+#   serve GitHub; the board's suite.md pins `iabufarha/iSarcasmEval
+#   @dfc708b, test/task_{A,B,C}_{En,Ar}_test.csv`). This lane takes the
+#   TRACK-A ENGLISH files only (test/task_A_En_test.csv = the board row's
+#   index metric population; train/train.En.csv = the corpus-ON pool) —
+#   the B/C/Arabic tracks are the recorded re-opens (issue 114 T10; the
+#   triage's English-first posture decision, never a silent drop). Each
+#   envelope is idempotent (skip on a valid cached page, FORCE refetches).
+fetch_isarcasmeval() {
+    suite=$1; owner_repo=$2; sha=$3
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    for spec in "test:test/task_A_En_test.csv" "train:train/train.En.csv"; do
+        split=${spec%%:*}; path=${spec#*:}
+        file="$dir/$split-000.json"
+        if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+            n=$(rows_count "$file" 2>/dev/null || echo 0)
+            if [ "$n" -gt 0 ]; then
+                log "  skip   $suite/$split-000 ($n rows)"
+                continue
+            fi
+        fi
+        url="https://raw.githubusercontent.com/$owner_repo/$sha/$path"
+        raw="$file.raw"
+        ok=0
+        if http_get "$url" "$raw"; then ok=1; fi
+        if [ "$ok" -eq 0 ]; then
+            sleep 5
+            if http_get "$url" "$raw"; then ok=1; fi
+        fi
+        if [ "$ok" -eq 0 ]; then
+            rm -f "$raw"
+            log "  FAIL   $suite/$split-000 (http error, $url)"
+            FAILED=$((FAILED + 1))
+            continue
+        fi
+        if _csv_a_rows "$raw" "$file.tmp" "$split"; then
+            rm -f "$raw"
+            n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
+            mv "$file.tmp" "$file"
+            FILES=$((FILES + 1))
+            ROWS=$((ROWS + n))
+            log "  fetch  $suite/$split-000 rows=$n (raw.githubusercontent $path)"
+        else
+            rm -f "$raw" "$file.tmp"
+        fi
+        sleep "$SLEEP"
+    done
+}
+
 main() {
     if have b3sum; then
         digest_tool="b3sum (blake3)"
@@ -1363,6 +1456,16 @@ main() {
     if want_suite contractnli; then
         log "[suite] contractnli — the authors' zip at the board's pinned sha, both splits flattened (the recorded transform)"
         fetch_contractnli_pairs contractnli "stanfordnlp/contract-nli" "eced652" "resources/contract-nli.zip"
+    fi
+
+    # Issue 114 T10 (the JDI ladder wave 3): iSarcasmEval — the authors'
+    # repo at the board's pinned sha (the tree sha read live at the licence
+    # probe), track-A English files only (the board row's index metric is
+    # track-A-English sarcastic-class F1; the B/C/Arabic tracks are the
+    # recorded re-opens).
+    if want_suite isarcasmeval; then
+        log "[suite] isarcasmeval — track-A English CSVs at the board's pinned sha (the recorded transform)"
+        fetch_isarcasmeval isarcasmeval "iabufarha/iSarcasmEval" "dfc708b53bde1bb571abfb5692f63231c2232195"
     fi
 
     log ""

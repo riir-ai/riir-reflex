@@ -846,6 +846,130 @@ pub fn build_contractnli(rows_file: &Value, max_rows: usize) -> Suite {
     }
 }
 
+/// Issue 114 T10 — the iSarcasmEval binary universe (sorted upstream
+/// spellings — the mechanical-from-fetched law). The board's index metric
+/// is track-A-English sarcastic-class F1, and `hard_metrics::positive_f1`
+/// keys the LAST option (index 1) for all-2-option rows — so the sorted
+/// order ["non-sarcastic", "sarcastic"] lands the sarcastic class exactly
+/// where the metric reads it.
+pub(crate) const ISARCASM_KEYS: [&str; 2] = ["non-sarcastic", "sarcastic"];
+
+/// Issue 114 T10 — iSarcasmEval (board id 40; the language rung's fourth
+/// suite). The board's suite.md pins `iabufarha/iSarcasmEval @dfc708b,
+/// test/task_{A,B,C}_{En,Ar}_test.csv`, "All prepared cases retained",
+/// cases 4,600 — the five test tracks' combined count. LICENCE (read live
+/// 2026-11-12 at the board's pinned tree sha `dfc708b…`): the authors'
+/// canonical repo carries the full MIT LICENSE (1,074 bytes, "Copyright
+/// (c) 2022 Ibrahim Abu Farha") and GitHub's API independently reports
+/// spdx_id=MIT; the recursive tree shows no separate data-terms file —
+/// the CSV data dirs ride the repo licence (the FinEntity two-surface
+/// PASS shape).
+///
+/// THE SCOPE (the triage's sanctioned partial, narrowed by the metric
+/// frame): this suite carries TRACK A ENGLISH ONLY — the board row's own
+/// index metric and chance (0.2227) are defined on exactly that track
+/// ("track A English: F1 of random guessing on the sarcastic class"), so
+/// the suite's positive_f1 (binary, index 1) IS the board number, read
+/// straight off the aggregate. The population pin is the fetched A_En
+/// census (1,400 tweets: 200 sarcastic / 1,200 non-sarcastic — the 1-in-7
+/// share the board's chance arithmetic pins), NOT the catalog's 4,600:
+/// that count books all five test tracks (A_En 1,400 + A_Ar + B_En +
+/// C_En + C_Ar ≈ 3,200 more) — the contractnli/finentity reconciliation
+/// law (the catalog's bookkeeping is disclosed, never inherited). THE
+/// RE-OPENS, recorded loud: track C (pair pick — shape-fine plain choice,
+/// but its second option universe would break the one-suite-one-universe
+/// router law and dilute the binary positive_f1 the board scores), track
+/// B (the six-label multilabel — needs the wave-2 multi-question
+/// envelope), Arabic tracks (the triage's English-first posture
+/// decision).
+///
+/// THE FETCH TRANSFORM (the recorded one): the task-A CSVs at the pinned
+/// sha — test `text,sarcastic`; train the 10-column file whose tweet +
+/// sarcastic columns are read — project to `{text, sarcastic, split}`
+/// rows (the fetch's csv DictReader program; embedded commas/newlines
+/// handled by the csv module). Upstream test census: 1,400 rows / 200
+/// sarcastic. Upstream train census: 3,468 rows, of which ONE (row 1062)
+/// carries an empty tweet — the converter's drop rule fails it; the
+/// fetched train envelope is 3,467 (867 sarcastic / 2,600 non).
+///
+/// CORPUS-ON (the wave-3 posture): the upstream TRAIN split is the
+/// task's own released training data (the shared task ran on it). Corpus
+/// doc text = the tweet alone (the label IS the tweet's own author label
+/// — the ragtruth response-alone rule transfers: nothing else carries
+/// the signal). corpus_cap_per_label 200 (the pool wants both classes
+/// well-heat — 867/2,600 upstream), cal_cap 200, named_only like every
+/// ladder suite.
+#[must_use]
+pub fn build_isarcasmeval(rows_file: &Value, max_rows: usize) -> Suite {
+    let keys: Vec<String> = ISARCASM_KEYS.iter().map(|k| (*k).to_string()).collect();
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(text), Some(sarcastic)) = (row_str(row, "text"), row_str(row, "sarcastic"))
+        else {
+            continue; // malformed row — fails the rule, the row drops
+        };
+        let gold_idx = match sarcastic {
+            "0" => 0,
+            "1" => 1,
+            other => panic!(
+                "isarcasmeval: sarcastic label {other:?} (row {pos}) is outside \
+                 ISARCASM_KEYS — the fetched universe drifted from the \
+                 pinned binary track-A set",
+            ),
+        };
+        cases.push(SuiteCase {
+            id: format!("isarcasmeval:{pos}"),
+            state: json!({
+                "tweet": text,
+            }),
+            questions: vec![choice_q(
+                "sarcasm",
+                "Was the tweet in `tweet` intended to be sarcastic by its author?",
+                &keys,
+                None,
+            )],
+            gold: vec![GoldAnswer {
+                idx: gold_idx,
+                soft: vec![0.0; ISARCASM_KEYS.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    // The population pin binds the FULL fetched test envelope (the eval
+    // posture loads every tweet; `max_rows` is 0 there). A partial test
+    // envelope (the cal front reads the TRAIN envelope) skips the census —
+    // the split column is the eval discriminator (the contractnli form).
+    let eval_rows = all
+        .iter()
+        .filter(|r| row_str(r, "split") == Some("test"))
+        .count();
+    if max_rows == 0 && eval_rows == all.len() && eval_rows > 0 {
+        assert_eq!(
+            cases.len(),
+            1_400,
+            "isarcasmeval: the fetched track-A-English test population drifted \
+             from the pinned census (1,400 tweets: 200 sarcastic / 1,200 \
+             non-sarcastic — the 1-in-7 share the board's chance 0.2227 pins) \
+             — a partial or revised fetch; refetch via scripts/fetch_datasets.sh \
+             and re-pin the manifest digest"
+        );
+    }
+    Suite {
+        name: "isarcasmeval",
+        cases,
+        option_counts_note: "2 fixed track-A options (non-sarcastic / sarcastic, sorted \
+                             upstream 0/1 spellings); one case per test tweet (1,400 = \
+                             the fetched track-A-English census: 200 sarcastic / 1,200 \
+                             non; the board catalog's 4,600 books all five test tracks — \
+                             disclosed, never inherited); the board metric is \
+                             sarcastic-class F1 (chance 0.2227 Monte Carlo, analytic \
+                             random-guess 0.2222), read straight off positive_f1 (index 1); \
+                             corpus-ON (the upstream train split is the task's own \
+                             released training data)",
+    }
+}
+
 /// Issue 114 T4 — the BFCL abstain option, APPENDED LAST on the
 /// irrelevance-tier rows only (the board row's "or irrelevance-detect";
 /// the pick tier never carries it — the official pick eval always has a
@@ -2502,6 +2626,14 @@ pub fn train_row_label(suite: &str, row: &Value) -> Option<String> {
         // mapping is needed; an unknown string fails the rule and the
         // row drops, like a malformed label.
         "contractnli" => row_str(row, "choice").map(str::to_string),
+        // Issue 114 T10: iSarcasmEval's binary 0/1 maps through
+        // ISARCASM_KEYS position (the content binding — index 1 = the
+        // sarcastic class, the same side the metric reads); an
+        // out-of-range label fails the rule and the row drops, exactly
+        // like a malformed label.
+        "isarcasmeval" => row_i64(row, "sarcastic")
+            .and_then(|l| ISARCASM_KEYS.get(l as usize))
+            .map(|k| (*k).to_string()),
         // Issue 077: the int-ClassLabel choice suites name their engine
         // domains by the OPTION KEY at the class index (content binding —
         // the doc comment on AG_NEWS_KEYS). The class index must be in
@@ -2901,6 +3033,20 @@ pub fn train_docs(train_rows_file: &Value, suite: &str) -> Vec<TrainDoc> {
                 Some(TrainDoc {
                     label: train_row_label(suite, r)?,
                     text: format!("{}\n{}", row_str(r, "contract")?, row_str(r, "hypothesis")?),
+                })
+            })
+            .collect(),
+        // Issue 114 T10: the iSarcasmEval corpus pool — the corpus text is
+        // the TWEET alone (the author's own sarcastic label carries the
+        // whole signal; the ragtruth response-alone rule transfers —
+        // disclosed in the builder doc). The per-label caps (200/label)
+        // heat both classes well (867/2,600 upstream).
+        "isarcasmeval" => rows
+            .iter()
+            .filter_map(|r| {
+                Some(TrainDoc {
+                    label: train_row_label(suite, r)?,
+                    text: row_str(r, "text")?.to_string(),
                 })
             })
             .collect(),
@@ -4096,5 +4242,63 @@ mod contractnli_builder_tests {
     fn contractnli_refuses_a_drifted_choice_universe() {
         let env = envelope(vec![pair("Maybe", "test")]);
         let _ = build_contractnli(&env, 1);
+    }
+}
+
+// Issue 114 T10: the iSarcasmEval builder — the track-A binary pair,
+// the sarcastic-class-positive key order, and the split-dispatched census.
+#[cfg(test)]
+mod isarcasmeval_builder_tests {
+    use super::{ISARCASM_KEYS, build_isarcasmeval};
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    fn a_row(text: &str, sarcastic: &str, split: &str) -> serde_json::Value {
+        serde_json::json!({ "text": text, "sarcastic": sarcastic, "split": split })
+    }
+
+    #[test]
+    fn isarcasmeval_renders_one_case_per_tweet_with_sarcastic_positive() {
+        let env = envelope(vec![
+            a_row("Pinball!", "0", "test"),
+            a_row("Oh great.", "1", "test"),
+        ]);
+        let s = build_isarcasmeval(&env, 1); // nonzero cap: the census asserts rest
+        assert_eq!(s.name, "isarcasmeval");
+        assert_eq!(s.cases.len(), 1);
+        let keys: Vec<_> = s.cases[0].questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, ISARCASM_KEYS); // sorted upstream spellings; index 1 = sarcastic
+        assert_eq!(keys, ["non-sarcastic", "sarcastic"]);
+        // Gold = the binary label mapped onto the key order — index 1 is
+        // the sarcastic class, exactly where hard_metrics::positive_f1
+        // (binary, index-1 side) and the board metric read it.
+        assert_eq!(s.cases[0].gold[0].idx, 0); // "0" → non-sarcastic
+        let s2 = build_isarcasmeval(&envelope(vec![a_row("Oh great.", "1", "test")]), 1);
+        assert_eq!(s2.cases[0].gold[0].idx, 1); // "1" → sarcastic
+        // State = the tweet verbatim (the author label carries the whole
+        // signal — the response-alone law transfers).
+        assert_eq!(s.cases[0].state["tweet"], "Pinball!");
+    }
+
+    #[test]
+    fn isarcasmeval_train_rows_build_the_cal_front_without_the_census() {
+        let env = envelope(vec![a_row("a", "0", "train"), a_row("b", "1", "train")]);
+        let s = build_isarcasmeval(&env, 0); // full load, but split=train
+        assert_eq!(s.cases.len(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "outside ISARCASM_KEYS")]
+    fn isarcasmeval_refuses_a_drifted_label_universe() {
+        let env = envelope(vec![a_row("x", "2", "test")]);
+        let _ = build_isarcasmeval(&env, 1);
     }
 }

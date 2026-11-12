@@ -1,0 +1,295 @@
+{
+  "meta": {
+    "date_utc": "2026-11-12T04:56:07Z",
+    "git_sha": "50870a2",
+    "host": "amo",
+    "profile": "release",
+    "laya_feature": true,
+    "laya_max_questions": 0,
+    "datasets_dir": "/Users/katopz/git/riir-reflex/.raw/datasets",
+    "corpus_cap_mode": "registry defaults",
+    "corpus_protocol": "one engine domain per label; corpus = train-split docs of that label, capped per label (registry), self-doc fallback for labels absent from the fetched train rows",
+    "calibration_protocol": "sigmoid-gate fit on a train-tail calibration slice (same builder over the train rows); fused-gate thresholds fitted per suite at the cal-slice 30th percentile (the T1.6 arena posture rho=30%; the birth constants do not transfer — measured: 100% abstain on several suites at defaults); raw-vs-calibrated readout ECE compared per the G1 gate; no calibration claim when the calibrator never moved",
+    "sampling_protocol": "test sample = label-STRATIFIED round-robin over the whole test split (budget = the registry test cap; first-appearance label order, dataset order within each label, deterministic, no RNG); cal slice = the same law over the train rows; corpus pool = the train rows MINUS the cal front (excluded by construction, not position); budget-0 suites unchanged (identity split) — Issue 039 T2",
+    "readout_posture": "shipped Dispatch law everywhere (Issue 039 T4 DEMOTED: the cal-side arming lever overfit the narrow suites' cal slice — emotion's test G1 regressed — and coincided with Dispatch on the wide suites it targeted; the wide-label G1 gap was closed by T2's stratified cal slice). The candidate table is recorded per suite (report-only); EngineConfig::readout stays the opt-in knob",
+    "floor_definition": "conformal-naive floor = split-conformal recalibration of the raw readout confidence, c'(s) = (1 + #{cal s_i <= s}) / (n_cal + 1) — the exchangeability-valid baseline (G1 fails unless the calibrated ECE beats it)",
+    "modal_floor_definition": "input-keyed modal-answer floor = the cal-split (reference) modal gold over questions sharing the input key, pooled by option identity and mapped through each case's own option order (first-4 normalized input tokens × qid × option-count; ties → global prior → case order; arXiv:2610.17495's anti-mimicry census; LOO over eval only when no cal slice exists) — a lane at/below it carries no input-independent signal (issue 094)",
+    "determinism_scoping": "the bit-identity claim is the MODELLESS lane's (plan caveat 3); the laya lane gets the same observed repeat check and it is reported, not claimed",
+    "laya_device": "metal (LAYA_DEVICE or the build's macOS default)",
+    "laya_python_lane": "off (pass --laya-python to add the reference lane)",
+    "clm_lane": "off (pass --clm to add the comparison lane; .issues/027)",
+    "gliner_lane": "off (pass --gliner to add the comparison lane; needs the gliner2 venv — .issues/029)",
+    "bekko_lane": "off (pass --bekko to add the comparison lane; needs the bekko venv — Bench 103)",
+    "agentjev_lane": "off (pass --agentjev to add the comparison lane; needs their jev_service on AGENTJEV_SERVE_URL — .issues/025)",
+    "clef_lane": "off (pass --clef to add the comparison lane; the hosted posture needs the owner's Workers AI creds behind the loopback forwarder, or serve the open weights locally — plan 011 Phase A + .research/007)",
+    "openthai_lane": "off (pass --openthai to add the comparison lane; needs their openthai service on OPENTHAI_SERVE_URL — plan 003)",
+    "drex_lane": "off (pass --drex to add the comparison lane; needs their service on DREX_SERVE_URL, default http://127.0.0.1:8000 — Issue 073)",
+    "d1_lane": "off (pass --d1 to add the comparison lane; needs the reference server on D1_SERVE_URL, default http://127.0.0.1:8078 — Issue 078)",
+    "pplx_lane": "off (pass --pplx to add the comparison lane; serve their autojev server on PPLX_SERVE_URL, default http://127.0.0.1:8793 — Issue 082)",
+    "d3_lane": "off (pass --d3 to add the comparison lane; serve their d3_server.py on D3_SERVE_URL, default http://127.0.0.1:8794 — riir-train 629 T2)",
+    "jeva_lane": "off (pass --jeva to add the comparison lane; serve OUR reference server scripts/jeva_server.py on JEVA_SERVE_URL, default http://127.0.0.1:8095, under the venv python with their repo installed — reflex Issue 090 B1)",
+    "startlux_lane": "off (pass --startlux to add the comparison lane; serve their startlux-decide engine on STARTLUX_SERVE_URL, default http://127.0.0.1:8090 — reflex Issue 095, riir-train 635 T3)",
+    "mammoth_lane": "off (pass --mammoth to add the hosted comparison lane; run the loopback TLS forwarder to inference.baseten.co on MAMMOTH_SERVE_URL, default http://127.0.0.1:8793, with MAMMOTH_API_TOKEN set — rethink Issue 032 T10; T10.1: the key is an OWNER act; window ends 2026-10-27 23:59 PT)",
+    "elephant_lane": "off (pass --elephant to add the self-hosted comparison lane; serve our scripts/elephant_server.py under the qev venv on ELEPHANT_SERVE_URL, default http://127.0.0.1:8096 — rethink Issue 032 T10.2, riir-train 640 T2(a) records the exact venv + weight pin)",
+    "opendecider_lane": "off (pass --opendecider to add the self-hosted comparison lane; pip install \"opendecider[serve]\" then `opendecider serve --model manjunathshiva/opendecider-nano` on OPENDECIDER_SERVE_URL, default http://127.0.0.1:8000 — rethink Issue 038 / Research 013)",
+    "paw_lane": "off (pass --paw to add the comparison lane; PAW_API_KEY optional — .issues/033)",
+    "paw_local_lane": "off (pass --paw-local to add the local-runtime twin; needs the programasweights venv + a hosted-lane cache — .issues/033)",
+    "box_state": {
+      "start": {
+        "power": "AC Power",
+        "power_mode": null,
+        "load_1m": 10.16,
+        "swap_used_mb": 4170.12,
+        "load_source": "loadavg1m",
+        "gpu_util_pct": null,
+        "gpu_mem_mib": null,
+        "latency_quotable": false,
+        "refusals": [
+          "load 10.16 > 6 — a sibling job is on the box"
+        ]
+      },
+      "end": {
+        "power": "AC Power",
+        "power_mode": null,
+        "load_1m": 9.11,
+        "swap_used_mb": 4170.12,
+        "load_source": "loadavg1m",
+        "gpu_util_pct": null,
+        "gpu_mem_mib": null,
+        "latency_quotable": false,
+        "refusals": [
+          "load 9.11 > 6 — a sibling job is on the box"
+        ]
+      }
+    },
+    "head_posture": "OFF (head_scale 0 — the published baseline posture)",
+    "nb_posture": "OFF (nb_scale 0 — the published baseline posture)",
+    "divergences": [
+      "massive option sampling: SplitMix64 (fixed seed), not CPython MT19937 — both lanes see byte-identical questions, which is the integrity that matters",
+      "banking77: mteb/banking77 mirror (the reference's own bench_apps variant); PolyAI/banking77 is script-based and unservable",
+      "engine context = state + prompt (wire criteria None) — the modelless serving path",
+      "synthetic fixtures (semantic_defects): in-process fixtures with programmatic gold; the six Issue-004 harness families (2026-10-02) and code_fixtures (2026-10-11) were retired — owner calls — so the modelless lane no longer answers any self-authored suite but the one that reads above chance"
+    ]
+  },
+  "suites": [
+    {
+      "name": "isarcasmeval",
+      "n_cases": 1400,
+      "n_questions": 1400,
+      "cases_digest": "fnv1a64-2beba2807e5714ae",
+      "modelless": {
+        "lane": "modelless",
+        "model": "modelless",
+        "hard": {
+          "n": 1400,
+          "accuracy": 0.21857142857142858,
+          "macro_f1": 0.21683087514905575,
+          "positive_f1": 0.25375170532060026,
+          "ece": 0.29229552447795876,
+          "brier": 0.5146219773718615,
+          "nll": 0.7077774658524439,
+          "aurc": 0.8401239797682006,
+          "mean_confidence": 0.5108669530493872,
+          "acc_at_50_coverage": 0.15857142857142856,
+          "acc_at_80_coverage": 0.18928571428571428
+        },
+        "readout_ece": 0.32138739381517684,
+        "readout_brier": 0.27413201648537355,
+        "raw_abstain": {
+          "abstain_rate": 1.0,
+          "selective_accuracy": 0.0,
+          "selective_n": 0
+        },
+        "calibrated_abstain": {
+          "abstain_rate": 0.6242857142857143,
+          "selective_accuracy": 0.20532319391634982,
+          "selective_n": 526
+        },
+        "abstain_causes": {
+          "score_gate": 492,
+          "distance_gate": 382,
+          "grammar_invalid": 0
+        },
+        "readout_ece_raw": 0.21376862687723977,
+        "readout_ece_calibrated": 0.32138739381517684,
+        "floor_ece": 0.3703873489694386,
+        "g1_pass": false,
+        "g1_verdict": "fail",
+        "by_question_type": null,
+        "soft_acc": null,
+        "brier_soft": null,
+        "score_mae": null,
+        "within_1": null,
+        "latency_p50_ms": 0.08,
+        "latency_p99_ms": 0.107,
+        "latency_tail_support": 15,
+        "latency_extremes": {
+          "first_ms": 0.079,
+          "max_ms": 0.176,
+          "argmax_case": 125
+        },
+        "determinism_ok": true,
+        "determinism_n": 10,
+        "seconds": 0.304442625,
+        "n_cases": 1400,
+        "n_questions": 1400,
+        "score_threshold": 0.5397233,
+        "distance_threshold": 0.3825055,
+        "threshold_recommendation": {
+          "posture": {
+            "posture": "percentile",
+            "rho": 0.3
+          },
+          "score": {
+            "threshold": 0.5397233,
+            "status": "fitted",
+            "targetAccuracy": 0.53571427,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          },
+          "distance": {
+            "threshold": 0.3825055,
+            "status": "fitted",
+            "targetAccuracy": 0.51428574,
+            "support": {
+              "n": 200,
+              "nPass": 140,
+              "nAbstain": 60
+            }
+          }
+        },
+        "corpus_cap": {
+          "effective": 200,
+          "source": "registry",
+          "selection": null
+        },
+        "head_selection": null,
+        "nb_selection": null,
+        "oc_selection": null,
+        "ridge_selection": null,
+        "genome_selection": null,
+        "transductive": null,
+        "confusion": [
+          {
+            "gold": "non-sarcastic",
+            "pred": "sarcastic",
+            "count": 1080,
+            "share_of_errors": 0.9872029250457038
+          },
+          {
+            "gold": "sarcastic",
+            "pred": "non-sarcastic",
+            "count": 14,
+            "share_of_errors": 0.012797074954296161
+          }
+        ],
+        "pair_head_ab": null,
+        "jdi_chance": 0.8571428571428571,
+        "jdi_skill": 0.0,
+        "readout_report": {
+          "best_on_cal": "max_prob",
+          "candidates": [
+            {
+              "mode": "dispatch",
+              "cal_ece": 0.5394520995020867
+            },
+            {
+              "mode": "max_prob",
+              "cal_ece": 0.04009129106998446
+            },
+            {
+              "mode": "inv_entropy",
+              "cal_ece": 0.5394520995020867
+            }
+          ]
+        },
+        "corpus_digest": "fnv1a64-9d870f09bc57f33d"
+      },
+      "laya": {
+        "english": {
+          "lane": "laya-riir",
+          "model": "english",
+          "hard": {
+            "n": 1400,
+            "accuracy": 0.8057142857142857,
+            "macro_f1": 0.48926764628565605,
+            "positive_f1": 0.087248322147651,
+            "ece": 0.0626573571428572,
+            "brier": 0.2942679048142858,
+            "nll": 0.4777419801167424,
+            "aurc": 0.12121128185243718,
+            "mean_confidence": 0.8636517857142861,
+            "acc_at_50_coverage": 0.8814285714285715,
+            "acc_at_80_coverage": 0.8553571428571428
+          },
+          "readout_ece": 0.3044052142857143,
+          "readout_brier": 0.25898359475,
+          "raw_abstain": null,
+          "calibrated_abstain": null,
+          "abstain_causes": null,
+          "readout_ece_raw": null,
+          "readout_ece_calibrated": null,
+          "floor_ece": null,
+          "g1_pass": null,
+          "g1_verdict": null,
+          "by_question_type": null,
+          "soft_acc": null,
+          "brier_soft": null,
+          "score_mae": null,
+          "within_1": null,
+          "latency_p50_ms": 9.0,
+          "latency_p99_ms": 11.0,
+          "latency_tail_support": 15,
+          "latency_extremes": {
+            "first_ms": 11.0,
+            "max_ms": 15.0,
+            "argmax_case": 1081
+          },
+          "determinism_ok": true,
+          "determinism_n": 10,
+          "seconds": 17.050943417,
+          "n_cases": 1400,
+          "n_questions": 1400,
+          "score_threshold": null,
+          "distance_threshold": null,
+          "threshold_recommendation": null,
+          "corpus_cap": null,
+          "head_selection": null,
+          "nb_selection": null,
+          "oc_selection": null,
+          "ridge_selection": null,
+          "genome_selection": null,
+          "transductive": null,
+          "confusion": null,
+          "pair_head_ab": null,
+          "jdi_chance": 0.8571428571428571,
+          "jdi_skill": 0.0
+        }
+      },
+      "slices": {
+        "n_test": 1400,
+        "n_cal": 200,
+        "n_pool": 3267,
+        "test_digest": "fnv1a64-46bb081e14c6181e",
+        "cal_digest": "fnv1a64-2a526e8c45291fff",
+        "pool_digest": "fnv1a64-7b2c37925a9f180a",
+        "missing_test_labels": [],
+        "missing_cal_labels": [],
+        "missing_pool_labels": [],
+        "violations": []
+      },
+      "modal_floor": {
+        "acc": 0.8592857142857143,
+        "n_questions": 1400,
+        "n_keys": 195,
+        "n_fallback": 1380,
+        "global_modal_share": 0.5,
+        "reference": "cal-split census (test∩cal disjoint)",
+        "key_rule": "modal census pooled by option identity; key = first-4 normalized input tokens × qid × option-count; ties → global prior → the case's own option order"
+      }
+    }
+  ]
+}

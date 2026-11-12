@@ -58,14 +58,14 @@ use crate::harness::pair_heads::{
 #[cfg(feature = "option_cond")]
 use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
-    BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, QKind, Suite, SuiteCase, SuiteQuestion,
-    TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb, build_bfcl,
-    build_clinc150, build_contractnli, build_emotion, build_emotion_syn, build_finentity,
-    build_hellaswag_jdi, build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections,
-    build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5,
-    build_sst5_syn, build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
-    build_when2call, build_winogrande_jdi, build_xnli_en, stratified_selection_slices,
-    stratified_split, train_docs, train_row_label,
+    BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
+    SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
+    build_bfcl, build_clinc150, build_contractnli, build_emotion, build_emotion_syn,
+    build_finentity, build_hellaswag_jdi, build_isarcasmeval, build_massive_intent_en,
+    build_mmlupro_jdi, build_prompt_injections, build_ragtruth, build_s1mb_choice, build_s1mb_noul,
+    build_s1mb_score, build_sst5, build_sst5_syn, build_thai_sib200, build_thai_wisesight,
+    build_typed_decisions, build_wanli_en, build_when2call, build_winogrande_jdi, build_xnli_en,
+    stratified_selection_slices, stratified_split, train_docs, train_row_label,
 };
 use crate::pyjson::serialize_state;
 use crate::readout::ReadoutMode;
@@ -816,6 +816,32 @@ const SUITES: &[SuiteSpec] = &[
         named_only: true,
         coverage_audit: true,
         build: build_contractnli,
+        synthetic: None,
+        modelless_lane: true,
+    },
+    // Issue 114 T10 — the JDI ladder wave-3 iSarcasmEval row (board id 40;
+    // the language rung's fourth suite). Track A ENGLISH only — the board
+    // row's index metric and chance (0.2227) are defined on exactly that
+    // track, so the suite's positive_f1 (binary, index 1 = "sarcastic") IS
+    // the board number. Population pin = the fetched track-A census (1,400
+    // tweets: 200 sarcastic / 1,200 non); the catalog's 4,600 books all
+    // five test tracks — disclosed, never inherited (the contractnli/
+    // finentity reconciliation law). Track C/B/Arabic are the recorded
+    // re-opens (builder doc). LICENCE: MIT at the authors' canonical repo,
+    // read live at the board's pinned tree sha (LICENSE text + API spdx).
+    // CORPUS-ON: the upstream train split is the task's own released
+    // training data; corpus doc = the tweet alone (the author label carries
+    // the whole signal). named_only like every ladder suite.
+    SuiteSpec {
+        name: "isarcasmeval",
+        dataset_dir: "isarcasmeval",
+        test_cap: 0,
+        cal_cap: 200,
+        corpus_cap_per_label: 200,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: true,
+        build: build_isarcasmeval,
         synthetic: None,
         modelless_lane: true,
     },
@@ -4794,6 +4820,7 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             // unique upstream choices — the gold index is the position in
             // this order).
             "contractnli" => Some(CONTRACTNLI_KEYS.to_vec()),
+            "isarcasmeval" => Some(ISARCASM_KEYS.to_vec()),
             "prompt_injections" => Some(vec!["0", "1"]),
             _ => None,
         };
@@ -4985,6 +5012,38 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
                 "contractnli: gold class {required:?} absent from the fetched \
                  population (gold classes: {gold_classes:?}) — the board row \
                  would misreport its macro-F1"
+            );
+        }
+    }
+
+    // Issue 114 T10 — the iSarcasmEval population + gold-coverage pins —
+    // 1,400 track-A-English test tweets (the fetched census; the board
+    // catalog's 4,600 books all five tracks, disclosed) and BOTH gold
+    // classes present (a fetch that lost the 200-tweet sarcastic minority
+    // would misreport the sarcastic-class F1 the board scores).
+    if spec.name == "isarcasmeval" {
+        assert_eq!(
+            suite.cases.len(),
+            1_400,
+            "isarcasmeval: the fetched test split drifted from the pinned \
+             track-A-English census (1,400 tweets: 200 sarcastic / 1,200 \
+             non-sarcastic) — a partial or revised fetch; refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+        let mut gold_classes: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        for case in &suite.cases {
+            if let Some(g) = case.gold.first()
+                && let Some(k) = labels.get(g.idx)
+            {
+                gold_classes.insert(k.as_str());
+            }
+        }
+        for required in ["non-sarcastic", "sarcastic"] {
+            assert!(
+                gold_classes.contains(required),
+                "isarcasmeval: gold class {required:?} absent from the fetched \
+                 population (gold classes: {gold_classes:?}) — the board row \
+                 would misreport its sarcastic-class F1"
             );
         }
     }

@@ -1,9 +1,10 @@
 # Issue 114 — JDI ladder adapters, wave 1: the decision-shaped tools three (BFCL / When2Call / API-Bank) + CLINC150 (retrieval)
 
-**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a/R3a; adapters unbulleted, one suite at a time. **Wave-3 OPEN: T7 ragtruth LANDED 2026-11-12 ([Bench 181](../.benchmarks/181_ragtruth_suite_birth.md) — the language rung's first suite: 2,700 cases corpus-ON, the upstream-direct lane, the board-metric positive_f1 readout; the honest first read BELOW the always-hallucinated floor: laya positive_f1 0.3361 / modelless 0.0099 — the api_bank-class floor disclosure; the row is now SCOREABLE, the teacher capture can ride it).** **Wave-3 TRIAGE (same day, zed-3aa7e916@amo): the language seven triaged below — five scoreable on existing machinery (ContractNLI, FinEntity, VAST, NLI4CT, RAGTruth), two scoreable-partial sharing wave-2's scorers (ACOS, iSarcasmEval), none refused.** Wave state after the 2026-11-10 third session (zed-64abf0dd@m3): T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md)) · **T3 when2call LANDED** ([Bench 101](../.benchmarks/101_when2call_suite_birth.md): the CORPUS-OPTIONAL posture chose re-open path (b) — the only self-serve path; the suite + the runner change landed, laya-only full-population read recorded, honestly below the majority floor) · **T4 bfcl LANDED** + **T5 api_bank LANDED** ([Bench 180](../.benchmarks/180_bfcl_api_bank_suite_birth.md) — the direct-resolve fetch lane + the two builders, corpus-optional; bfcl reads 0.5612 / skill +0.31, api_bank 0.6081 / skill ≈ 0 — the honest floor posture) · T6 clinc150+when2call+bfcl+api_bank reflex halves DONE; the rethink fold = the rethink-side booking (owner-gated amo hours, unchanged). The wave's remaining DECISIONS are unchanged: the modelless corpus for T3/T4/T5 (paths (a)/(d) = owner/lane-gated spend or rethink-side synthesis) and the owner-gated amo booking.
+**Status:** OPEN — plan-half of rethink Issue 060's R1a/R2a/R3a; adapters unbulleted, one suite at a time. **Wave-3 OPEN: T7 ragtruth LANDED 2026-11-12 ([Bench 181](../.benchmarks/181_ragtruth_suite_birth.md) — the language rung's first suite: 2,700 cases corpus-ON, the upstream-direct lane, the board-metric positive_f1 readout; the honest first read BELOW the always-hallucinated floor: laya positive_f1 0.3361 / modelless 0.0099 — the api_bank-class floor disclosure; the row is now SCOREABLE, the teacher capture can ride it).** **T8 finentity LANDED the same day ([Bench 182](../.benchmarks/182_finentity_suite_birth.md) — the wave-3 residue's first passing probe: the authors' own readme at the board's pinned sha states ODC-BY + the authors' own HF card tags license:odc-by; 2,129 span cases (the board's own fields count via the disclosed conflict quarantine); laya macro-F1 0.7433 vs the board chance 0.3201 = skill +0.423, honestly BELOW the modal floor 0.8027 — the corpus-less zero-shot disclosure).** **Wave-3 TRIAGE (2026-11-12, zed-3aa7e916@amo): the language seven triaged below — five scoreable on existing machinery (ContractNLI, FinEntity, VAST, NLI4CT, RAGTruth), two scoreable-partial sharing wave-2's scorers (ACOS, iSarcasmEval), none refused.** ⚠ Licence verdicts updated by the T8 probe pass: VAST's shape verdict stands but its SOURCE is REFUSED (no licence at any surface — the fail-closed law); ContractNLI stays UNDECIDED; NLI4CT unprobed (probe rides its build start). Wave state after the 2026-11-10 third session (zed-64abf0dd@m3): T1 probes DONE (all licences verified) · **T2 clinc150 LANDED** ([Bench 100](../.benchmarks/100_clinc150_suite_birth.md)) · **T3 when2call LANDED** ([Bench 101](../.benchmarks/101_when2call_suite_birth.md): the CORPUS-OPTIONAL posture chose re-open path (b) — the only self-serve path; the suite + the runner change landed, laya-only full-population read recorded, honestly below the majority floor) · **T4 bfcl LANDED** + **T5 api_bank LANDED** ([Bench 180](../.benchmarks/180_bfcl_api_bank_suite_birth.md) — the direct-resolve fetch lane + the two builders, corpus-optional; bfcl reads 0.5612 / skill +0.31, api_bank 0.6081 / skill ≈ 0 — the honest floor posture) · T6 clinc150+when2call+bfcl+api_bank reflex halves DONE; the rethink fold = the rethink-side booking (owner-gated amo hours, unchanged). The wave's remaining DECISIONS are unchanged: the modelless corpus for T3/T4/T5 (paths (a)/(d) = owner/lane-gated spend or rethink-side synthesis) and the owner-gated amo booking.
 **Lease closed:** zed-64abf0dd@m3 (riir-refine idle loop continuation, m3), 1794350458, expires 2026-11-12T22:40:58+00:00 — discharged by the T4+T5 landing (Bench 180 + the fetch lane + the builders, this session); the wave's residue is the rethink-side booking, not a reflex claim.
 **Lease closed:** zed-3aa7e916@amo (amo), 1794451200, was expires 2026-11-14T02:40:00+00:00 — the R3a TRIAGE + T7's ragtruth suite birth LANDED under it (2026-11-12; the claim scope was triage-only and the birth rode the same session's lane after the triage — recorded here as one lease, two landings); the wave-3 residue (ContractNLI / FinEntity / VAST / NLI4CT adapters, one at a time; ACOS + iSarcasmEval behind wave-2's scorers) is its own next claim
 **Claimed:** zed-wave3@amo, 1794454786, expires 2026-11-14T03:39:46+00:00 — the wave-3 residue lane: the FinEntity/VAST/NLI4CT licence probes (T8 order, first probe to pass wins) + the first passing suite's adapter, one suite at a time per the issue law
+**Lease closed:** zed-wave3@amo, 1794454786, was expires 2026-11-14T03:39:46+00:00 — DISCHARGED the same day: the T8 probes ran (FinEntity PASS at two authoritative ODC-BY surfaces; VAST REFUSED no-licence; NLI4CT probe deferred to its build start) and the finentity suite LANDED ([Bench 182](../.benchmarks/182_finentity_suite_birth.md)); the wave-3 residue is now NLI4CT + ContractNLI (licence-pending) + ACOS/iSarcasmEval (behind wave-2's scorers) — the next adapter is its own claim
 
 Rethink Issue 060 (the beat-the-JDI ladder) orders the areas most-use × quick-win first:
 **tools (18.3% fold weight, ZERO coverage today)**, then retrieval (20.0%, one served
@@ -330,6 +331,52 @@ Why wave 3 and never forced: same law as wave 2's section — the triage is a sh
       capture side stays the rethink booking (060 R3a/R1b, owner-gated).
       Wave-3 residue: ContractNLI / FinEntity / VAST / NLI4CT adapters (one at
       a time per the issue law), ACOS + iSarcasmEval behind wave-2's scorers.
+- [x] T8 — the wave-3 residue's first passing probe + its adapter (the T8
+      ordering note's law: "whichever probe passes first"). **PROBES + LANDED
+      2026-11-12 (zed-wave3@amo):**
+      - **FinEntity PASS** — the authors' own readme at the board's pinned
+        GitHub sha (`yixuantt/FinEntity@3b6cedc`, the file list fetched from
+        the GitHub API at that ref) states verbatim "FinEntity is licensed
+        under ODC-BY"; the authors' OWN HF dataloader (linked from that
+        readme) tags `license:odc-by`. Two authoritative surfaces agreeing;
+        the fetched HF `FinEntity.json` verified BYTE-IDENTICAL to the
+        GitHub pinned `data/FinEntity.json` (710,430 bytes, sha256
+        `3208667d…55463`). The board's suite.md cell ("not stated in the
+        repository") predates the readme's licence section.
+      - **VAST REFUSED (fail-closed)** — the upstream
+        `emilyallaway/zero-shot-stance` carries NO licence at any surface:
+        no LICENSE file at the pinned sha e7c4775 (API contents listing
+        checked), the README silent. The wave-3 triage's "scoreable" shape
+        verdict stands; the SOURCE is refused until an author statement
+        (the StartLux DECLARED-NC precedent binds any restricted verdict;
+        absent licence is strictly worse). Noted here; never "annotated in"
+        later.
+      - **ContractNLI stays UNDECIDED** (the earlier T8-note probe:
+        cc-by-nc-sa-4.0 canonical mirror vs cc-by-4.0 legalbench curation —
+        pending an upstream-authoritative read).
+      - **NLI4CT not probed** — the probe rides its own build start (the T5
+        pattern: one less stale verdict to re-check at build time). The
+        board's suite.md names `ai-systems/Task-2-SemEval-2024 @7f32fa6` +
+        "SemEval-2024 Task 2 terms"; the repo has no LICENSE file (README
+        checked at the pin) — the terms live on the (now-404ing) task site,
+        so the probe must find an authoritative surface before any fetch.
+      **THE SUITE LANDED** ([Bench 182](../.benchmarks/182_finentity_suite_birth.md)):
+      the fetch stanza (the authors' own dataloader via the existing
+      /resolve lane — zero new fetch machinery; one `probe_license` repair:
+      the hub API wants the literal slash, the first two-segment id through
+      the probe), the builder (one case per annotated SPAN, 2,131 upstream −
+      2 quarantined conflict rows = **2,129 = the board's own fields count**,
+      the reconciliation; the builder's census asserts + the prepare
+      gold-coverage pin), FINENTITY_KEYS + the exact-membership guard, the
+      manifest §23 + the licence-ledger row (both authoritative surfaces
+      named), corpus-optional (`modelless_lane: false` — evaluation-only
+      unsplit source, the board's own disclosure). Read: laya macro-F1
+      **0.7433** vs the board chance 0.3201 = **skill +0.423** (acc 0.7412,
+      acc-frame chance 0.5303 / skill +0.4490) — honestly BELOW the modal
+      floor 0.8027 (the corpus-less zero-shot disclosure; the corpus/teacher
+      re-open stays the rethink-side booking). Latency NOT QUOTABLE
+      (preflight refused, load). Gates: 600 lib tests, clippy clean, the
+      licence rows landed before any number.
 
 ### Landscape note (2026-11-12, amo idle lane zed-c21902cf — wave-2/3 candidate, recorded not restated)
 

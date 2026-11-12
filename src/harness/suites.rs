@@ -554,6 +554,175 @@ fn pool_gold(row: &Value) -> Option<usize> {
     Some(usize::from(any_span))
 }
 
+/// Issue 114 T8 — the FinEntity entity-given sentiment universe
+/// (sorted unique upstream labels, the CLINC150 mechanical-from-fetched
+/// law; neither authoritative surface — the authors' readme nor the HF
+/// card — pins a key order). One label drifted off this set fails loud in
+/// the builder.
+pub(crate) const FINENTITY_KEYS: [&str; 3] = ["Negative", "Neutral", "Positive"];
+
+/// Issue 114 T8 — FinEntity (board id 39; the language rung's second
+/// suite, the first probe to pass the wave-3 residue: the authors' own
+/// readme at the board's pinned sha states "FinEntity is licensed under
+/// ODC-BY" and the authors' own HF card tags `license:odc-by` — two
+/// authoritative surfaces agreeing; the StartLux NC precedent does not
+/// bite an attribution licence). The board row is B_mechanical:
+/// "entity-given sentiment — the entity span is PROVIDED, the model
+/// judges the sentiment expressed toward it" (macro-F1, board chance
+/// 0.3201 Monte Carlo; our analytic random-choice macro-F1 over the same
+/// population is 0.32016 — Δ 3e-5, MC noise ✓). Each upstream document
+/// (Tang et al., EMNLP 2023 main.956) carries `content` + `annotations`
+/// (entity spans with `value`/`start`/`end`/`label`/`tag`; label ≡ tag on
+/// every row). The faithful case = ONE question per annotated SPAN: state
+/// = {text, entity, start, end} (the span provided, the offsets carried),
+/// options = the 3 sentiment keys, gold = the span's label position. The
+/// metric frame this pins is span-level macro-F1 — the frame the board's
+/// own chance arithmetic implies (a per-document 979-request frame does
+/// NOT reproduce 0.3201 under any selection rule: first-annotation reads
+/// 0.3178, plurality 0.3158 — both >10× the MC noise; the catalog's
+/// `requests=979` bookkeeping is the board's own, disclosed here, never
+/// inherited).
+///
+/// THE QUARANTINE (the board's own disclosed rule, census 2026-11-12):
+/// within one document the same exact (start, end) span carries TWO
+/// labels exactly once — doc 299's "S&P 500" (Neutral + Positive), an
+/// unresolved annotation conflict. BOTH rows drop (never a guessed
+/// pick), giving 2,131 built − 2 = **2,129 cases = the board's own
+/// `fields` count** — the reconciliation that pins the shape. Same-label
+/// exact duplicates STAY (two pairs — BlackRock, Microsoft — the board
+/// kept them; `fields` counts annotations; the third duplicated span IS
+/// the quarantined conflict). The census asserts (2,131 seen / exactly
+/// one conflicting span / 2,129 built) are the drift guard — a partial
+/// or revised fetch reds at build, never silently.
+///
+/// CORPUS-OPTIONAL (the T3 decision tree): the source is
+/// evaluation-only unsplit (the board's own disclosure — "not an
+/// invented official test split"; the authors' HF dataloader carries the
+/// same 979 documents as one `train`-named split), so the spans and
+/// their labels ARE the test rows' content (grammar-not-answers) —
+/// `modelless_lane: false`.
+#[must_use]
+pub fn build_finentity(rows_file: &Value, max_rows: usize) -> Suite {
+    let keys: Vec<String> = FINENTITY_KEYS.iter().map(|k| (*k).to_string()).collect();
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    let mut seen_annotations = 0usize;
+    let mut conflicting_spans = 0usize;
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(content), Some(annotations)) = (
+            row_str(row, "content"),
+            row.get("annotations").and_then(Value::as_array),
+        ) else {
+            continue; // malformed doc — fails the rule, the doc drops
+        };
+        // The conflicting-exact-span quarantine: within one document, a
+        // (start, end) span labelled two ways is an unresolved annotation
+        // conflict — BOTH its rows drop (never a guessed pick). Census
+        // 2026-11-12 pins exactly ONE such span in the fetched population.
+        let mut labels_by_span: HashMap<(i64, i64), &str> = HashMap::new();
+        let mut conflicting: Vec<(i64, i64)> = Vec::new();
+        for ann in annotations {
+            let (Some(start), Some(end), Some(label)) = (
+                row_i64(ann, "start"),
+                row_i64(ann, "end"),
+                row_str(ann, "label"),
+            ) else {
+                continue;
+            };
+            match labels_by_span.get(&(start, end)) {
+                Some(prev) if *prev != label => {
+                    if !conflicting.contains(&(start, end)) {
+                        conflicting.push((start, end));
+                        conflicting_spans += 1;
+                    }
+                }
+                _ => {
+                    labels_by_span.insert((start, end), label);
+                }
+            }
+        }
+        for (i, ann) in annotations.iter().enumerate() {
+            let (Some(start), Some(end), Some(label)) = (
+                row_i64(ann, "start"),
+                row_i64(ann, "end"),
+                row_str(ann, "label"),
+            ) else {
+                continue; // malformed annotation — fails the rule, drops
+            };
+            seen_annotations += 1;
+            if conflicting.contains(&(start, end)) {
+                continue; // the quarantined conflict — both rows drop
+            }
+            let Some(gold_idx) = keys.iter().position(|k| k == label) else {
+                panic!(
+                    "finentity: label {label:?} (doc {pos} span {i}) is outside \
+                     FINENTITY_KEYS — the fetched universe drifted from the \
+                     pinned three-label sentiment set"
+                );
+            };
+            let entity = ann.get("value").and_then(Value::as_str).unwrap_or("");
+            cases.push(SuiteCase {
+                id: format!("finentity:{pos}:{i}"),
+                state: json!({
+                    "text": content,
+                    "entity": entity,
+                    "start": start,
+                    "end": end,
+                }),
+                questions: vec![choice_q(
+                    "sentiment",
+                    "What sentiment does the document in `text` express toward the \
+                     entity named in `entity` (its span is characters `start`..`end` \
+                     of `text`)?",
+                    &keys,
+                    None,
+                )],
+                gold: vec![GoldAnswer {
+                    idx: gold_idx,
+                    soft: vec![0.0; FINENTITY_KEYS.len()],
+                    gold_score: None,
+                }],
+            });
+        }
+    }
+    // The census asserts bind the FULL fetched population (the eval
+    // posture loads every document; `max_rows` is 0 in the eval path and
+    // the prepare pin rests on these). A partial test envelope carries a
+    // nonzero cap and skips them.
+    if max_rows == 0 {
+        assert_eq!(
+            seen_annotations, 2_131,
+            "finentity: the fetched annotation census drifted from the pinned \
+             2,131 upstream spans — a partial or revised fetch; refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+        assert_eq!(
+            conflicting_spans, 1,
+            "finentity: {} conflicting exact spans (pinned exactly ONE — doc \
+             299's S&P 500, Neutral + Positive); a changed upstream census \
+             must be re-pinned here with the drift disclosed",
+            conflicting_spans
+        );
+        assert_eq!(
+            cases.len(),
+            2_129,
+            "finentity: the built population drifted from the board's fields \
+             count (2,131 spans − 2 quarantined conflict rows = 2,129) — a \
+             drifted fetch or quarantine rule"
+        );
+    }
+    Suite {
+        name: "finentity",
+        cases,
+        option_counts_note: "3 fixed sentiment options (Negative / Neutral / Positive, \
+                             sorted unique upstream labels); one case per annotated \
+                             entity span (2,131 − 2 quarantined conflict rows = 2,129); \
+                             the board metric is span-level macro-F1 (chance 0.3201 \
+                             Monte Carlo, analytic 0.32016); corpus-optional (eval-only \
+                             unsplit source — grammar-not-answers)",
+    }
+}
+
 /// Issue 114 T4 — the BFCL abstain option, APPENDED LAST on the
 /// irrelevance-tier rows only (the board row's "or irrelevance-detect";
 /// the pick tier never carries it — the official pick eval always has a
@@ -3618,5 +3787,99 @@ mod api_bank_builder_tests {
         let s = build_api_bank(&env, 0);
         assert_eq!(s.cases.len(), 1); // only the ToolSearcher-gold row kept
         assert_eq!(s.cases[0].gold[0].idx, 0);
+    }
+}
+
+// Issue 114 T8: the FinEntity builder — the entity-given sentiment span
+// cases, the conflicting-exact-span quarantine, and the gold mapping.
+#[cfg(test)]
+mod finentity_builder_tests {
+    use super::{FINENTITY_KEYS, build_finentity};
+
+    fn doc(annotations: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "content": "Johnson & Johnson <JNJ.N> shares gained after beating expectations.",
+            "annotations": annotations,
+        })
+    }
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    #[test]
+    fn finentity_renders_one_case_per_span_with_the_state_faithful() {
+        let doc = doc(serde_json::json!([
+            {"value": "Johnson & Johnson", "start": 0, "end": 17, "label": "Positive", "tag": "Positive"},
+            {"value": "JNJ.N", "start": 18, "end": 23, "label": "Neutral", "tag": "Neutral"}
+        ]));
+        let env = envelope(vec![doc]);
+        let s = build_finentity(&env, 1); // nonzero cap: the census asserts rest
+        assert_eq!(s.name, "finentity");
+        assert_eq!(s.cases.len(), 2);
+        let keys: Vec<_> = s.cases[0].questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, FINENTITY_KEYS); // sorted unique upstream labels
+        // Gold = the span's label position in FINENTITY_KEYS.
+        assert_eq!(s.cases[0].gold[0].idx, 2); // Positive
+        assert_eq!(s.cases[1].gold[0].idx, 1); // Neutral
+        // State = {text, entity, start, end} — the span PROVIDED (the
+        // board's own explainer), the document verbatim.
+        assert_eq!(s.cases[0].state["entity"], "Johnson & Johnson");
+        assert_eq!(s.cases[0].state["start"], 0);
+        assert_eq!(s.cases[0].state["end"], 17);
+        assert!(
+            s.cases[0].state["text"]
+                .as_str()
+                .unwrap()
+                .starts_with("Johnson & Johnson")
+        );
+    }
+
+    #[test]
+    fn finentity_quarantines_both_rows_of_the_conflicting_exact_span() {
+        // Doc 299's shape: the SAME (start, end) span labelled Neutral and
+        // Positive — an unresolved annotation conflict; BOTH rows drop
+        // (never a guessed pick), same-document neighbours stay.
+        let doc = doc(serde_json::json!([
+            {"value": "S&P 500", "start": 20, "end": 27, "label": "Neutral", "tag": "Neutral"},
+            {"value": "S&P 500", "start": 20, "end": 27, "label": "Positive", "tag": "Positive"},
+            {"value": "SPLRCM", "start": 80, "end": 87, "label": "Negative", "tag": "Negative"}
+        ]));
+        let env = envelope(vec![doc]);
+        let s = build_finentity(&env, 1);
+        assert_eq!(s.cases.len(), 1); // only the unambiguous span kept
+        assert_eq!(s.cases[0].gold[0].idx, 0); // Negative
+        assert_eq!(s.cases[0].state["entity"], "SPLRCM");
+    }
+
+    #[test]
+    fn finentity_keeps_same_label_exact_duplicates() {
+        // Two identical same-label rows for one span (the BlackRock
+        // census shape) — both stay (the board's fields count pins it).
+        let doc = doc(serde_json::json!([
+            {"value": "BlackRock Inc", "start": 0, "end": 13, "label": "Neutral", "tag": "Neutral"},
+            {"value": "BlackRock Inc", "start": 0, "end": 13, "label": "Neutral", "tag": "Neutral"}
+        ]));
+        let env = envelope(vec![doc]);
+        let s = build_finentity(&env, 1);
+        assert_eq!(s.cases.len(), 2);
+        assert_eq!(s.cases[0].gold[0].idx, 1);
+        assert_eq!(s.cases[1].gold[0].idx, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "outside FINENTITY_KEYS")]
+    fn finentity_refuses_a_drifted_label_universe() {
+        let doc = doc(serde_json::json!([
+            {"value": "X", "start": 0, "end": 1, "label": "Bullish", "tag": "Bullish"}
+        ]));
+        let env = envelope(vec![doc]);
+        let _ = build_finentity(&env, 1);
     }
 }

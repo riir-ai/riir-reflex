@@ -60,11 +60,12 @@ use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, QKind, Suite, SuiteCase, SuiteQuestion, TrainDoc,
     build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb, build_bfcl,
-    build_clinc150, build_emotion, build_emotion_syn, build_hellaswag_jdi, build_massive_intent_en,
-    build_mmlupro_jdi, build_prompt_injections, build_ragtruth, build_s1mb_choice, build_s1mb_noul,
-    build_s1mb_score, build_sst5, build_sst5_syn, build_thai_sib200, build_thai_wisesight,
-    build_typed_decisions, build_wanli_en, build_when2call, build_winogrande_jdi, build_xnli_en,
-    stratified_selection_slices, stratified_split, train_docs, train_row_label,
+    build_clinc150, build_emotion, build_emotion_syn, build_finentity, build_hellaswag_jdi,
+    build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_ragtruth,
+    build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5, build_sst5_syn,
+    build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
+    build_when2call, build_winogrande_jdi, build_xnli_en, stratified_selection_slices,
+    stratified_split, train_docs, train_row_label,
 };
 use crate::pyjson::serialize_state;
 use crate::readout::ReadoutMode;
@@ -763,6 +764,32 @@ const SUITES: &[SuiteSpec] = &[
         build: build_ragtruth,
         synthetic: None,
         modelless_lane: true,
+    },
+    // Issue 114 T8 — the JDI ladder wave-3 FinEntity row (the language
+    // rung's second suite; the first wave-3 probe to pass: the authors'
+    // own readme at the board's pinned sha states ODC-BY, and the
+    // authors' own HF card tags license:odc-by — two authoritative
+    // surfaces). B_mechanical entity-given sentiment, one case per
+    // annotated span (2,131 upstream − 2 quarantined conflict rows =
+    // 2,129, the board's own fields count; the population pin rests on
+    // the builder's census asserts). The board metric is span-level
+    // macro-F1 (chance 0.3201 Monte Carlo — analytic 0.32016 over the
+    // same population, Δ 3e-5). CORPUS-OPTIONAL: the source is
+    // evaluation-only unsplit (the board's own disclosure), so the spans
+    // and their labels ARE the test content (grammar-not-answers) — only
+    // the LLM lanes answer. test_cap 0 = ALL rows (the faithful posture).
+    SuiteSpec {
+        name: "finentity",
+        dataset_dir: "finentity",
+        test_cap: 0,
+        cal_cap: 0, // corpus-optional: no train split exists (asserted in prepare)
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: true,
+        build: build_finentity,
+        synthetic: None,
+        modelless_lane: false,
     },
     // ── RETIRED (owner call, 2026-10-02): the six Issue-004 harness
     // decision-point families (`harness_visibility` · `harness_permissions`
@@ -4732,6 +4759,9 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             // Issue 114 T7: the binary hallucination decision — index 1 is
             // the positive side `binary_f1_of` is pinned to.
             "ragtruth" => Some(crate::harness::suites::RAGTRUTH_KEYS.to_vec()),
+            // Issue 114 T8: the FinEntity sentiment universe (sorted unique
+            // upstream labels; the gold index is the position in this order).
+            "finentity" => Some(crate::harness::suites::FINENTITY_KEYS.to_vec()),
             "prompt_injections" => Some(vec!["0", "1"]),
             _ => None,
         };
@@ -4871,6 +4901,30 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
              refetch via scripts/fetch_datasets.sh and re-pin the manifest \
              digest"
         );
+    }
+    // Issue 114 T8: the FinEntity gold-coverage pin — all three sentiment
+    // classes must be present in the fetched population (a fetch that
+    // lost a class would misreport the macro-F1 the board scores).
+    // The population count itself is pinned in the BUILDER's census
+    // asserts (2,131 seen / one conflicting span / 2,129 built), so there
+    // is no separate count arm here.
+    if spec.name == "finentity" {
+        let mut gold_classes: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        for case in &suite.cases {
+            if let Some(g) = case.gold.first()
+                && let Some(k) = labels.get(g.idx)
+            {
+                gold_classes.insert(k.as_str());
+            }
+        }
+        for required in ["Negative", "Neutral", "Positive"] {
+            assert!(
+                gold_classes.contains(required),
+                "finentity: gold class {required:?} absent from the fetched \
+                 population (gold classes: {gold_classes:?}) — the board row \
+                 would misreport its macro-F1"
+            );
+        }
     }
 
     // Issue 114 T7 — the RAGTruth population pin lives in the builder (the

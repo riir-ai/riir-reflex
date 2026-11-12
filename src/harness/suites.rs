@@ -501,7 +501,11 @@ pub fn build_ragtruth(rows_file: &Value, max_rows: usize) -> Suite {
     // drifted EVAL fetch still reds here (the eval rows all carry score;
     // 900-class partials fail this assert exactly as before).
     let eval_rows = all.iter().filter(|r| eval_gold(r).is_some()).count();
-    let built_eval = all.iter().take(cases.len()).filter(|r| eval_gold(r).is_some()).count();
+    let built_eval = all
+        .iter()
+        .take(cases.len())
+        .filter(|r| eval_gold(r).is_some())
+        .count();
     if eval_rows > 0 {
         assert_eq!(
             eval_rows, 2_700,
@@ -510,7 +514,8 @@ pub fn build_ragtruth(rows_file: &Value, max_rows: usize) -> Suite {
              a drifted mirror reds here, never silently"
         );
         assert_eq!(
-            cases.len(), eval_rows,
+            cases.len(),
+            eval_rows,
             "ragtruth: rows that carry the eval schema must all build (skipped \
              rows would silently shrink the scored population)"
         );
@@ -545,9 +550,7 @@ fn pool_gold(row: &Value) -> Option<usize> {
     let counts = row
         .get("hallucination_labels_processed")
         .and_then(Value::as_object)?;
-    let any_span = counts
-        .values()
-        .any(|v| v.as_i64().is_some_and(|n| n > 0));
+    let any_span = counts.values().any(|v| v.as_i64().is_some_and(|n| n > 0));
     Some(usize::from(any_span))
 }
 
@@ -2198,17 +2201,8 @@ pub fn train_row_label(suite: &str, row: &Value) -> Option<String> {
                 .get("hallucination_labels_processed")
                 .and_then(Value::as_object);
             let counts = counts?;
-            let any_span = counts
-                .values()
-                .any(|v| v.as_i64().is_some_and(|n| n > 0));
-            Some(
-                if any_span {
-                    "hallucinated"
-                } else {
-                    "grounded"
-                }
-                .to_string(),
-            )
+            let any_span = counts.values().any(|v| v.as_i64().is_some_and(|n| n > 0));
+            Some(if any_span { "hallucinated" } else { "grounded" }.to_string())
         }
         // Issue 077: the int-ClassLabel choice suites name their engine
         // domains by the OPTION KEY at the class index (content binding —

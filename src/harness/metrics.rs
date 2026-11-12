@@ -807,7 +807,11 @@ mod binary_f1_tests {
     #[test]
     fn hard_metrics_carries_positive_f1_for_binary_rows_only() {
         // 2-option rows → positive_f1 populated (index 1 side).
-        let rows = vec![(1usize, vec![0.2, 0.8]), (0, vec![0.9, 0.1]), (1, vec![0.3, 0.7])];
+        let rows = vec![
+            (1usize, vec![0.2, 0.8]),
+            (0, vec![0.9, 0.1]),
+            (1, vec![0.3, 0.7]),
+        ];
         let m = hard_metrics(&rows);
         let expected = binary_f1_of(&[1, 0, 1], &[1, 0, 1], 1);
         assert!((m.positive_f1 - expected).abs() < 1e-12);

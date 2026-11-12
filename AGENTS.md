@@ -225,6 +225,10 @@ OPENTHAI_PYTHON=.raw/openthai-env/bin/python \
 # byte-identical, §2(c) competitor clause live; board 2026-11-06: Max #28/274 (67.52), 27 open above, mammoth-1
 # 75.34 MIT still GOAT+teacher — defers stands. Max weights ARE on HF since 10-14 (the old "closed weights" note
 # was a board-lag misread). Training-recipe distill filed: riir-train issue 676 (recipe-from-paper only).
+# (→ 2026-11-13 UPDATE: the "UNSETTLED" note below is SUPERSEDED — Research 019 finding 1 RESOLVED the
+# licence as MIT the same day it was flagged (2026-11-07; owner ruling "it's MIT" + Baseten's own model page),
+# the block LIFTED, and the hosted mammoth-1 ESC remote think leg has SERVED since the 2026-11-07 arming
+# (Bench 087/088/089). Serving + distill both live. Kept for lineage.)
 # (→ 2026-11-07: the "MIT" read above is SUPERSEDED — mammoth-1 licence UNSETTLED (board note: proprietary;
 # HF tag: license:mit; NO LICENSE file in tree) — eval proceeds, serving/distill blocked pending settlement;
 # see riir-rethink Research 019 finding 1.)

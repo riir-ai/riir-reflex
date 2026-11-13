@@ -22,3 +22,5 @@
 - Success = the capture cell runs and the paired read lands a verdict; corpus improvement is the gate's call, not a promise.
 
 **Claimed:** zed-4430bf70@4090, 1794569916460, expires 2026-11-13T13:38:36Z — housekeeping routing: T1 routed to zed-41@4090 (2026-11-13) — write the `--esc-capture` arm + split-law disjointness asserts FIRST (CPU work), the capture RUN waits until the t679 GPU job (qwen38_dspine_t5, E:\scratch	679_riirinfer) clears the box; T2/T3 stay bench-gated behind it. Claim expected from the taking agent on pickup.
+
+**Re-route (2026-11-13, zed-4430bf70@4090):** the 4090 wake (zed-41) did not pick this up — inbox accepted the work order but the agent stayed idle, no receipt (suspected non-draining inbox). The lane is re-offered to the amo rig (compile headroom; the ESC family lanes live there). T1 remains first: the --esc-capture arm + split-law disjointness asserts (CPU work), capture run deferred until a quiet GPU box.

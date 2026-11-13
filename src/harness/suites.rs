@@ -1124,6 +1124,517 @@ pub fn build_isarcasm_b(rows_file: &Value, max_rows: usize) -> Suite {
     }
 }
 
+/// the issue 114 R4a constants (the gsm8k port): the board v3 builder's
+/// SEED (kept for provenance), the group size K, the 4-option ring window,
+/// and the two positional key universes (the hellaswag positional
+/// convention).
+const GSM8K_SEED: u64 = 2026_1003;
+const GSM8K_K: usize = 10;
+const GSM8K_WINDOW: usize = 4;
+const GSM8K_KEYS_10: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+const GSM8K_KEYS_4: [&str; 4] = ["1", "2", "3", "4"];
+
+/// The GSM8K gold parse (the gsm8k_v3 `gold_of()`): the number after the
+/// LAST `####` marker, thousands separators stripped (the dataset's
+/// universal solution format; integer golds).
+fn gsm8k_gold_of(answer: &str) -> Option<i64> {
+    answer
+        .rsplit_once("####")
+        .and_then(|(_, tail)| tail.trim().replace(',', "").parse::<i64>().ok())
+}
+
+/// Issue 114 R4a queue head (2026-11-13) — `gsm8k` (openai/gsm8k, config
+/// `main`, split `test` — 1,319 problems, the board row 30's population
+/// exactly). Math word problems scored as TWO choice tracks per problem
+/// (the board's v3 rebuild shape: "Picks a math word problem's answer from
+/// 4, and separately 10, numbers, with no working"): one 10-option and one
+/// 4-option question over the SAME problem. Keys are positional
+/// [`GSM8K_KEYS_10`]/[`GSM8K_KEYS_4`] (the hellaswag positional
+/// convention); the option TEXTS are the numeric strings riding the
+/// criteria descriptions.
+///
+/// THE DISTRACTOR METHOD — ported from the board's own published builder
+/// (decision-index `decision_index/suite/build/gsm8k_v3.py` @
+/// `f5a6e4fd85fe`, METHOD `answer-groups-v1`): golds are sorted into
+/// groups of [`GSM8K_K`] DISTINCT values (each 10-option question's
+/// distractors are nine OTHER problems' golds — the anti-lucky-guess
+/// property), the 4-option track takes a shifted 4-wide window of the
+/// group's sorted ring around the gold, and option ORDER is a
+/// per-question seeded shuffle. Re-seated on the house primitives: the
+/// board ties ties with sha256 and shuffles with Python's MT19937; this
+/// port folds the house FNV constant (the [`jdi_row_identity_hash`]
+/// multiplier, ungated — Issue-088) over `"{SEED}:…"` strings for both
+/// the tiebreak and the shuffles (every shuffle a KEY-SORT, no RNG
+/// state). The option sets are therefore METHOD-identical but NOT
+/// byte-identical to the board's rows — the disclosure the bench record
+/// carries. The board's SEED is kept for provenance.
+///
+/// CORPUS-OPTIONAL (the finentity/isarcasm_b posture; registry
+/// `modelless_lane: false`): the options are case-specific NUMBERS and
+/// the per-question shuffle makes any position prior zero by
+/// construction — the modelless lane carries no lawful signal, and the
+/// router binds ONE domain per input while the case carries two tracks.
+#[must_use]
+pub fn build_gsm8k(rows_file: &Value, max_rows: usize) -> Suite {
+    let all = rows_of(rows_file);
+    // The gold of a GSM8K row rides the solution text after the LAST
+    // `####` marker (the dataset's universal format; thousands separators
+    // stripped). A row missing the marker is a drifted fetch — dropped,
+    // and the census pin below makes the shrinkage loud.
+    let mut golds: HashMap<usize, i64> = HashMap::new();
+    let mut questions: Vec<Option<String>> = vec![None; all.len()];
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(problem), Some(answer)) = (row_str(row, "question"), row_str(row, "answer"))
+        else {
+            continue;
+        };
+        let Some(gold) = gsm8k_gold_of(answer) else {
+            continue;
+        };
+        golds.insert(pos, gold);
+        questions[pos] = Some(problem.to_string());
+    }
+    let n = sampled(&all, max_rows).len();
+    // ── the answer-groups walk (the gsm8k_v3 port) ──────────────────────
+    let mut order: Vec<usize> = (0..n).filter(|i| golds.contains_key(i)).collect();
+    order.sort_by_key(|&i| {
+        (
+            golds[&i],
+            house_fold(&format!("{}:order:{}", GSM8K_SEED, i)),
+        )
+    });
+    let r = order.len() % GSM8K_K;
+    let (left, extra) = gsm8k_leftover(&order, &golds, r);
+    let taken: std::collections::HashSet<usize> = left.iter().copied().collect();
+    let rest: Vec<usize> = order
+        .iter()
+        .copied()
+        .filter(|i| !taken.contains(i))
+        .collect();
+    let vals: Vec<i64> = rest.iter().map(|&i| golds[&i]).collect();
+    // group id → (members, the K distinct values, band)
+    let mut groups: Vec<(Vec<usize>, Vec<i64>)> = Vec::new();
+    for (s, m) in gsm8k_bands(&vals, GSM8K_K) {
+        for j in 0..m {
+            let members: Vec<usize> = (0..GSM8K_K).map(|t| rest[s + t * m + j]).collect();
+            let values: Vec<i64> = members.iter().map(|&c| golds[&c]).collect();
+            groups.push((members, values));
+        }
+    }
+    if !left.is_empty() {
+        let mut members = left.clone();
+        members.sort_by_key(|&i| golds[&i]);
+        let mut values: Vec<i64> = members.iter().map(|&c| golds[&c]).collect();
+        values.extend(extra.iter().copied());
+        groups.push((members, values));
+    }
+    // the block shifts: per block of WINDOW groups, a key-sorted permutation
+    let mut shifts: Vec<usize> = Vec::new();
+    for block in 0..groups.len().div_ceil(GSM8K_WINDOW) {
+        let remaining = groups
+            .len()
+            .saturating_sub(block * GSM8K_WINDOW)
+            .min(GSM8K_WINDOW);
+        let mut perm: Vec<usize> = (0..GSM8K_WINDOW).collect();
+        perm.sort_by_key(|&v| house_fold(&format!("{}:shifts:{}:{}", GSM8K_SEED, block, v)));
+        shifts.extend(perm.into_iter().take(remaining));
+    }
+    // member → its 10-value group + the 4-value shifted window
+    let mut set10: HashMap<usize, Vec<i64>> = HashMap::new();
+    let mut set4: HashMap<usize, Vec<i64>> = HashMap::new();
+    for (g, (members, values)) in groups.iter().enumerate() {
+        assert_eq!(
+            values.len(),
+            GSM8K_K,
+            "gsm8k: an answer group carries {} values — the grouping broke",
+            values.len()
+        );
+        let mut sorted = values.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            GSM8K_K,
+            "gsm8k: an answer group carries duplicate values — the distinct-value \
+             law broke"
+        );
+        let ring = sorted;
+        let shift = shifts[g];
+        let n_ring = ring.len();
+        let pos_of = |v: i64| {
+            ring.iter()
+                .position(|&x| x == v)
+                .expect("gold in own group")
+        };
+        for (t, &member) in members.iter().enumerate() {
+            let four: Vec<i64> = (0..GSM8K_WINDOW)
+                .map(|w| ring[(pos_of(values[t]) + n_ring - shift + w) % n_ring])
+                .collect();
+            assert!(four.contains(&values[t]));
+            set10.insert(member, values.clone());
+            set4.insert(member, four);
+        }
+    }
+    // ── the cases ──────────────────────────────────────────────────────
+    let keys10: Vec<String> = GSM8K_KEYS_10.iter().map(|k| (*k).to_string()).collect();
+    let keys4: Vec<String> = GSM8K_KEYS_4.iter().map(|k| (*k).to_string()).collect();
+    let mut cases = Vec::new();
+    for (pos, question) in questions.iter().enumerate() {
+        let Some(problem) = question else { continue };
+        let (Some(vals10), Some(vals4)) = (set10.get(&pos), set4.get(&pos)) else {
+            continue;
+        };
+        let (opts10, gold10) = gsm8k_shuffled_options(vals10, golds[&pos], pos, 10);
+        let (opts4, gold4) = gsm8k_shuffled_options(vals4, golds[&pos], pos, 4);
+        // the keys are POSITIONAL ("1".."10" = the i-th option in order), so
+        // the gold's key index IS its index in the shuffled options.
+        let gold_idx10 = gold10;
+        let gold_idx4 = gold4;
+        let descs10: Vec<Option<String>> = opts10.iter().map(|v| Some(v.clone())).collect();
+        let descs4: Vec<Option<String>> = opts4.iter().map(|v| Some(v.clone())).collect();
+        cases.push(SuiteCase {
+            id: format!("gsm8k:{pos}"),
+            state: json!({ "problem": problem }),
+            questions: vec![
+                choice_q(
+                    "answer10",
+                    "Picks the math word problem in `problem`'s answer from 10 numbers, \
+                     with no working.",
+                    &keys10,
+                    Some(descs10),
+                ),
+                choice_q(
+                    "answer4",
+                    "Picks the math word problem in `problem`'s answer from 4 numbers, \
+                     with no working.",
+                    &keys4,
+                    Some(descs4),
+                ),
+            ],
+            gold: vec![
+                GoldAnswer {
+                    idx: gold_idx10,
+                    soft: vec![0.0; GSM8K_KEYS_10.len()],
+                    gold_score: None,
+                },
+                GoldAnswer {
+                    idx: gold_idx4,
+                    soft: vec![0.0; GSM8K_KEYS_4.len()],
+                    gold_score: None,
+                },
+            ],
+        });
+    }
+    // The eval population pin binds the FULL fetched envelope (max_rows 0 =
+    // the eval posture; the contractnli split-discriminator law — no train
+    // envelope exists here, the fetch is test-only).
+    if max_rows == 0 {
+        assert_eq!(
+            cases.len(),
+            1_319,
+            "gsm8k: the fetched test population drifted from the board's fields \
+             count (1,319 problems) — a partial or revised fetch; refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+        assert_eq!(
+            cases.len() * 2,
+            2_638,
+            "gsm8k: the question count drifted from the board's request count \
+             (1,319 problems × 2 tracks = 2,638)"
+        );
+    }
+    Suite {
+        name: "gsm8k",
+        cases,
+        option_counts_note: "TWO choice tracks per problem (the board v3 rebuild shape): a \
+                             10-option question (keys 1..10, chance 0.1) and a 4-option \
+                             question (keys 1..4, chance 0.25) over the same problem — 2,638 \
+                             questions over 1,319 problems, pooled chance 0.175 (the board's \
+                             per-track average). The options are case-specific numbers built \
+                             at load by the answer-groups-v1 port (distinct-value groups from \
+                             other problems' golds; shifted 4-rings; per-question key-sorted \
+                             shuffles on the house FNV constant — METHOD-identical, NOT \
+                             byte-identical to the board's rows). Corpus-optional: the \
+                             per-question shuffle makes any position prior zero by \
+                             construction, so the modelless lane is refused (laya-only) — \
+                             NO train split is fetched.",
+    }
+}
+
+/// The GSM8K option shuffle (the gsm8k_v3 `options()` port): the numeric
+/// strings, key-sorted per (problem, option count) on the house fold —
+/// deterministic, no RNG state. Returns (ordered numeric strings, the
+/// gold's index in them).
+fn gsm8k_shuffled_options(
+    values: &[i64],
+    gold: i64,
+    pos: usize,
+    count: usize,
+) -> (Vec<String>, usize) {
+    let opts: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+    // python: Random(f"{SEED}:GSM:{i}:{count}").shuffle(opts) — the
+    // key-sort analogue: each element sorts by its own fold; the original
+    // index breaks the (theoretical) key tie.
+    let mut keyed: Vec<(u64, usize)> = opts
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            (
+                house_fold(&format!("{}:GSM:{}:{}:{}", GSM8K_SEED, pos, count, s)),
+                i,
+            )
+        })
+        .collect();
+    keyed.sort_unstable();
+    let ordered: Vec<String> = keyed.iter().map(|&(_, i)| opts[i].clone()).collect();
+    let gold_str = gold.to_string();
+    let idx = ordered
+        .iter()
+        .position(|s| *s == gold_str)
+        .expect("gold in own option set");
+    (ordered, idx)
+}
+
+/// The GSM8K leftover-group port (the gsm8k_v3 `leftover()`): the trailing
+/// `len % K` problems (distinct golds, picked from a seeded scan start) are
+/// padded with the nearest outside values (above the pick's top, then below
+/// its bottom) so the group still carries K distinct options.
+fn gsm8k_leftover(
+    order: &[usize],
+    golds: &HashMap<usize, i64>,
+    r: usize,
+) -> (Vec<usize>, Vec<i64>) {
+    if r == 0 {
+        return (Vec::new(), Vec::new());
+    }
+    // python: start = Random(f"{SEED}:leftover").randrange(len(order)) —
+    // the key-sort analogue: the index with the minimal fold key.
+    let start = (0..order.len())
+        .min_by_key(|&i| house_fold(&format!("{}:leftover:{}", GSM8K_SEED, i)))
+        .expect("order non-empty");
+    let mut scan: Vec<usize> = order[start..].to_vec();
+    let mut head: Vec<usize> = order[..start].to_vec();
+    head.reverse();
+    scan.extend(head);
+    let mut pick: Vec<usize> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for &i in &scan {
+        if seen.insert(golds[&i]) {
+            pick.push(i);
+        }
+        if pick.len() == r {
+            break;
+        }
+    }
+    let top = pick
+        .iter()
+        .map(|&i| golds[&i])
+        .max()
+        .expect("pick non-empty");
+    let bottom = pick
+        .iter()
+        .map(|&i| golds[&i])
+        .min()
+        .expect("pick non-empty");
+    let mut above: Vec<i64> = golds.values().copied().filter(|&g| g > top).collect();
+    above.sort_unstable();
+    above.dedup();
+    let mut below: Vec<i64> = golds.values().copied().filter(|&g| g < bottom).collect();
+    below.sort_unstable();
+    below.dedup();
+    below.reverse();
+    let mut extra = above;
+    extra.extend(below);
+    extra.truncate(GSM8K_K - r);
+    (pick, extra)
+}
+
+/// The GSM8K band partition (the gsm8k_v3 `bands()`): consecutive segments
+/// `(start, m)` where a segment holds `k * m` values whose longest
+/// equal-value run is ≤ m — so the m stride-groups carved from it each get
+/// k DISTINCT values. The tail recovery pops prior segments until the
+/// remainder fits; a value more frequent than n/k is a loud refusal (the
+/// python builder's ValueError).
+fn gsm8k_bands(vals: &[i64], k: usize) -> Vec<(usize, usize)> {
+    let (mut s, n) = (0usize, vals.len());
+    let mut out: Vec<(usize, usize)> = Vec::new();
+    while s < n {
+        let mut m = 1usize;
+        while s + k * m <= n && gsm8k_max_run(&vals[s..s + k * m]) > m {
+            m += 1;
+        }
+        if s + k * m > n {
+            loop {
+                let s0 = out.pop().map_or(0, |(a, _)| a);
+                let m2 = (n - s0) / k;
+                if gsm8k_max_run(&vals[s0..n]) <= m2 {
+                    out.push((s0, m2));
+                    return out;
+                }
+                if s0 == 0 {
+                    panic!(
+                        "gsm8k: a gold value occurs more than n/k times — the \
+                         option grouping cannot build distinct sets"
+                    );
+                }
+            }
+        }
+        out.push((s, m));
+        s += k * m;
+    }
+    out
+}
+
+/// the gsm8k_v3 `max_run()`: the longest run of equal consecutive values
+/// (1 on a slice shorter than two — the python shape).
+fn gsm8k_max_run(vals: &[i64]) -> usize {
+    let (mut best, mut run) = (1usize, 1usize);
+    for w in vals.windows(2) {
+        run = if w[0] == w[1] { run + 1 } else { 1 };
+        best = best.max(run);
+    }
+    best
+}
+
+// Issue 114 R4a: the GSM8K builder — the gold parse, the answer-group
+// laws (distinct-value groups incl. gold; the 4-ring contains gold), the
+// two-track question shape, and the shuffle determinism.
+#[cfg(test)]
+mod gsm8k_builder_tests {
+    use super::{GSM8K_K, build_gsm8k, gsm8k_bands, gsm8k_gold_of, gsm8k_max_run};
+
+    fn gsm_row(question: &str, gold: i64) -> serde_json::Value {
+        serde_json::json!({
+            "question": question,
+            "answer": format!("some working lines\n#### {}", gold),
+        })
+    }
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    #[test]
+    fn gold_parse_reads_the_last_marker_and_strips_commas() {
+        assert_eq!(gsm8k_gold_of("x\n#### 18"), Some(18));
+        assert_eq!(gsm8k_gold_of("has #### twice\n#### 2,500"), Some(2_500));
+        assert_eq!(gsm8k_gold_of("no marker here"), None);
+        assert_eq!(gsm8k_gold_of("#### not-a-number"), None);
+    }
+
+    #[test]
+    fn bands_separate_equal_neighbors_so_groups_stay_distinct() {
+        // Equal neighbors force m > 1 segments; each stride group carved
+        // from a segment must carry K DISTINCT values (the anti-lucky-guess
+        // property the board's bands() exists for).
+        let vals: Vec<i64> = (1..=10).flat_map(|v| [v, v]).collect();
+        assert_eq!(vals.len(), 20);
+        for (s, m) in gsm8k_bands(&vals, GSM8K_K) {
+            let seg = &vals[s..s + GSM8K_K * m];
+            assert!(gsm8k_max_run(seg) <= m, "segment {s}.. violated run ≤ {m}");
+            for j in 0..m {
+                let group: Vec<i64> = (0..GSM8K_K).map(|t| seg[t * m + j]).collect();
+                let mut sorted = group.clone();
+                sorted.sort_unstable();
+                sorted.dedup();
+                assert_eq!(
+                    sorted.len(),
+                    GSM8K_K,
+                    "stride group {j} of segment {s} carries duplicates"
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "more than n/k times")]
+    fn bands_refuse_a_value_dominating_the_pool() {
+        // Ten identical values across the whole slice — the python
+        // builder's ValueError shape, our loud panic.
+        let vals = [7i64; 10];
+        let _ = gsm8k_bands(&vals, GSM8K_K);
+    }
+
+    #[test]
+    fn gsm8k_renders_two_tracks_per_problem_with_distinct_options() {
+        // 12 distinct golds, 12 problems (r = 12 % 10 = 2 → one leftover
+        // group + one full group) — small enough to eyeball, large enough
+        // to exercise both group shapes.
+        let rows: Vec<serde_json::Value> = (0..12)
+            .map(|i| gsm_row(&format!("problem {} text", i), (i * 37 + 3) % 400))
+            .collect();
+        let s = build_gsm8k(&envelope(rows), 12); // nonzero cap: the census assert rests
+        assert_eq!(s.name, "gsm8k");
+        assert_eq!(s.cases.len(), 12);
+        for case in &s.cases {
+            assert_eq!(case.questions.len(), 2);
+            let q10 = &case.questions[0];
+            let q4 = &case.questions[1];
+            assert_eq!(q10.qid, "answer10");
+            assert_eq!(q4.qid, "answer4");
+            let opts10: Vec<String> = q10
+                .criteria
+                .as_object()
+                .unwrap()
+                .values()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect();
+            let opts4: Vec<String> = q4
+                .criteria
+                .as_object()
+                .unwrap()
+                .values()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect();
+            assert_eq!(opts10.len(), 10);
+            assert_eq!(opts4.len(), 4);
+            // the distinct-value law (parse the numeric texts back)
+            let mut nums10: Vec<i64> = opts10.iter().filter_map(|s| s.parse().ok()).collect();
+            nums10.sort_unstable();
+            nums10.dedup();
+            assert_eq!(nums10.len(), 10, "10-track options must be distinct");
+            let mut nums4: Vec<i64> = opts4.iter().filter_map(|s| s.parse().ok()).collect();
+            nums4.sort_unstable();
+            nums4.dedup();
+            assert_eq!(nums4.len(), 4, "4-track options must be distinct");
+            // the gold rides BOTH tracks at its gold index
+            let gold10 = opts10[case.gold[0].idx].parse::<i64>().unwrap();
+            let gold4 = opts4[case.gold[1].idx].parse::<i64>().unwrap();
+            assert_eq!(gold10, gold4, "both tracks ask the same problem's gold");
+            // and it is THE problem's own gold (the state's problem index
+            // pins it: problem N's gold is the fixture's f(N))
+            let pos: usize = case.id.rsplit_once(':').unwrap().1.parse().unwrap();
+            assert_eq!(gold10, ((pos * 37 + 3) % 400) as i64);
+            assert_eq!(case.gold[0].soft.len(), 10);
+            assert_eq!(case.gold[1].soft.len(), 4);
+        }
+    }
+
+    #[test]
+    fn gsm8k_option_walk_is_deterministic() {
+        let rows: Vec<serde_json::Value> = (0..12)
+            .map(|i| gsm_row(&format!("problem {} text", i), (i * 37 + 3) % 400))
+            .collect();
+        let a = build_gsm8k(&envelope(rows.clone()), 12);
+        let b = build_gsm8k(&envelope(rows), 12);
+        for (ca, cb) in a.cases.iter().zip(&b.cases) {
+            assert_eq!(ca.questions[0].criteria, cb.questions[0].criteria);
+            assert_eq!(ca.questions[1].criteria, cb.questions[1].criteria);
+            assert_eq!(ca.gold[0].idx, cb.gold[0].idx);
+            assert_eq!(ca.gold[1].idx, cb.gold[1].idx);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the board's fields count")]
+    fn gsm8k_full_load_refuses_a_drifted_population() {
+        let rows: Vec<serde_json::Value> = (0..12)
+            .map(|i| gsm_row(&format!("p{}", i), i as i64))
+            .collect();
+        let _ = build_gsm8k(&envelope(rows), 0); // max_rows 0 = the eval census
+    }
+}
+
 /// Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer (board
 /// row 9, the home-appliance simulator; MIT, board-generated, seed
 /// 2026091807). One case per kept household request (88 — the release-v2.1
@@ -1221,7 +1732,7 @@ pub fn build_home_appliance(rows_file: &Value, max_rows: usize) -> Suite {
                 },
                 QKind::Score => unreachable!("refused above"),
             };
-            let k = crate::harness::runner::question_option_count(&SuiteQuestion {
+            let k = question_option_count(&SuiteQuestion {
                 qid: qid.clone(),
                 kind,
                 instructions: instructions.to_string(),
@@ -3239,12 +3750,35 @@ fn jdi_row_identity_hash(suite: &str, row: &Value) -> u64 {
         _ => None,
     }
     .unwrap_or_else(|| row.to_string());
+    house_fold(&identity)
+}
+
+/// The house FNV-1a 64 fold (the `jdi_row_identity_hash` multiplier law —
+/// see that fn's doc for the Issue-088 transposition constant; the gsm8k
+/// port reuses the SAME fold for its tiebreak + shuffle keys so the whole
+/// suite rides one deterministic primitive).
+fn house_fold(s: &str) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for &b in identity.as_bytes() {
+    for &b in s.as_bytes() {
         h ^= u64::from(b);
         h = h.wrapping_mul(0x0010_0000_01b3);
     }
     h
+}
+
+/// The option count one suite question presents — k for the case-exact
+/// chance fold (choice: the criteria entry count; score: the level array;
+/// noul: always 2, `[false, true]`). A malformed criteria shape reads 0
+/// and the metrics walk refuses loud. LIVES HERE (ungated) so the
+/// home_appliance builder consumes it at the flag-OFF posture — the
+/// runner (modelless-gated) re-exports this spelling; the issue-077
+/// E0433 class fixed at the sink (2026-11-13).
+pub(crate) fn question_option_count(q: &SuiteQuestion) -> usize {
+    match q.kind {
+        QKind::Choice => q.criteria.as_object().map_or(0, |m| m.len()),
+        QKind::Score => q.criteria.as_array().map_or(0, |a| a.len()),
+        QKind::Noul => 2,
+    }
 }
 
 /// Train rows per suite. Label/text rules:
@@ -4708,8 +5242,7 @@ mod isarcasm_b_builder_tests {
 // ── Issue 114 T11: the home_appliance builder tests ────────────────────────
 #[cfg(test)]
 mod home_appliance_builder_tests {
-    use super::build_home_appliance;
-    use crate::harness::runner::question_option_count;
+    use super::{build_home_appliance, question_option_count};
     use serde_json::json;
 
     /// One board-shaped row: two questions (the 9-option resolution

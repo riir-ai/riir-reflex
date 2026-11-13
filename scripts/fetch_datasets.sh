@@ -1664,6 +1664,29 @@ main() {
         fetch_home_appliance home_appliance "${HOME_APPLIANCE_CLONE:-$ROOT/.raw/mammoth-local/decision-index}"
     fi
 
+    # 26. gsm8k — issue 114 R4a queue head (the knowledge nine triage,
+    #     2026-11-13; board row 30). openai/gsm8k config=main split=test,
+    #     fetched WHOLE (1,319 problems = the board's population exactly;
+    #     the option sets are rebuilt at build time, never fetched). MIT at
+    #     both hub surfaces (tag + cardData — probe below). CORPUS-OPTIONAL
+    #     (the finentity/isarcasm_b posture): the options are case-specific
+    #     NUMBERS and the builder shuffles them per question, so a position
+    #     prior is zero by construction — the modelless lane carries no
+    #     lawful signal; the lane is laya-only and NO train split is
+    #     fetched (the 7,473-problem train pool stays unfetched in this
+    #     stanza; a corpus re-open would need a corpus shape the numeric
+    #     option universe can consume — recorded, not built).
+    if want_suite gsm8k; then
+        log "[probe] gsm8k /splits"
+        probe_splits gsm8k "openai%2Fgsm8k"
+        log "[probe] gsm8k licence"
+        probe_license gsm8k "openai/gsm8k"
+    fi
+    if want_suite gsm8k; then
+        log "[suite] gsm8k openai/gsm8k config=main split=test cap=all (universe rows; the board's 1,319-problem population; eval cap lives in the harness)"
+        fetch_suite gsm8k "openai%2Fgsm8k" main test all
+    fi
+
     log ""
     log "summary: files=$FILES rows=$ROWS failed_requests=$FAILED"
     if [ "$FAILED" -gt 0 ]; then

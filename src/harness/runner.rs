@@ -61,7 +61,7 @@ use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
     SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
     build_bfcl, build_clinc150, build_contractnli, build_emotion, build_emotion_syn,
-    build_finentity, build_hellaswag_jdi, build_home_appliance, build_isarcasm_b,
+    build_finentity, build_gsm8k, build_hellaswag_jdi, build_home_appliance, build_isarcasm_b,
     build_isarcasmeval, build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections,
     build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5,
     build_sst5_syn, build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
@@ -865,6 +865,31 @@ const SUITES: &[SuiteSpec] = &[
         synthetic: None,
         modelless_lane: false,
     },
+    // Issue 114 R4a queue head (2026-11-13) — the knowledge nine triage's
+    // first adapter (board row 30; openai/gsm8k config=main split=test,
+    // fetched WHOLE — 1,319 problems = the board's population). TWO choice
+    // tracks per problem (10-option + 4-option = 2,638 questions, pooled
+    // chance 0.175 = the board's per-track average); the option sets are
+    // built at load by the answer-groups-v1 port (the board's own published
+    // builder, re-seated on the house fold — see the builder's doc). LICENCE:
+    // MIT at both hub surfaces (tag + cardData — probe 2026-11-13).
+    // CORPUS-OPTIONAL (`modelless_lane: false`): the options are
+    // case-specific NUMBERS and the per-question shuffle makes any position
+    // prior zero by construction — the fake lane carries no lawful signal;
+    // NO train split is fetched.
+    SuiteSpec {
+        name: "gsm8k",
+        dataset_dir: "gsm8k",
+        test_cap: 0, // all 1,319 problems — the board's population
+        cal_cap: 0,  // corpus-optional: no train pool is consulted
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: false,
+        build: build_gsm8k,
+        synthetic: None,
+        modelless_lane: false,
+    },
     // Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer
     // (board row 9, the home-appliance simulator; MIT, board-generated —
     // the fetch lane regenerates the rows with the board's own generator
@@ -977,14 +1002,10 @@ const CASE_EXACT_SUITES: &[&str] = &["home_appliance"];
 /// The option count one suite question presents — k for the case-exact
 /// chance fold (choice: the criteria entry count; score: the level array;
 /// noul: always 2, `[false, true]`). A malformed criteria shape reads 0
-/// and [`case_exact_metrics`] refuses loud at the walk.
-pub(crate) fn question_option_count(q: &SuiteQuestion) -> usize {
-    match q.kind {
-        QKind::Choice => q.criteria.as_object().map_or(0, |m| m.len()),
-        QKind::Score => q.criteria.as_array().map_or(0, |a| a.len()),
-        QKind::Noul => 2,
-    }
-}
+/// and [`case_exact_metrics`] refuses loud at the walk. LIVES IN suites.rs
+/// (ungated — the home_appliance builder consumes it at the flag-OFF
+/// posture; this spelling re-exports for the runner's own callers).
+pub(crate) use crate::harness::suites::question_option_count;
 
 /// The case-exact metrics for one lane's eval, or None off the arm list
 /// (`CASE_EXACT_SUITES`). One home for the per-case + per-question-count

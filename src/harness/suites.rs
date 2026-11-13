@@ -2238,6 +2238,120 @@ mod cruxeval_builder_tests {
     }
 }
 
+// Issue 114 R4a queue #6: the GPQA builder — the board's own A..D letter
+// keys, the fixed 4-choice shape, the gold-index join, the shape
+// refusals, the emptiness gate, and the census pin. SYNTHETIC FIXTURE
+// TEXT ONLY (the local-only rows discipline — no real question text ever
+// enters a tracked file).
+#[cfg(test)]
+mod gpqa_builder_tests {
+    use super::build_gpqa;
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    fn gpqa_row(sid: i64, choices: &[&str], correct: i64) -> serde_json::Value {
+        serde_json::json!({
+            "sid": sid,
+            "question": "Synthetic fixture prompt (never real benchmark text).",
+            "choices": choices,
+            "correct": correct,
+        })
+    }
+
+    #[test]
+    fn gpqa_builds_the_board_letters_with_the_texts_as_values() {
+        let env = envelope(vec![gpqa_row(7, &["opt-a", "opt-b", "opt-c", "opt-d"], 2)]);
+        let s = build_gpqa(&env, 1);
+        assert_eq!(s.cases.len(), 1);
+        let case = &s.cases[0];
+        assert_eq!(case.id, "gpqa:7");
+        let q = &case.questions[0];
+        let keys: Vec<_> = q.criteria.as_object().unwrap().keys().cloned().collect();
+        assert_eq!(keys, ["A", "B", "C", "D"]); // the board's own letters
+        assert_eq!(q.criteria["C"], "opt-c"); // the text rides the value
+        assert_eq!(case.gold[0].idx, 2); // the transform's precomputed join
+        assert!(case.state.as_object().unwrap().is_empty()); // the board's state=""
+        assert_eq!(
+            q.instructions,
+            "Synthetic fixture prompt (never real benchmark text)."
+        );
+    }
+
+    #[test]
+    fn gpqa_gold_letter_distribution_maps_through_the_options() {
+        // The gold lands on each letter across the four positions.
+        for (correct, letter) in [(0usize, "A"), (1, "B"), (2, "C"), (3, "D")] {
+            let env = envelope(vec![gpqa_row(
+                correct as i64,
+                &["w", "x", "y", "z"],
+                correct as i64,
+            )]);
+            let s = build_gpqa(&env, 1);
+            assert_eq!(s.cases[0].gold[0].idx, correct);
+            assert_eq!(
+                s.cases[0].questions[0].criteria[letter],
+                serde_json::json!(&["w", "x", "y", "z"][correct])
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "GPQA is fixed 4-choice")]
+    fn gpqa_refuses_a_three_candidate_row() {
+        let _ = build_gpqa(&envelope(vec![gpqa_row(0, &["a", "b", "c"], 0)]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "gold index 4 outside the 4-choice set")]
+    fn gpqa_refuses_a_gold_outside_the_set() {
+        let _ = build_gpqa(&envelope(vec![gpqa_row(0, &["a", "b", "c", "d"], 4)]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "candidate 2 is not a string")]
+    fn gpqa_refuses_a_non_string_candidate() {
+        let bad = serde_json::json!({
+            "sid": 0,
+            "question": "q",
+            "choices": ["a", "b", 5, "d"],
+            "correct": 0,
+        });
+        let _ = build_gpqa(&envelope(vec![bad]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "candidate 3 is empty")]
+    fn gpqa_refuses_an_empty_option_cell() {
+        let _ = build_gpqa(&envelope(vec![gpqa_row(0, &["a", "b", "c", " "], 0)]), 1);
+    }
+
+    #[test]
+    fn gpqa_is_deterministic() {
+        let rows: Vec<serde_json::Value> = (0..5)
+            .map(|i| gpqa_row(i, &["aa", "bb", "cc", "dd"], i % 4))
+            .collect();
+        let s1 = build_gpqa(&envelope(rows.clone()), 5); // nonzero cap: the census assert rests
+        let s2 = build_gpqa(&envelope(rows), 5);
+        assert_eq!(s1.cases.len(), s2.cases.len());
+        for (a, b) in s1.cases.iter().zip(&s2.cases) {
+            assert_eq!(a.id, b.id);
+            assert_eq!(a.questions, b.questions);
+            assert_eq!(a.gold, b.gold);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the pinned 198 cases")]
+    fn gpqa_full_load_refuses_a_drifted_population() {
+        let rows: Vec<serde_json::Value> = (0..4)
+            .map(|i| gpqa_row(i, &["a", "b", "c", "d"], 0))
+            .collect();
+        let _ = build_gpqa(&envelope(rows), 0); // max_rows 0 = the eval census
+    }
+}
+
 /// Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer (board
 /// row 9, the home-appliance simulator; MIT, board-generated, seed
 /// 2026091807). One case per kept household request (88 — the release-v2.1
@@ -2760,6 +2874,120 @@ pub fn build_cruxeval(rows_file: &Value, max_rows: usize) -> Suite {
                              values; 570 cases (800 source − 230 excluded counted, the \
                              board's own census); corpus-off at the census (eval-only \
                              snippets + archived model generations — grammar-not-answers)",
+    }
+}
+
+/// Issue 114 R4a queue #6 — the GPQA Diamond suite (board row 25,
+/// `idavidrein/gpqa` dataset.zip — the password-public zip, the file bytes
+/// pinned by sha256, the board's own pin). Graduate-level science MC
+/// (biology / physics / chemistry), the board's `A direct: Original
+/// multiple-choice options` adaptation. ONE choice question per case;
+/// the option keys are the BOARD'S OWN letters "A".."D" — the fetch
+/// transform ports the board's normalize recipe BYTE-EXACT
+/// (normalize_text.py::gpqa @ clone sha f5a6e4fd85fe: options =
+/// [Correct Answer] + Incorrect 1..3, the per-source-index MT19937
+/// shuffle `random.Random(f"20260918:GPQA:{i}")` — python-native, NO
+/// re-seat, so the option order IS the board's), the gold index = the
+/// letter where the correct answer landed. The dataset canary
+/// (`gpqa:4b24:…`, a superset of the BigBench canary) is verified PER
+/// ROW at the transform (the BBH belt-and-braces); the
+/// Explanation/validator/writer columns NEVER reach the envelope
+/// (leaked answer material — the SATA trap-drop class).
+///
+/// THE LOCAL-ONLY ROWS DISCIPLINE (the authors' ask, verbatim on the HF
+/// gated prompt: do not reveal examples in plain text or images online):
+/// the rows live under `.raw/` ONLY (untracked by construction), no
+/// tracked artifact carries question text, the birth artifacts are
+/// aggregate-only — this builder's fixtures use synthetic text and the
+/// census asserts counts only.
+///
+/// CORPUS-OFF at the census: eval-only (the dataset ships no train
+/// split; the canary + the authors' ask make the corpus posture moot) —
+/// laya-only, `modelless_lane: false`. 4-choice chance 0.25 (the
+/// board's pin; the gold letters land 48/54/47/49 — no position prior).
+#[must_use]
+pub fn build_gpqa(rows_file: &Value, max_rows: usize) -> Suite {
+    const EXPECTED_CASES: usize = 198;
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(sid), Some(question), Some(choices), Some(correct)) = (
+            row_i64(row, "sid").map(|v| v.to_string()),
+            row_str(row, "question"),
+            row.get("choices").and_then(Value::as_array),
+            row_i64(row, "correct"),
+        ) else {
+            panic!(
+                "gpqa: row {pos} drifted from the pinned transform shape \
+                 (sid/question/choices/correct required) — refetch via \
+                 scripts/fetch_datasets.sh"
+            );
+        };
+        assert!(
+            choices.len() == 4,
+            "gpqa: row {pos} (sid {sid}) carries {} candidates — GPQA is fixed \
+             4-choice (the board's own A..D letters)",
+            choices.len()
+        );
+        assert!(
+            (0..4).contains(&correct),
+            "gpqa: row {pos} (sid {sid}) gold index {correct} outside the \
+             4-choice set — the transform's gold join drifted"
+        );
+        let mut texts: Vec<Option<String>> = Vec::with_capacity(4);
+        for (i, c) in choices.iter().enumerate() {
+            let s = c.as_str().unwrap_or_else(|| {
+                panic!(
+                    "gpqa: row {pos} (sid {sid}) candidate {i} is not a string — \
+                     the transform emits plain option texts"
+                )
+            });
+            assert!(
+                !s.trim().is_empty(),
+                "gpqa: row {pos} (sid {sid}) candidate {i} is empty — the \
+                 transform's emptiness gate drifted"
+            );
+            texts.push(Some(s.to_string()));
+        }
+        let keys: Vec<String> = (0..4)
+            .map(|i| char::from(b'A' + u8::try_from(i).expect("4 keys fit u8")).to_string())
+            .collect();
+        cases.push(SuiteCase {
+            id: format!("gpqa:{sid}"),
+            // The board's own state shape: EMPTY (the question IS the
+            // instructions; there is no separate state payload).
+            state: json!({}),
+            questions: vec![choice_q("answer", question, &keys, Some(texts))],
+            gold: vec![GoldAnswer {
+                idx: correct as usize,
+                soft: vec![0.0; 4],
+                gold_score: None,
+            }],
+        });
+    }
+    // The population pin binds the FULL fetched envelope (max_rows 0 —
+    // the eval posture; 198 = the board's pin, "all prepared cases
+    // retained" — the csv's Diamond split is fixed).
+    if max_rows == 0 {
+        assert_eq!(
+            cases.len(),
+            EXPECTED_CASES,
+            "gpqa: the fetched population drifted from the pinned 198 cases \
+             (the board's own census) — refetch via scripts/fetch_datasets.sh \
+             and re-pin the manifest digest"
+        );
+    }
+    Suite {
+        name: "gpqa",
+        cases,
+        option_counts_note: "fixed 4-choice over the board's own letters A..D; the \
+                             board's MT19937 per-source-index shuffle ported byte-exact \
+                             at the fetch transform (no re-seat — the option order IS \
+                             the board's); gold letters land 48/54/47/49 (no position \
+                             prior); 198 cases (all prepared cases retained, the board's \
+                             pin); LOCAL-ONLY rows (the authors' no-plain-text ask — \
+                             rows under .raw/ only); corpus-off at the census (eval-only \
+                             + the dataset canary; grammar-not-answers)",
     }
 }
 

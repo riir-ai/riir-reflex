@@ -61,13 +61,13 @@ use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
     SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
     build_bbh, build_bfcl, build_cladder, build_clinc150, build_contractnli, build_cruxeval,
-    build_emotion, build_emotion_syn, build_finentity, build_gsm8k, build_hellaswag_jdi,
-    build_home_appliance, build_isarcasm_b, build_isarcasmeval, build_massive_intent_en,
-    build_mmlupro_jdi, build_prompt_injections, build_ragtruth, build_s1mb_choice, build_s1mb_noul,
-    build_s1mb_score, build_sata, build_sst5, build_sst5_syn, build_thai_sib200,
-    build_thai_wisesight, build_typed_decisions, build_wanli_en, build_when2call,
-    build_winogrande_jdi, build_xnli_en, stratified_selection_slices, stratified_split, train_docs,
-    train_row_label,
+    build_emotion, build_emotion_syn, build_finentity, build_gpqa, build_gsm8k,
+    build_hellaswag_jdi, build_home_appliance, build_isarcasm_b, build_isarcasmeval,
+    build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_ragtruth,
+    build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sata, build_sst5, build_sst5_syn,
+    build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
+    build_when2call, build_winogrande_jdi, build_xnli_en, stratified_selection_slices,
+    stratified_split, train_docs, train_row_label,
 };
 use crate::pyjson::serialize_state;
 use crate::readout::ReadoutMode;
@@ -1001,6 +1001,37 @@ const SUITES: &[SuiteSpec] = &[
         named_only: true,
         coverage_audit: false, // per-case k (2..10 candidates)
         build: build_cruxeval,
+        synthetic: None,
+        modelless_lane: false,
+    },
+    // Issue 114 R4a queue #6 (2026-11-13) — board row 25; GPQA Diamond
+    // (idavidrein/gpqa dataset.zip — the password-public zip, the FILE
+    // BYTES pinned by sha256, the board's own pin). Graduate-level
+    // science MC, the board's `A direct: Original multiple-choice
+    // options`. ONE choice question per case (198 = the board's pin);
+    // fixed 4-choice over the board's own letters A..D; the board's
+    // MT19937 per-source-index shuffle ported BYTE-EXACT at the fetch
+    // transform (python-native, NO re-seat — the option order IS the
+    // board's); the gold letters land 48/54/47/49 (no position prior).
+    // 4-choice chance 0.25. LICENCE: DATA CC BY 4.0 at two hub surfaces
+    // (HF tag + cardData, read 2026-11-13) + the authors' verbatim gated
+    // prompt (no plain-text publication); the GitHub repo's MIT spdx_id
+    // is the CODE licence (the baselines), not the data's. THE
+    // LOCAL-ONLY ROWS DISCIPLINE: rows live under .raw/ only (untracked
+    // by construction), no tracked artifact carries question text, the
+    // birth artifacts are aggregate-only. CORPUS-OFF at the census:
+    // eval-only + the dataset canary (verified per row at the transform)
+    // — grammar-not-answers — laya-only.
+    SuiteSpec {
+        name: "gpqa",
+        dataset_dir: "gpqa",
+        test_cap: 0, // all 198 cases — the board's population
+        cal_cap: 0,  // corpus-off at the census: no train split exists
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: false, // the fixed 4-choice set
+        build: build_gpqa,
         synthetic: None,
         modelless_lane: false,
     },
@@ -5330,6 +5361,17 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             570,
             "cruxeval: the fetched population drifted from the pinned \
              570 (the board's census: 800 source − 230 excluded) — refetch \
+             via scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+    }
+    // Issue 114 R4a queue #6: the GPQA population pin at the prepare
+    // layer (the builder pins 198 at max_rows 0; the home_appliance form).
+    if spec.name == "gpqa" {
+        assert_eq!(
+            suite.cases.len(),
+            198,
+            "gpqa: the fetched population drifted from the pinned \
+             198 (the board's census: all prepared cases retained) — refetch \
              via scripts/fetch_datasets.sh and re-pin the manifest digest"
         );
     }

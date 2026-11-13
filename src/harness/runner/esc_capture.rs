@@ -24,8 +24,8 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::harness::cascade::{CalGateRecords, LayaQuestions, WorthinessInput};
 use super::{Prepared, SuiteSpec};
+use crate::harness::cascade::{CalGateRecords, LayaQuestions, WorthinessInput};
 
 /// The only suite the initial mining posture may capture (issue 117 T1:
 /// `massive_intent_en` ONLY — the Bench-089 shadow-read PASS clause;
@@ -160,12 +160,8 @@ pub(crate) fn capture(
     // SPLIT LAW, clause 3 (disjointness): every emitted id must be ABSENT
     // from the suite's test-split ids. The test ids are read ONLY inside
     // this assert — the triples carry cal rows exclusively.
-    let test_ids: std::collections::HashSet<&str> = prepared
-        .suite
-        .cases
-        .iter()
-        .map(|c| c.id.as_str())
-        .collect();
+    let test_ids: std::collections::HashSet<&str> =
+        prepared.suite.cases.iter().map(|c| c.id.as_str()).collect();
     let mut triples = Vec::new();
     let mut ids = Vec::new();
     let mut stats = EscCaptureStats {
@@ -199,12 +195,14 @@ pub(crate) fn capture(
             let cheap_pick = gate.picks[ci][qi];
             let abstained = gate.abstained[ci][qi];
             let served_j = served.get(&ci).copied();
-            let think_pick = served_j.map(|j| escalator.expect("served map implies records").picks[j][qi]);
+            let think_pick =
+                served_j.map(|j| escalator.expect("served map implies records").picks[j][qi]);
             let gate_fired = abstained && armed && served_j.is_some();
             if gate_fired {
                 stats.gate_fired += 1;
                 stats.gate_fired_served += 1;
-                let think = escalator.expect("served map implies records").picks[served_j.expect("checked")][qi];
+                let think = escalator.expect("served map implies records").picks
+                    [served_j.expect("checked")][qi];
                 if think == gold.idx {
                     stats.think_correct += 1;
                 }
@@ -320,10 +318,7 @@ mod tests {
         }
     }
 
-    fn prepared(
-        spec: &SuiteSpec,
-        cal: Vec<crate::harness::suites::SuiteCase>,
-    ) -> Prepared {
+    fn prepared(spec: &SuiteSpec, cal: Vec<crate::harness::suites::SuiteCase>) -> Prepared {
         Prepared {
             suite: crate::harness::suites::Suite {
                 name: spec.name,

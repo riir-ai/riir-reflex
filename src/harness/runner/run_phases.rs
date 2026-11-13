@@ -23,9 +23,10 @@ fn validate_run_options(opts: &RunOptions) -> Result<(), String> {
             );
         }
         let ok = opts.suites.len() == 1
-            && opts.suites.iter().all(|s| {
-                super::esc_capture::ESC_CAPTURE_SUITES.contains(&s.as_str())
-            });
+            && opts
+                .suites
+                .iter()
+                .all(|s| super::esc_capture::ESC_CAPTURE_SUITES.contains(&s.as_str()));
         if !ok {
             return Err(format!(
                 "--esc-capture mines massive_intent_en ONLY at this posture                  (allowed: {:?}); banking77 is forbidden outright — pass                  --suites massive_intent_en",
@@ -370,19 +371,22 @@ fn run_suite(spec: &SuiteSpec, opts: &RunOptions, errors: &mut Vec<String>) -> O
     // deferred — this writes the join the run will feed).
     if let Some(out_dir) = &opts.esc_capture {
         let Some(mq) = modelless_questions.as_ref() else {
-            errors.push(format!("{}: esc-capture needs the modelless lane", spec.name));
+            errors.push(format!(
+                "{}: esc-capture needs the modelless lane",
+                spec.name
+            ));
             return None;
         };
-        let capture_worthiness = opts.cascade_worthiness.then(|| {
-            crate::harness::cascade::WorthinessInput {
-                gate: mq.cal_gate.as_ref(),
-                escalator: laya_lanes.cal_questions.values().next(),
-                cal_cases: prepared.cal_cases.as_slice(),
-                min_delta: opts.cascade_worthiness_margin,
-                min_probe_lcb: opts.cascade_worthiness_lcb,
-                collective_worth: false,
-            }
-        });
+        let capture_worthiness =
+            opts.cascade_worthiness
+                .then(|| crate::harness::cascade::WorthinessInput {
+                    gate: mq.cal_gate.as_ref(),
+                    escalator: laya_lanes.cal_questions.values().next(),
+                    cal_cases: prepared.cal_cases.as_slice(),
+                    min_delta: opts.cascade_worthiness_margin,
+                    min_probe_lcb: opts.cascade_worthiness_lcb,
+                    collective_worth: false,
+                });
         match super::esc_capture::capture(
             spec,
             &prepared,

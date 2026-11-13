@@ -267,22 +267,25 @@ else
     note "warn swap usage unreadable"
 fi
 
-# ---- 6. GPU clock canary --------------------------------------------------
-# The ONLY throttle detector available without sudo on this box: run a fixed
-# kernel and read its absolute time. powermetrics needs root; there is no
-# sudo-free thermal-pressure sysctl on Apple Silicon here (measured).
+# ---- 6. GPU clock canary (macOS-only axis — Issue 118) --------------------
+# The ONLY throttle detector available without sudo on the macOS box: run a
+# fixed Metal kernel and read its absolute time. powermetrics needs root;
+# there is no sudo-free thermal-pressure sysctl on Apple Silicon here
+# (measured). LAYA_DEVICE=metal is meaningless off macOS, so the canary is a
+# macOS axis: off macOS it SKIPS with a disclosure, never runs, and never
+# pastes a non-numeric reading into the provenance.
 # BEST-OF-N: one run's p50 still carries whatever a sibling put on the GPU
 # during its ~0.4 s (measured single-run spread 18%); the minimum over N
 # runs is what a throttled clock moves and contention mostly does not.
 canary=""
 canary_n=0
-if [ -x "$CANARY_BIN" ]; then
+if [ "$os_name" = "Darwin" ] && [ -x "$CANARY_BIN" ]; then
     i=0
     while [ "$i" -lt "$CANARY_RUNS" ]; do
         i=$((i + 1))
         one=$(LAYA_DEVICE=metal "$CANARY_BIN" 2>/dev/null \
             | awk '/317x1024x1024/{gsub("gpu_p50=","");gsub("us","");print $3}' || true)
-        [ -n "$one" ] || continue
+        case "$one" in ''|*[!0-9.]*) continue ;; esac
         canary_n=$((canary_n + 1))
         if [ -z "$canary" ] || awk "BEGIN{exit !($one < $canary)}"; then
             canary="$one"
@@ -293,7 +296,9 @@ if [ -x "$CANARY_BIN" ]; then
         note "warn canary       only ${canary_n}/${CANARY_RUNS} runs produced a reading"
     fi
 fi
-if [ -z "$canary" ]; then
+if [ "$os_name" != "Darwin" ]; then
+    note "warn canary       SKIPPED — macOS-only axis (Metal throttle detector), disclosed"
+elif [ -z "$canary" ]; then
     note "warn canary       SKIPPED — build it first:"
     note "                  cargo build --release --features laya-riir-metal \\"
     note "                      --example sgemm_shape_timing"

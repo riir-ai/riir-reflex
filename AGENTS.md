@@ -348,7 +348,13 @@ declines perf edits under `benches/` — a bench file's numbers ARE its artifact
   `scripts/bench_preflight.sh` before any published or quoted latency number
   and quote its `PROVENANCE:` line. It refuses on battery, Low Power Mode
   (`powermode=1`; 2 = High Power, 0 = Automatic), under `SETTLE_MIN` minutes
-  since plug-in, or over `MAX_LOAD`. On a Windows box the sibling gate is
+  since plug-in, or over `MAX_LOAD`. The .sh itself is cross-OS since
+  Issue 118: power via `Win32_Battery` on Windows (a no-battery desktop is
+  AC-assumed, disclosed) and `/sys/class/power_supply` on Linux — both
+  fail-loud (unreadable = exit 2); Windows load is a disclosed `win-est`
+  (Win32_Processor median-of-3 busy-core estimate — MSYS2's `/proc/loadavg`
+  is a stub); powermode/settle/canary are macOS-only axes, disclosed n/a off
+  macOS. On a Windows box the sibling gate is
   `scripts/bench_preflight.ps1` (Issue 065 T3(b)); `box_state::capture()`
   stamps the same verdict in-process, so 4090-hosted harness runs are never
   UNJUDGED.

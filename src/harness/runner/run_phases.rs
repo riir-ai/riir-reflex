@@ -12,6 +12,27 @@ use super::*;
 /// refusal — the same check order as before the split, so the first
 /// failing option still names itself.
 fn validate_run_options(opts: &RunOptions) -> Result<(), String> {
+    // Issue 117 T1: the ESC-capture arm's preconditions — it reads the
+    // worthiness records the cascade composes, and the split law pins the
+    // mining source to massive_intent_en (banking77 is forbidden outright).
+    if opts.esc_capture.is_some() {
+        if !opts.cascade || !opts.cascade_worthiness {
+            return Err(
+                "--esc-capture needs --cascade --cascade-worthiness: the capture                  rides the worthiness probe's cal records (the issue's own                  posture: an ESC-armed suite slice)"
+                    .to_string(),
+            );
+        }
+        let ok = opts.suites.len() == 1
+            && opts.suites.iter().all(|s| {
+                super::esc_capture::ESC_CAPTURE_SUITES.contains(&s.as_str())
+            });
+        if !ok {
+            return Err(format!(
+                "--esc-capture mines massive_intent_en ONLY at this posture                  (allowed: {:?}); banking77 is forbidden outright — pass                  --suites massive_intent_en",
+                super::esc_capture::ESC_CAPTURE_SUITES
+            ));
+        }
+    }
     if opts.corpus_cap_override != 0 && !opts.cal_select_caps.is_empty() {
         return Err(
             "--corpus-cap and --cal-select-cap are mutually exclusive: one pins the cap, \
@@ -342,6 +363,50 @@ fn run_suite(spec: &SuiteSpec, opts: &RunOptions, errors: &mut Vec<String>) -> O
         &laya_lanes,
         errors,
     );
+
+    // Issue 117 T1: the ESC-capture arm — the cal-side outcome join, riding
+    // the SAME worthiness records the compose step just consumed (the split
+    // law lives in esc_capture::capture; the capture RUN itself stays
+    // deferred — this writes the join the run will feed).
+    if let Some(out_dir) = &opts.esc_capture {
+        let Some(mq) = modelless_questions.as_ref() else {
+            errors.push(format!("{}: esc-capture needs the modelless lane", spec.name));
+            return None;
+        };
+        let capture_worthiness = opts.cascade_worthiness.then(|| {
+            crate::harness::cascade::WorthinessInput {
+                gate: mq.cal_gate.as_ref(),
+                escalator: laya_lanes.cal_questions.values().next(),
+                cal_cases: prepared.cal_cases.as_slice(),
+                min_delta: opts.cascade_worthiness_margin,
+                min_probe_lcb: opts.cascade_worthiness_lcb,
+                collective_worth: false,
+            }
+        });
+        match super::esc_capture::capture(
+            spec,
+            &prepared,
+            mq.cal_gate.as_ref(),
+            laya_lanes.cal_questions.values().next(),
+            capture_worthiness.as_ref(),
+            out_dir,
+        ) {
+            Ok(out) => eprintln!(
+                "    esc-capture[{}]: {} triples · gate fired {} · disagreements {} (armed {} delta {:+.3} n {}) — triples {} · ids {} · stats {}",
+                out.stats.suite,
+                out.stats.triples_written,
+                out.stats.gate_fired,
+                out.stats.disagreements,
+                out.stats.armed,
+                out.stats.probe_delta,
+                out.stats.probe_n,
+                out.triples_path.display(),
+                out.ids_path.display(),
+                out.stats_path.display(),
+            ),
+            Err(e) => errors.push(format!("{} (esc-capture): {e}", spec.name)),
+        }
+    }
 
     let inductive_bias = run_inductive_bias_probes(
         spec,

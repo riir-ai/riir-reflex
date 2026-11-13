@@ -475,7 +475,11 @@ impl WorthinessInput<'_> {
     /// Compute the verdict. Loud `Err` on any shape drift — a misaligned
     /// cal record would fabricate the delta exactly like a misaligned
     /// test record would fabricate accuracy.
-    fn probe(&self) -> Result<WorthinessVerdict, String> {
+    ///
+    /// `pub(crate)`: the ESC-capture arm (issue 117 T1) re-derives the
+    /// SAME verdict from the same inputs so its `gate_fired` rows mirror
+    /// the lane's arming decision byte-for-byte — never a second delta.
+    pub(crate) fn probe(&self) -> Result<WorthinessVerdict, String> {
         let unprobed = |reason: String, n, la, ma, collective: Option<CollectiveWorthBlock>| {
             WorthinessVerdict {
                 disarmed: false,

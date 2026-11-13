@@ -463,6 +463,17 @@ fn harness_main() {
             "--label-smooth-ab" => opts.label_smooth_ab = true,
             "--cascade" => opts.cascade = true,
             "--cascade-worthiness" => opts.cascade_worthiness = true,
+            // Issue 117 T1 — the ESC-capture arm (needs --cascade
+            // --cascade-worthiness; massive_intent_en only, the split law
+            // is enforced in esc_capture::capture).
+            "--esc-capture" => {
+                i += 1;
+                opts.esc_capture = Some(
+                    args.get(i)
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| die("--esc-capture needs an output dir")),
+                );
+            }
             "--collective-worth" => opts.collective_worth = true,
             "--worth-ab" => opts.worth_ab = true,
             "--gate-fit-selection" => opts.gate_fit_selection = true,

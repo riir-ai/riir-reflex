@@ -63,7 +63,7 @@ use crate::harness::suites::{
     build_bbh, build_bfcl, build_clinc150, build_contractnli, build_emotion, build_emotion_syn,
     build_finentity, build_gsm8k, build_hellaswag_jdi, build_home_appliance, build_isarcasm_b,
     build_isarcasmeval, build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections,
-    build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5,
+    build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sata, build_sst5,
     build_sst5_syn, build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
     build_when2call, build_winogrande_jdi, build_xnli_en, stratified_selection_slices,
     stratified_split, train_docs, train_row_label,
@@ -218,6 +218,11 @@ pub use routing_state_probe::{
 
 mod density_pilot;
 mod echo_gates;
+
+// Issue 117 T1 — the ESC-capture harness arm (the cal-side outcome join;
+// the split law lives in the module — massive_intent_en only, banking77
+// forbidden, test ids asserted disjoint from every captured id).
+mod esc_capture;
 pub use density_pilot::{
     DensityPilotMeta, DensityPilotOutput, DensityPilotSuite, DensityRung,
     render_density_pilot_markdown, run_density_pilot,
@@ -916,6 +921,33 @@ const SUITES: &[SuiteSpec] = &[
         synthetic: None,
         modelless_lane: false,
     },
+    // Issue 114 R4a queue #3 (2026-11-13) — board row 33; SATA-Bench
+    // (sata-bench/sata-bench @371dd0c, sata_bench_final_2025.json fetched
+    // WHOLE — 1,650 rows = the board's population exactly). Select-all
+    // scored the board's way: ONE case per source row, every candidate an
+    // independent binary yes/no question, the case passes only when ALL
+    // are right — the board's `case exact accuracy` (the case_exact column
+    // arms for this suite; the board pins chance 0.0131, re-derived
+    // 0.0131290 on the kept set — Δ 0.2%). LICENCE: MIT at two GitHub
+    // surfaces (LICENSE at the pin + API spdx_id, read 2026-11-13). The
+    // legacy answer/symbol columns never reach the envelope (the board's
+    // gold_rule: those letters refer to a DIFFERENT permutation — a trap
+    // the fetch transform drops at the source). CORPUS-OPTIONAL
+    // (`modelless_lane: false`): no train split exists and the candidates
+    // are case-specific TEXTS (grammar-not-answers) — laya-only.
+    SuiteSpec {
+        name: "sata",
+        dataset_dir: "sata",
+        test_cap: 0, // all 1,650 cases — the board's population
+        cal_cap: 0,  // corpus-optional: no train pool is consulted
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: false, // per-case k (3..16 candidates → 3..16 binary questions)
+        build: build_sata,
+        synthetic: None,
+        modelless_lane: false,
+    },
     // Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer
     // (board row 9, the home-appliance simulator; MIT, board-generated —
     // the fetch lane regenerates the rows with the board's own generator
@@ -1021,9 +1053,10 @@ fn laya_checkpoints_for(suite: &str) -> &'static [&'static str] {
 /// Issue 114 T11: the suites whose board index metric is CASE EXACT
 /// ACCURACY — the `case_exact` column arms for these and only these (the
 /// home-appliance simulator row 9 first; the ACOS row 38 was REFUSED at
-/// the licence probe, never built). A suite joins by appending its
+/// the licence probe, never built; the SATA-Bench row 33 joined at its
+/// R4a suite birth 2026-11-13). A suite joins by appending its
 /// registry name here in the same commit its spec lands.
-const CASE_EXACT_SUITES: &[&str] = &["home_appliance"];
+const CASE_EXACT_SUITES: &[&str] = &["home_appliance", "sata"];
 
 /// The option count one suite question presents — k for the case-exact
 /// chance fold (choice: the criteria entry count; score: the level array;
@@ -5207,6 +5240,20 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
              scripts/fetch_datasets.sh and re-pin the manifest digest"
         );
     }
+    // Issue 114 R4a queue #3: the SATA question-census crosscheck (the
+    // builder also asserts 1,650 cases / 15,517 questions at max_rows 0 —
+    // this arm adds the question-census crosscheck at the prepare layer
+    // so a builder drift cannot hide behind a count-only pin; the
+    // home_appliance form).
+    if spec.name == "sata" {
+        let nq: usize = suite.cases.iter().map(|c| c.questions.len()).sum();
+        assert_eq!(
+            nq, 15_517,
+            "sata: the fetched question census drifted from the \
+             pinned 15,517 (the source rows' fields changed) — refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+    }
     // Issue 114 T8: the FinEntity gold-coverage pin — all three sentiment
     // classes must be present in the fetched population (a fetch that
     // lost a class would misreport the macro-F1 the board scores).
@@ -6069,6 +6116,12 @@ pub struct RunOptions {
     /// missing cal records / thin support stay armed with a named reason.
     /// Needs `cascade`. Default off = the landed T4′ lane, byte-identical.
     pub cascade_worthiness: bool,
+    /// Issue 117 T1: the ESC-capture arm — write the cal-side outcome join
+    /// (`triples.jsonl` + `captured_ids.txt` + divergence stats) into this
+    /// dir while the normal cascade run proceeds. Needs `cascade` +
+    /// `cascade_worthiness`. The SPLIT LAW is enforced in
+    /// `esc_capture::capture` (massive_intent_en only; test ids refused).
+    pub esc_capture: Option<std::path::PathBuf>,
     /// The worthiness arm bar: the probe disarms when
     /// `(escalator − modelless accuracy on the cal probe set) <` this
     /// value. Default 0.16 (issue 042 T3 (a), promoted per the issue's
@@ -6483,6 +6536,7 @@ impl RunOptions {
             label_smooth_ab: false,
             cascade: false,
             cascade_worthiness: false,
+            esc_capture: None,
             // Issue 042 T3 (a), promoted per the issue's own trigger (a second
             // independent lane run reproduced 10/10 at 0.16 — byte-identical
             // probe deltas, recorded in the 042 HISTORY row): the measured

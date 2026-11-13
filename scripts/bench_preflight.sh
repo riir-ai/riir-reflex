@@ -203,15 +203,56 @@ else
     note "warn settle window UNVERIFIED — no power-transition history axis on $os_name"
 fi
 
-# ---- 4. load --------------------------------------------------------------
-la=$(uptime | sed 's/.*averages*: *//' | awk '{print $1}' | tr -d ',' || true)
+# ---- 4. load (Issue 118: cross-OS read) -----------------------------------
+# macOS keeps the uptime load average. Linux reads /proc/loadavg (uptime
+# fallback). MSYS2's /proc/loadavg is a STUB (measured 0.00 with cargo
+# running — Issue 118 T2 cell) and Git Bash ships no uptime, so Windows
+# estimates busy cores from Win32_Processor: median of 3 one-second
+# LoadPercentage samples × logical processors — the same busy-core units as
+# a unix load average, DISCLOSED as an estimate (an instant CPU read, not a
+# 1-minute average).
+load_src=""
+la=""
+case "$os_name" in
+    Darwin)
+        la=$(uptime | sed 's/.*averages*: *//' | awk '{print $1}' | tr -d ',' || true)
+        ;;
+    Linux)
+        la=$(cut -d ' ' -f1 /proc/loadavg 2>/dev/null || true)
+        if [ -z "$la" ]; then
+            la=$(uptime | sed 's/.*averages*: *//' | awk '{print $1}' | tr -d ',' || true)
+        fi
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        load_src="win-est"
+        la=$(powershell.exe -NoProfile -NonInteractive -Command '
+$s = @()
+1..3 | ForEach-Object {
+    $p = Get-CimInstance -ClassName Win32_Processor
+    $cpu = ($p | Measure-Object -Property LoadPercentage -Average).Average
+    $lp = ($p | Measure-Object -Property NumberOfLogicalProcessors -Maximum).Maximum
+    if ($null -ne $cpu -and $null -ne $lp) { $s += [math]::Round(($cpu / 100) * $lp, 2) }
+    Start-Sleep -Seconds 1
+}
+($s | Sort-Object)[1]
+' 2>/dev/null | tr -d '\r' | tr ',' '.' || true)
+        ;;
+esac
 if [ -z "$la" ]; then
     note "⛔ load average unreadable"; exit 2
 fi
 if awk "BEGIN{exit !($la > $MAX_LOAD)}"; then
-    refuse "load average $la exceeds MAX_LOAD=$MAX_LOAD — a sibling session is on the box"
+    if [ -n "$load_src" ]; then
+        refuse "load $la ($load_src) exceeds MAX_LOAD=$MAX_LOAD — a sibling session is on the box"
+    else
+        refuse "load average $la exceeds MAX_LOAD=$MAX_LOAD — a sibling session is on the box"
+    fi
 else
-    note "ok   load         $la (ceiling $MAX_LOAD)"
+    if [ -n "$load_src" ]; then
+        note "ok   load         $la ($load_src) (ceiling $MAX_LOAD)"
+    else
+        note "ok   load         $la (ceiling $MAX_LOAD)"
+    fi
 fi
 
 # ---- 5. memory pressure ---------------------------------------------------
@@ -276,7 +317,7 @@ else
     prov="power=$power_state"
 fi
 if [ -n "$canary" ]; then canary_prov="${canary}us/best${canary_n}"; else canary_prov="skipped"; fi
-prov="$prov load=$la swap=${swap:-?}M canary=${canary_prov} powermode=${pmode:-?}(${pmode_name})"
+prov="$prov load=$la${load_src:+($load_src)} swap=${swap:-?}M canary=${canary_prov} powermode=${pmode:-?}(${pmode_name})"
 note ""
 note "PROVENANCE: $prov"
 

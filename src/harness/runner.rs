@@ -60,7 +60,7 @@ use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
     SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
-    build_bfcl, build_clinc150, build_contractnli, build_emotion, build_emotion_syn,
+    build_bbh, build_bfcl, build_clinc150, build_contractnli, build_emotion, build_emotion_syn,
     build_finentity, build_gsm8k, build_hellaswag_jdi, build_home_appliance, build_isarcasm_b,
     build_isarcasmeval, build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections,
     build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sst5,
@@ -887,6 +887,32 @@ const SUITES: &[SuiteSpec] = &[
         named_only: true,
         coverage_audit: false,
         build: build_gsm8k,
+        synthetic: None,
+        modelless_lane: false,
+    },
+    // Issue 114 R4a queue #2 (2026-11-13) — board row 58; the 23
+    // fixed-option BBH task files fetched at the board's pinned tree sha
+    // (the four free-form tasks NEVER fetched — the board's own cut at
+    // fetch). ONE choice question per case, mixed-shape option keys by
+    // the board's own recipe (letters / identity texts / three unlisted
+    // fixed sets); 5,507 built of 5,511 fetched (the board's four
+    // malformed skips, counted — the builder census pins all three
+    // numbers). LICENCE: MIT (repo LICENSE at the pin + GitHub API
+    // spdx_id, both read 2026-11-13) + the BIG-bench canary (verified
+    // per file at fetch; the never-train law's belt-and-braces).
+    // CORPUS-OPTIONAL (`modelless_lane: false`): no train split exists,
+    // the option-key union is mixed-shape, and the canary forbids any
+    // corpus built from the rows — laya-only.
+    SuiteSpec {
+        name: "bbh",
+        dataset_dir: "bbh",
+        test_cap: 0, // all 5,507 built cases — the board's population
+        cal_cap: 0,  // corpus-optional: no train pool is consulted
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: false,
+        build: build_bbh,
         synthetic: None,
         modelless_lane: false,
     },

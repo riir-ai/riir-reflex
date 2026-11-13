@@ -1496,6 +1496,292 @@ fn gsm8k_max_run(vals: &[i64]) -> usize {
     best
 }
 
+/// Issue 114 R4a queue #2 (2026-11-13) — `bbh` (suzgunmirac/BIG-Bench-Hard
+/// @`9ee07bd`, `bbh/*.json` — the 23 FIXED-OPTION task files, the four
+/// free-form tasks never fetched; board row 58). The option parse is the
+/// BOARD'S OWN builder recipe (decision-index `adapters_added.py::bbh` @
+/// clone sha `f5a6e4fd85fe`), three shapes:
+///
+/// - **unlisted** ([`BBH_UNLISTED`], the three tasks whose answers are a
+///   fixed set with no Options: block — the input carries none, asserted):
+///   criteria = the fixed set, identity keys.
+/// - **dash tasks** (the Options: block's lines all start `"- "`): the
+///   option TEXTS are the keys (identity criteria — the board's own
+///   shape; the engine renders `text: text`, harmless).
+/// - **letter tasks** (otherwise): lines fullmatch `(\([A-Z]\)) (.*)`,
+///   keys = the paren letters, asserting the consecutive-A convention.
+///
+/// A row whose target is outside its criteria, or whose criteria count is
+/// under two, is SKIPPED COUNTED (the board skipped exactly four such
+/// source items — the census pin is the loud guard: 5,507 built of 5,511
+/// fetched). State = the input text VERBATIM (the question, its context
+/// and its Options: block are one string — the board's own state shape);
+/// instructions are the board's own `CHOICE` wording.
+///
+/// LICENCE: MIT (the repo LICENSE at the pin + the GitHub API spdx_id,
+/// both read 2026-11-13) — and the files carry the BIG-bench canary
+/// ("SHOULD NEVER APPEAR IN TRAINING CORPORA"), which the fetch transform
+/// VERIFIES per file; corpus-optional is therefore doubly pinned: no
+/// train split exists and the canary forbids one being built from these
+/// rows (grammar-not-answers, the belt-and-braces).
+#[must_use]
+pub fn build_bbh(rows_file: &Value, max_rows: usize) -> Suite {
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    let mut dropped_malformed = 0usize;
+    let mut tasks_seen = std::collections::BTreeSet::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(text), Some(target), Some(task)) = (
+            row_str(row, "input"),
+            row_str(row, "target"),
+            row_str(row, "task"),
+        ) else {
+            dropped_malformed += 1;
+            continue; // a row without the fetch transform's three fields
+        };
+        // (keys, values) in ORDER — the position of the target in `keys`
+        // is the gold index. The three shapes from the board's builder.
+        let pair = if let Some((_, fixed)) = BBH_UNLISTED.iter().find(|(t, _)| *t == task) {
+            assert!(
+                !text.contains("Options:"),
+                "bbh: task {task} carries an Options: block — the unlisted-table \
+                 law (fixed set, no block) drifted"
+            );
+            let fixed: Vec<String> = fixed.iter().map(|s| (*s).to_string()).collect();
+            Some((fixed.clone(), fixed))
+        } else {
+            let Some((head, block)) = text.rsplit_once("\nOptions:\n") else {
+                dropped_malformed += 1;
+                continue; // neither unlisted nor a block — not a fixed-option row
+            };
+            let _ = head;
+            let lines: Vec<&str> = block.split('\n').collect();
+            if lines.iter().all(|l| l.starts_with("- ")) {
+                let keys: Vec<String> = lines.iter().map(|l| l[2..].trim().to_string()).collect();
+                Some((keys.clone(), keys))
+            } else {
+                let parsed: Option<Vec<(String, String)>> = lines
+                    .iter()
+                    .map(|l| {
+                        // python re.fullmatch(r"(\([A-Z]\)) (.*)", l, re.S)
+                        // — the letter, then the WHOLE rest including
+                        // embedded newlines
+                        let rest = l.strip_prefix("(")?;
+                        let close = rest.find(")")?;
+                        let letter = &rest[..close];
+                        if letter.len() != 1
+                            || !letter
+                                .chars()
+                                .next()
+                                .is_some_and(|c| c.is_ascii_uppercase())
+                        {
+                            return None;
+                        }
+                        let value = rest[close + 1..].strip_prefix(' ')?;
+                        Some((format!("({letter})"), value.to_string()))
+                    })
+                    .collect();
+                let Some(parsed) = parsed else {
+                    dropped_malformed += 1;
+                    continue; // a block line that matches neither shape
+                };
+                let want: Vec<String> = (0..parsed.len())
+                    .map(|i| {
+                        let c = char::from(b'A' + u8::try_from(i).expect("< 27 options"));
+                        format!("({c})")
+                    })
+                    .collect();
+                // python asserts list(criteria) == consecutive letters
+                let got: Vec<String> = parsed.iter().map(|(k, _)| k.clone()).collect();
+                assert!(
+                    got == want,
+                    "bbh: task {task} row {pos} option letters are not the consecutive \
+                     A.. convention ({got:?} vs {want:?}) — the source drifted"
+                );
+                let keys: Vec<String> = parsed.iter().map(|(k, _)| k.clone()).collect();
+                let values: Vec<String> = parsed.into_iter().map(|(_, v)| v).collect();
+                Some((keys, values))
+            }
+        };
+        let Some((keys, values)) = pair else { continue };
+        if keys.len() < 2 || !keys.iter().any(|k| k == target) {
+            dropped_malformed += 1;
+            continue; // the board's skip: target outside criteria or < 2 options
+        }
+        let gold = keys
+            .iter()
+            .position(|k| k == target)
+            .expect("target in criteria, checked above");
+        let descs: Vec<Option<String>> = values.iter().map(|v| Some(v.clone())).collect();
+        let _ = values;
+        tasks_seen.insert(task.to_string());
+        cases.push(SuiteCase {
+            id: format!("bbh:{task}:{pos}"),
+            state: json!({ "input": text }),
+            questions: vec![choice_q(
+                "answer",
+                "Which option is the correct answer?",
+                &keys,
+                Some(descs),
+            )],
+            gold: vec![GoldAnswer {
+                idx: gold,
+                soft: vec![0.0; keys.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    // The population pin binds the FULL fetched envelope (the 23-task
+    // fetch; max_rows 0 = the eval posture). 5,511 fetched − 4 malformed
+    // = the board's 5,507 requests.
+    if max_rows == 0 {
+        assert_eq!(
+            cases.len(),
+            5_507,
+            "bbh: the built population drifted from the board's fields count \
+             (5,507 = 5,511 fetched − 4 malformed source items) — the option \
+             parse or the fetch diverged; refetch via scripts/fetch_datasets.sh \
+             and re-pin the manifest digest"
+        );
+        assert_eq!(
+            tasks_seen.len(),
+            23,
+            "bbh: the task set drifted from the pinned 23 fixed-option tasks \
+             (seen: {tasks_seen:?})"
+        );
+        assert_eq!(
+            dropped_malformed, 4,
+            "bbh: the malformed-skip count drifted from the board's four \
+             (dropped {dropped_malformed}) — the option parse diverged"
+        );
+    }
+    Suite {
+        name: "bbh",
+        cases,
+        option_counts_note: "ONE choice question per case (the board's own CHOICE wording); \
+                             option keys are MIXED-SHAPE by the board's own recipe — \
+                             paren letters \"(A)\".. for the letter tasks (texts ride the \
+                             criteria), identity option-texts for the dash tasks, and the \
+                             three unlisted fixed sets (True/False, yes/no, Yes/No); 23 \
+                             fixed-option tasks of the pinned 27-file tree (the four \
+                             free-form tasks never fetched); 5,507 built of 5,511 fetched \
+                             (the board's four malformed skips, counted); the option-key \
+                             union is mixed and deliberately NOT pinned (the content-binding \
+                             law's corpora route is moot — corpus-optional, laya-only: no \
+                             train split exists and the BIG-bench canary forbids one)",
+    }
+}
+
+/// The BBH unlisted table (the board's `BBH_UNLISTED`): the three tasks
+/// whose fixed answer sets appear without an Options: block.
+const BBH_UNLISTED: &[(&str, &[&str])] = &[
+    ("boolean_expressions", &["True", "False"]),
+    ("sports_understanding", &["yes", "no"]),
+    ("web_of_lies", &["Yes", "No"]),
+];
+
+// Issue 114 R4a: the BBH builder — the three option shapes, the gold
+// mapping, the malformed skip, and the letter-convention refusal.
+#[cfg(test)]
+mod bbh_builder_tests {
+    use super::build_bbh;
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    fn letter_task_row(input: &str, target: &str, task: &str) -> serde_json::Value {
+        serde_json::json!({ "input": input, "target": target, "task": task })
+    }
+
+    #[test]
+    fn bbh_parses_the_letter_block_with_consecutive_letters() {
+        let input = "Question text?\nOptions:\n(A) first option\n(B) second one\n(C) third";
+        let env = envelope(vec![letter_task_row(input, "(B)", "date_understanding")]);
+        let s = build_bbh(&env, 1);
+        assert_eq!(s.cases.len(), 1);
+        let q = &s.cases[0].questions[0];
+        let keys: Vec<_> = q.criteria.as_object().unwrap().keys().cloned().collect();
+        assert_eq!(keys, ["(A)", "(B)", "(C)"]);
+        assert_eq!(q.criteria["(B)"], "second one");
+        assert_eq!(s.cases[0].gold[0].idx, 1);
+        assert_eq!(s.cases[0].state["input"], input); // verbatim state
+    }
+
+    #[test]
+    fn bbh_parses_the_dash_block_as_identity_criteria() {
+        let input = "Statement?\nOptions:\n- valid reading\n- invalid reading";
+        let env = envelope(vec![letter_task_row(
+            input,
+            "valid reading",
+            "disambiguation_qa",
+        )]);
+        let s = build_bbh(&env, 1);
+        assert_eq!(s.cases.len(), 1);
+        let q = &s.cases[0].questions[0];
+        let keys: Vec<_> = q.criteria.as_object().unwrap().keys().cloned().collect();
+        assert_eq!(keys, ["valid reading", "invalid reading"]);
+        assert_eq!(q.criteria["valid reading"], "valid reading"); // identity
+        assert_eq!(s.cases[0].gold[0].idx, 0);
+    }
+
+    #[test]
+    fn bbh_unlisted_tasks_take_the_fixed_set_and_refuse_a_block() {
+        let env = envelope(vec![letter_task_row(
+            "Expression evaluates to what?",
+            "True",
+            "boolean_expressions",
+        )]);
+        let s = build_bbh(&env, 1);
+        assert_eq!(s.cases.len(), 1);
+        let keys: Vec<_> = s.cases[0].questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, ["True", "False"]);
+        assert_eq!(s.cases[0].gold[0].idx, 0);
+        // the block-carrying drift refuses loud
+        let bad = envelope(vec![letter_task_row(
+            "Expression?\nOptions:\n(A) True\n(B) False",
+            "(A)",
+            "boolean_expressions",
+        )]);
+        let result = std::panic::catch_unwind(|| build_bbh(&bad, 1));
+        assert!(
+            result.is_err(),
+            "unlisted task with an Options: block must refuse"
+        );
+    }
+
+    #[test]
+    fn bbh_skips_malformed_rows_counted() {
+        let env = envelope(vec![
+            // target outside the criteria (the board's skip shape)
+            letter_task_row("Q?\nOptions:\n(A) a\n(B) b", "(Z)", "navigate"),
+            // a valid row rides alongside
+            letter_task_row("Q?\nOptions:\n(A) a\n(B) b", "(A)", "navigate"),
+            // a block line matching neither shape (no dash, no letter)
+            letter_task_row("Q?\nOptions:\napples\n(B) pears", "(B)", "navigate"),
+        ]);
+        let s = build_bbh(&env, 3); // nonzero cap: the census assert rests
+        assert_eq!(s.cases.len(), 1, "only the valid row builds");
+    }
+
+    #[test]
+    #[should_panic(expected = "not the consecutive")]
+    fn bbh_refuses_nonconsecutive_option_letters() {
+        let env = envelope(vec![letter_task_row(
+            "Q?\nOptions:\n(A) a\n(C) c",
+            "(A)",
+            "navigate",
+        )]);
+        let _ = build_bbh(&env, 1);
+    }
+}
+
 // Issue 114 R4a: the GSM8K builder — the gold parse, the answer-group
 // laws (distinct-value groups incl. gold; the 4-ring contains gold), the
 // two-track question shape, and the shuffle determinism.

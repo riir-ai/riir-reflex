@@ -2164,6 +2164,80 @@ mod cladder_builder_tests {
     }
 }
 
+// Issue 114 R4a queue #5: the CRUXEval builder — the positional-key
+// choice shape with the repr texts as values, the gold-index join, the
+// k bounds, the shape refusals, and the census pin.
+#[cfg(test)]
+mod cruxeval_builder_tests {
+    use super::build_cruxeval;
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    fn crux_row(sid: &str, choices: &[&str], correct: i64) -> serde_json::Value {
+        serde_json::json!({
+            "sid": sid,
+            "code": "def f(x):\n    return x + 1",
+            "input": "[2]",
+            "choices": choices,
+            "correct": correct,
+        })
+    }
+
+    #[test]
+    fn cruxeval_builds_positional_keys_with_repr_values() {
+        let env = envelope(vec![crux_row("s1", &["3", "5", "None"], 1)]);
+        let s = build_cruxeval(&env, 1);
+        assert_eq!(s.cases.len(), 1);
+        let case = &s.cases[0];
+        assert_eq!(case.id, "cruxeval:s1");
+        let q = &case.questions[0];
+        let keys: Vec<_> = q.criteria.as_object().unwrap().keys().cloned().collect();
+        assert_eq!(keys, ["1", "2", "3"]); // positional (the gsm8k shape)
+        assert_eq!(q.criteria["2"], "5"); // the repr text rides the value
+        assert_eq!(case.gold[0].idx, 1); // the transform's precomputed join
+        assert_eq!(case.state["input"], "[2]");
+        assert!(case.state["code"].as_str().unwrap().starts_with("def f"));
+        // The instructions are the board's own wording.
+        assert!(q.instructions.starts_with("Choose the correct output of f"));
+    }
+
+    #[test]
+    #[should_panic(expected = "bounds k in [2, 10]")]
+    fn cruxeval_refuses_a_single_candidate_row() {
+        let _ = build_cruxeval(&envelope(vec![crux_row("s1", &["3"], 0)]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "gold index 5 outside the candidate set")]
+    fn cruxeval_refuses_a_gold_outside_the_candidates() {
+        let _ = build_cruxeval(&envelope(vec![crux_row("s1", &["3", "5"], 5)]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "candidate 1 is not a string")]
+    fn cruxeval_refuses_a_non_string_candidate() {
+        let bad = serde_json::json!({
+            "sid": "s1",
+            "code": "c",
+            "input": "i",
+            "choices": ["3", 5],
+            "correct": 0,
+        });
+        let _ = build_cruxeval(&envelope(vec![bad]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the pinned 570 cases")]
+    fn cruxeval_full_load_refuses_a_drifted_population() {
+        let rows: Vec<serde_json::Value> = (0..4)
+            .map(|i| crux_row(&i.to_string(), &["3", "5"], 0))
+            .collect();
+        let _ = build_cruxeval(&envelope(rows), 0); // max_rows 0 = the eval census
+    }
+}
+
 /// Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer (board
 /// row 9, the home-appliance simulator; MIT, board-generated, seed
 /// 2026091807). One case per kept household request (88 — the release-v2.1
@@ -2567,6 +2641,7 @@ pub fn build_cladder(rows_file: &Value, max_rows: usize) -> Suite {
         name: "cladder",
         cases,
         option_counts_note: "every question carries the fixed two-option set [yes, no] \
+                             the fixed binary set [yes, no] \
                              in the board's own order (gold yes→0, no→1); one choice \
                              question per case (5,000 = the board's freeze CASE_CAP of \
                              the 10,112-question balanced file, replicated byte-exact at \
@@ -2575,6 +2650,116 @@ pub fn build_cladder(rows_file: &Value, max_rows: usize) -> Suite {
                              own shape); corpus-off at the census (the zip carries seven \
                              eval question variants + models + README — no train split; \
                              grammar-not-answers)",
+    }
+}
+
+/// Issue 114 R4a queue #5 — the CRUXEval suite (board row 43,
+/// `facebookresearch/cruxeval` @190faf1, THREE files: the 800-item
+/// source jsonl + the ARCHIVED codellama-7b sample generations + the
+/// scored evaluation flags — the model-generated WRONG outputs are the
+/// distractors, no teacher run needed). ONE choice question per case
+/// (570 cases = 570 questions; the board's pin exactly); candidates
+/// 2..10 (avg 3.2); positional option keys ("1".."k") with
+/// the candidate `repr` strings as the criteria values (the gsm8k
+/// shape — the engine renders `key: value`, the texts are the signal);
+/// the gold index rides the transform's precomputed `correct`. THE
+/// RECIPE IS THE BOARD'S, BYTE-EXACT: the fetch transform ports
+/// adapters_selection.py::crux @ clone sha f5a6e4fd85fe verbatim —
+/// failed-generation distractors, value-equality dedup (python ==
+/// semantics), max 10, the MT19937 shuffle (python-native, NO
+/// re-seat), the unique-gold assert, and the <2-distinct-candidates
+/// exclusion COUNTED (230 of 800 → 570 kept = the board's pin).
+/// Because the whole recipe (literal_eval, dedup, shuffle) is
+/// python-native at the transform, our option ORDER is the board's
+/// own MT19937 order — DIRECTLY board-comparable, no re-seat caveat.
+/// LICENCE: MIT at two GitHub surfaces (LICENSE "Copyright (c) 2023
+/// Meta" + API spdx_id, read 2026-11-13). CORPUS-OFF at the census:
+/// the code snippets are eval-only and the distractors are archived
+/// model generations — no train split (grammar-not-answers) —
+/// `modelless_lane: false`, laya-only.
+#[must_use]
+pub fn build_cruxeval(rows_file: &Value, max_rows: usize) -> Suite {
+    const EXPECTED_CASES: usize = 570;
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(sid), Some(code), Some(input), Some(choices), Some(correct)) = (
+            row_str(row, "sid"),
+            row_str(row, "code"),
+            row_str(row, "input"),
+            row.get("choices").and_then(Value::as_array),
+            row_i64(row, "correct"),
+        ) else {
+            panic!(
+                "cruxeval: row {pos} drifted from the pinned transform shape \
+                 (sid/code/input/choices/correct required) — refetch via \
+                 scripts/fetch_datasets.sh"
+            );
+        };
+        assert!(
+            choices.len() >= 2 && choices.len() <= 10,
+            "cruxeval: row {pos} (sid {sid}) carries {} candidates — the pinned \
+             recipe bounds k in [2, 10]",
+            choices.len()
+        );
+        assert!(
+            correct >= 0 && (correct as usize) < choices.len(),
+            "cruxeval: row {pos} (sid {sid}) gold index {correct} outside the \
+             candidate set — the transform's gold join drifted"
+        );
+        let mut texts: Vec<Option<String>> = Vec::with_capacity(choices.len());
+        let mut keys: Vec<String> = Vec::with_capacity(choices.len());
+        for (i, c) in choices.iter().enumerate() {
+            let s = c.as_str().unwrap_or_else(|| {
+                panic!(
+                    "cruxeval: row {pos} (sid {sid}) candidate {i} is not a string — \
+                     the transform emits repr strings"
+                )
+            });
+            texts.push(Some(s.to_string()));
+            keys.push((i + 1).to_string());
+        }
+        cases.push(SuiteCase {
+            id: format!("cruxeval:{sid}"),
+            state: json!({ "code": code, "input": input }),
+            questions: vec![choice_q(
+                "answer",
+                "Choose the correct output of f called with the supplied input \
+                 arguments. Candidates are Python literal values.",
+                &keys,
+                Some(texts),
+            )],
+            gold: vec![GoldAnswer {
+                idx: correct as usize,
+                soft: vec![0.0; choices.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    // The population pin binds the FULL fetched envelope (max_rows 0 —
+    // the eval posture; 570 = the board's pin, 230 excluded counted at
+    // the transform).
+    if max_rows == 0 {
+        assert_eq!(
+            cases.len(),
+            EXPECTED_CASES,
+            "cruxeval: the fetched population drifted from the pinned 570 cases \
+             (the board's own census: 800 source − 230 excluded) — refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+    }
+    Suite {
+        name: "cruxeval",
+        cases,
+        option_counts_note: "per-case candidate sets of 2..10 Python-literal repr \
+                             strings (the board's distractor recipe: gold + archived \
+                             codellama-7b failed generations, value-equality dedup, max \
+                             10, the MT19937 shuffle — ported byte-exact at the fetch \
+                             transform, so the option order IS the board's); positional \
+                             option keys (\"1\"..\"k\"), the texts ride the criteria \
+                             values; 570 cases (800 source − 230 excluded counted, the \
+                             board's own census); corpus-off at the census (eval-only \
+                             snippets + archived model generations — grammar-not-answers)",
     }
 }
 

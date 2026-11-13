@@ -1247,6 +1247,134 @@ fetch_cladder() {
     fi
 }
 
+# fetch_cruxeval <suite> <owner_repo> <sha>
+#   The CRUXEval fetch (issue 114 R4a queue #5): THREE files at the
+#   board's pinned tree sha via the GitHub raw lane (board suite.md row
+#   43: facebookresearch/cruxeval @190faf1, data/cruxeval.jsonl + the
+#   codellama-7b generations + the scored evaluation flags — the
+#   ARCHIVED MODEL-GENERATED WRONG OUTPUTS are the distractors, no
+#   teacher run needed). The _cruxeval_rows transform ports the board's
+#   recipe BYTE-EXACT (adapters_selection.py::crux @ clone sha
+#   f5a6e4fd85fe): per source id (sorted), candidates = [gold] + the
+#   failed generations (evaluation flag false), value-equality dedup
+#   (python == semantics), max 10, the MT19937 shuffle
+#   (random.Random(f"20260917:CRUX:{sid}") — python-native, so no
+#   re-seat), choices = repr strings, gold = the unique index equal to
+#   the source output. Cases with <2 distinct valid candidates are
+#   EXCLUDED COUNTED (the board's own rule — 230 of 800; 570 kept =
+#   the board's pin exactly). One envelope page. Idempotent.
+_cruxeval_rows() {
+    jsonl=$1; gens=$2; evals=$3; out=$4
+    if [ -z "$PY3" ]; then
+        if have python3 && python3 -c pass >/dev/null 2>&1; then
+            PY3="python3"
+        elif have py && py -3 -c pass >/dev/null 2>&1; then
+            PY3="py -3"
+        fi
+    fi
+    if [ -z "$PY3" ]; then
+        log "  FAIL   cruxeval convert (no working python3 — the CRUXEval lane cannot convert)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    "$PY3" - "$jsonl" "$gens" "$evals" "$out" <<'PYEOF'
+import ast, json, random, sys
+src_path, gen_path, ev_path, dst = sys.argv[1:5]
+SEED = 20260917
+source = {}
+for line in open(src_path, encoding="utf-8"):
+    x = json.loads(line)
+    source[x["id"]] = x
+gen = json.loads(open(gen_path, encoding="utf-8").read())
+flags = json.loads(open(ev_path, encoding="utf-8").read())["raw_scored_generations"]
+rows = []
+excluded = 0
+for sid, item in sorted(source.items()):
+    vals = []
+    gold = ast.literal_eval(item["output"])
+    def add(v):
+        try:
+            key = (type(v).__name__, repr(v))
+        except Exception:
+            return
+        if not any(v == prior for _, prior in vals):
+            vals.append((key, v))
+    add(gold)
+    assert len(gen.get(sid, [])) == len(flags.get(sid, [])), sid
+    for raw, ok in zip(gen.get(sid, []), flags.get(sid, [])):
+        assert type(ok) is bool, (sid, ok)
+        if ok:
+            continue
+        try:
+            add(ast.literal_eval(raw))
+        except (ValueError, SyntaxError, MemoryError, TypeError):
+            continue
+    if len(vals) < 2:
+        excluded += 1
+        continue
+    vals = vals[:10]
+    random.Random(f"{SEED}:CRUX:{sid}").shuffle(vals)
+    choices = [repr(v) for _, v in vals]
+    correct = next(i for i, (_, v) in enumerate(vals) if v == gold)
+    assert sum(v == gold for _, v in vals) == 1, sid
+    rows.append({
+        "sid": sid,
+        "code": item["code"],
+        "input": item["input"],
+        "choices": choices,
+        "correct": correct,
+    })
+with open(dst, "w", encoding="utf-8") as g:
+    for r in rows:
+        g.write(json.dumps(r, ensure_ascii=False) + "\n")
+print(f"cruxeval={len(rows)} excluded={excluded}")
+PYEOF
+}
+fetch_cruxeval() {
+    suite=$1; owner_repo=$2; sha=$3
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    file="$dir/test-000.json"
+    if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+        n=$(rows_count "$file" 2>/dev/null || echo 0)
+        log "  skip   $suite/test-000 ($n rows)"
+        return 0
+    fi
+    base="https://raw.githubusercontent.com/$owner_repo/$sha"
+    jsonl="$dir/cruxeval.jsonl.raw"
+    gens="$dir/generations.json.raw"
+    evals="$dir/scored.json.raw"
+    ok=0
+    if http_get "$base/data/cruxeval.jsonl" "$jsonl" && http_get "$base/samples/model_generations/sample_codellama-7b_temp0.2_output/generations.json" "$gens" && http_get "$base/samples/evaluation_results/sample_scored_codellama-7b_temp0.2_output.json" "$evals"; then ok=1; fi
+    if [ "$ok" -eq 0 ]; then
+        sleep 5
+        ok=0
+        if http_get "$base/data/cruxeval.jsonl" "$jsonl" && http_get "$base/samples/model_generations/sample_codellama-7b_temp0.2_output/generations.json" "$gens" && http_get "$base/samples/evaluation_results/sample_scored_codellama-7b_temp0.2_output.json" "$evals"; then ok=1; fi
+    fi
+    if [ "$ok" -eq 0 ]; then
+        rm -f "$jsonl" "$gens" "$evals"
+        log "  FAIL   $suite/test-000 (http error)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    rows="$dir/cruxeval.rows.jsonl"
+    if ! _cruxeval_rows "$jsonl" "$gens" "$evals" "$rows"; then
+        rm -f "$jsonl" "$gens" "$evals" "$rows"
+        return 1
+    fi
+    rm -f "$jsonl" "$gens" "$evals"
+    if _raw_convert "$rows" "jsonl" "$file.tmp" "$suite/test-000"; then
+        rm -f "$rows"
+        n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
+        mv "$file.tmp" "$file"
+        FILES=$((FILES + 1))
+        ROWS=$((ROWS + n))
+        log "  fetch  $suite/test-000 rows=$n"
+    else
+        rm -f "$rows"
+    fi
+}
+
 fetch_isarcasmeval() {
     suite=$1; owner_repo=$2; sha=$3
     dir="$OUT/$suite"
@@ -2038,6 +2166,26 @@ main() {
     if want_suite cladder; then
         log "[suite] cladder causalNLP/cladder @3d2d116 data/cladder-v1.zip (balanced -> the board's 5,000-case freeze, byte-exact; MIT read at the pin via GitHub LICENSE + API spdx 2026-11-13)"
         fetch_cladder cladder "causalNLP/cladder" "3d2d1169b4b939a09048a6a75956c8972a93cc38"
+    fi
+
+    # 30. cruxeval — issue 114 R4a queue #5 (board row 43):
+    #     facebookresearch/cruxeval @190faf1, THREE files (the source
+    #     jsonl + the archived codellama-7b generations + the scored
+    #     evaluation flags — the wrong outputs are the distractors, no
+    #     teacher run). The board's recipe is ported BYTE-EXACT at the
+    #     transform (failed-generation distractors, value-equality dedup,
+    #     <=10 candidates, the MT19937 shuffle — python-native, no
+    #     re-seat); 570 kept / 230 excluded-counted = the board's pin.
+    #     Output-prediction track as choice (2..10 candidates). MIT (read
+    #     2026-11-13, two GitHub surfaces — the hub probe does not
+    #     apply): the repo's LICENSE at the pinned sha is the full MIT
+    #     text ("Copyright (c) 2023 Meta") + the GitHub API reports
+    #     spdx_id MIT. CORPUS-OFF at the census (the code snippets are
+    #     eval-only; the distractors are archived model generations —
+    #     no train split; grammar-not-answers; laya-only).
+    if want_suite cruxeval; then
+        log "[suite] cruxeval facebookresearch/cruxeval @190faf1 data/cruxeval.jsonl + the codellama-7b sample generations + scored flags (the board's distractor recipe ported byte-exact; MIT read at the pin via GitHub LICENSE + API spdx 2026-11-13)"
+        fetch_cruxeval cruxeval "facebookresearch/cruxeval" "190faf16d175b5847b0af05d937872b1fb395942"
     fi
 
     log ""

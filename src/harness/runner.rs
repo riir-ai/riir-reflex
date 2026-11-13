@@ -60,13 +60,14 @@ use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
     SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
-    build_bbh, build_bfcl, build_cladder, build_clinc150, build_contractnli, build_emotion,
-    build_emotion_syn, build_finentity, build_gsm8k, build_hellaswag_jdi, build_home_appliance,
-    build_isarcasm_b, build_isarcasmeval, build_massive_intent_en, build_mmlupro_jdi,
-    build_prompt_injections, build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score,
-    build_sata, build_sst5, build_sst5_syn, build_thai_sib200, build_thai_wisesight,
-    build_typed_decisions, build_wanli_en, build_when2call, build_winogrande_jdi, build_xnli_en,
-    stratified_selection_slices, stratified_split, train_docs, train_row_label,
+    build_bbh, build_bfcl, build_cladder, build_clinc150, build_contractnli, build_cruxeval,
+    build_emotion, build_emotion_syn, build_finentity, build_gsm8k, build_hellaswag_jdi,
+    build_home_appliance, build_isarcasm_b, build_isarcasmeval, build_massive_intent_en,
+    build_mmlupro_jdi, build_prompt_injections, build_ragtruth, build_s1mb_choice, build_s1mb_noul,
+    build_s1mb_score, build_sata, build_sst5, build_sst5_syn, build_thai_sib200,
+    build_thai_wisesight, build_typed_decisions, build_wanli_en, build_when2call,
+    build_winogrande_jdi, build_xnli_en, stratified_selection_slices, stratified_split, train_docs,
+    train_row_label,
 };
 use crate::pyjson::serialize_state;
 use crate::readout::ReadoutMode;
@@ -972,6 +973,34 @@ const SUITES: &[SuiteSpec] = &[
         named_only: true,
         coverage_audit: false, // the fixed binary set
         build: build_cladder,
+        synthetic: None,
+        modelless_lane: false,
+    },
+    // Issue 114 R4a queue #5 (2026-11-13) — board row 43; CRUXEval
+    // (facebookresearch/cruxeval @190faf1, THREE files: the source jsonl
+    // + the archived codellama-7b generations + the scored evaluation
+    // flags — the model-generated WRONG outputs are the distractors, no
+    // teacher run). ONE choice question per case (570 = the board's pin;
+    // 230 excluded counted at the transform — the board's own <2-
+    // distinct-candidates rule); candidates 2..10 as repr strings over
+    // positional keys (the gsm8k shape); THE RECIPE IS THE BOARD'S,
+    // BYTE-EXACT (the transform ports adapters_selection.py::crux
+    // verbatim: value-equality dedup, max 10, the MT19937 shuffle —
+    // python-native, NO re-seat — so the option order IS the board's).
+    // LICENCE: MIT at two GitHub surfaces (LICENSE at the pin + API
+    // spdx_id, read 2026-11-13). CORPUS-OFF at the census: eval-only
+    // snippets + archived model generations — grammar-not-answers —
+    // laya-only.
+    SuiteSpec {
+        name: "cruxeval",
+        dataset_dir: "cruxeval",
+        test_cap: 0, // all 570 cases — the board's population
+        cal_cap: 0,  // corpus-off at the census: no train split exists
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: false, // per-case k (2..10 candidates)
+        build: build_cruxeval,
         synthetic: None,
         modelless_lane: false,
     },
@@ -5291,6 +5320,17 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             "cladder: the fetched population drifted from the pinned \
              5,000 (the board's freeze CASE_CAP) — refetch via \
              scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+    }
+    // Issue 114 R4a queue #5: the CRUXEval population pin at the prepare
+    // layer (the builder pins 570 at max_rows 0; the home_appliance form).
+    if spec.name == "cruxeval" {
+        assert_eq!(
+            suite.cases.len(),
+            570,
+            "cruxeval: the fetched population drifted from the pinned \
+             570 (the board's census: 800 source − 230 excluded) — refetch \
+             via scripts/fetch_datasets.sh and re-pin the manifest digest"
         );
     }
     // Issue 114 T8: the FinEntity gold-coverage pin — all three sentiment

@@ -59,6 +59,7 @@ the mint surface (riir-rethink Issue 024 v1 — the Plan 007 P0 hosted lane;
 | cladder | `causalNLP/cladder` (issue 114 R4a queue #4, board row 44; the single zip `data/cladder-v1.zip` at the board's pinned tree sha `3d2d116`, fetched via the GitHub raw lane; the BALANCED questions file (`cladder-v1-q-balanced.json`, 10,112 questions) + the models meta; the board's "5000 seeded cases" = its freeze CASE_CAP of that file, replicated BYTE-EXACT at the fetch transform (sha256-priority over the row ids — freeze.py, verified id-for-id at fetch), so the population IS the board's; the zip carries SEVEN EVAL question variants + models + README — no train split anywhere (corpus-off at the census); the meta groundtruth/estimand columns never reach the envelope (the board's own request_exclusion); the hub-side licence probe does not apply, this source is a GitHub repo — 2026-11-13) | **MIT** (two GitHub surfaces agreeing, read 2026-11-13 at the pin: the repo's LICENSE is the full MIT text "Copyright (c) 2023 CausalNLP" + the GitHub API reports spdx_id MIT; no separate data-terms file in the tree) | Jin et al., "CLadder: A Benchmark to Assess Causal Reasoning Capabilities of Language Models", arXiv:2312.04350 (the board's row 44 reference) | ✓ |
 | cruxeval | `facebookresearch/cruxeval` (issue 114 R4a queue #5, board row 43; THREE files at the board's pinned tree sha `190faf1`, fetched via the GitHub raw lane: the 800-item source jsonl + the ARCHIVED codellama-7b sample generations + the scored evaluation flags — the model-generated WRONG outputs are the distractors, no teacher run; the board's recipe ported BYTE-EXACT at the fetch transform (adapters_selection.py::crux: value-equality dedup, max 10, the MT19937 shuffle — python-native, NO re-seat, so the option order IS the board's); 570 kept / 230 excluded-counted = the board's pin; the hub-side licence probe does not apply, this source is a GitHub repo — 2026-11-13) | **MIT** (two GitHub surfaces agreeing, read 2026-11-13 at the pin: the repo's LICENSE is the full MIT text "Copyright (c) 2023 Meta" + the GitHub API reports spdx_id MIT; no separate data-terms file in the tree) | Guo et al., "CRUXEval: A Benchmark for Code Reasoning, Understanding and Execution", arXiv:2401.03065 (the board's row 43) | ✓ |
 | gpqa | `idavidrein/gpqa` (the AUTHORS' canonical repo + hub mirror — issue 114 R4a queue #6, board row 25; the password-public `dataset.zip` fetched via the GitHub raw lane, the FILE BYTES sha256-pinned at the board's own pin `461ae732…08dc` — a moved upstream refuses loud; the password rides the upstream README verbatim (public by design — a crawler gate, not an access gate); member `dataset/gpqa_diamond.csv` only (198 rows, the Diamond split); the board's normalize recipe ported BYTE-EXACT (the per-source-index MT19937 shuffle — python-native, NO re-seat, so the option order IS the board's); the canary column VERIFIED per row (the BBH belt-and-braces); the Explanation + validator columns never reach the envelope (leaked answer material — the SATA trap-drop class); **LOCAL-ONLY rows discipline** (the authors' ask, verbatim on the HF gated prompt: no plain-text/images publication — rows under `.raw/` only, untracked by construction, no tracked artifact carries question text, birth artifacts aggregate-only, `--dump-items` never armed); the hub-side probe reads the API metadata without auth (the hub FILES are gated — the fetch stays GitHub-side, no HF auth anywhere) — 2026-11-13) | **CC BY 4.0 — the DATA** (two hub metadata surfaces agreeing, probe 2026-11-13: the tag `license:cc-by-4.0` + `cardData.license: cc-by-4.0`; the hub files are gated so the license.txt file read is deferred to any future auth'd lane — the two metadata surfaces + the authors' own gated-prompt text are the recorded grant read; the GitHub repo's `license: MIT` API surface is the CODE licence (the baselines), NOT the data's — the mteb-mirror lesson named explicitly). The authors' plain-text ask rides the row as a CONDITION, not a licence term: benchmark/record-only use, local evaluation, attribution — exactly what this lane does | Rein et al., "GPQA: A Graduate-Level Google-Proof Q&A Benchmark", COLM 2024 / arXiv:2311.12022 | ✓ (attribution + the plain-text ask carried; benchmark-only posture — no served/leased artifact ever carries the rows) |
+| chessbench | `google-deepmind/searchless_chess` (the AUTHORS' canonical repo + GCS bucket — issue 114 R4a queue #7, board row 31, the queue's LAST scoreable; the `action_value_data.bag` TEST split (141 MB) fetched via the GCS direct lane, the FILE BYTES sha256-pinned at the board's own pin `5f73aac8…986b0` — verified at fetch, a moved source refuses loud; the board's `adapters_scored.py::chessbench` recipe ported BYTE-EXACT at the transform (the bagz reader + decode verbatim; python-chess legal-move enumeration — the PYTHON ORACLE LANE only, the untracked `.raw/venvs/chess` uv venv, never a cargo dep; the sha256(fen:move) option order; the freeze CASE_CAP 5,000 of 61,833 eligible by sha256("20260919:31:<sha256(fen)>") lowest — the proven cladder key format, catalog id 31); **the TIE LAW carried** (all tied-best accepted — 5.78% of the frozen positions; the accepted set rides gold-side `soft`, the CHESS_MOVE_SUITES scorer arm; `expected` stays ONE representative, the board's own shape); the per-move reference VALUES never reach the envelope (answer material — the SATA/GPQA trap-drop class); the 1.1 TB train split NEVER fetched — 2026-11-13) | **CC-BY 4.0 — the DATA** (the repo README's License section at the pinned sha `90ae0e6`, read verbatim 2026-11-13: "Some portions of the dataset are in the public domain by a Creative Commons CC0 license from lichess.org. The remainder of the dataset is licensed under Creative Commons Attribution 4.0 (CC-BY)" — the bag is CC-BY-4.0 data with a CC0 lichess portion; **CODE Apache-2.0** (the same README section: "All software is licensed under the Apache License, Version 2.0" — the data/code split named on the row, the mteb-mirror lesson) | Ruoss et al., "Amortized Planning with Large-Scale Transformers: A Case Study on Chess", NeurIPS 2024 / arXiv:2402.04494 (DeepMind; Stockfish 16 provided the action values) | ✓ (attribution; benchmark-only posture — eval-only, the train split never fetched) |
 | home_appliance | the BOARD'S OWN generated track (issue 114 T11 — board row 9, the home-appliance simulator: `decision_index/suite/build/home_appliance.py` at the decision-index clone sha `f5a6e4fd`, seed 2026091807, stdlib-only and deterministic; the rows file is regenerated locally and filtered to the release-v2.1 subset's pinned kept set — 88 run_ids whose newline-joined list hashes to the file's `run_ids_sha256` pin `f76d0ef2`, verified matching. The board's hub HF lane is PRIVATE, so no board download exists; the regeneration proofs are pinned in §26) | **MIT (this repository)** — the board's suite.md row 9 names it verbatim; the generator + subset files are the decision-index repo's own content at that licence, read at the clone sha 2026-11-12 | Cai, Xia, Yu, "Aspect-Category-Opinion-Sentiment Quadruple Extraction with Implicit Aspects and Opinions", ACL 2021 (the board's suite context; the track itself is board-authored) | ✓ |
 | acos | `NUSTM/ACOS` @45d179a (the authors' repo — the ACL 2021 ACOS datasets; issue 114 T11 probe, NO build) | **REFUSED — no licence exists to clear** (three authoritative surfaces agreeing, read 2026-11-12: GitHub's repo API reports `license: null`; the README at the pinned sha carries a CITATION REQUEST only, no licence grant; the repo tree at that sha has NO LICENSE or terms file at any level. The board's own suite.md row 38 independently records "not stated in the repository". The underlying data compounds it — Restaurant-ACOS extends the SemEval-2014 set, Laptop-ACOS is collected from the Amazon domain. Same verdict class as VAST; the named re-open is an AUTHORS' STATEMENT, an owner call, never filed unilaterally) | Cai, Xia, Yu, "Aspect-Category-Opinion-Sentiment Quadruple Extraction with Implicit Aspects and Opinions", ACL 2021 | ⛔ benchmark-only even if a suite ever lands (no grant exists); NO suite built |
 | bright | `xlangai/BRIGHT` (the board's row 36 source, arXiv:2407.12883; issue 114 T12 — the licence probe ran, NO build) | **CC-BY-4.0** (hub tag + cardData agree, read 2026-11-12; the documents tree ≈470 MB — feasible). **Licence clear, suite birth REFUSED-AS-SHAPED** ([Bench 186](../../.benchmarks/186_bright_toolret_ndcg_machinery_and_verdicts.md)): the board wire is per-(query, doc) `Score` questions over FULL-TEXT documents, and the laya lane's `english` serving posture truncates the sequence at **512 tokens** (`riir-infer-laya` config.rs L20-21/L59-60; tokenize.rs L245-254 drops the overflow silently) — the lane would measure truncation, not retrieval capability. The named re-opens: a long-context encoder posture (the rethink Research-014 rerank-tier vehicle, owner-gated booking) or an OWNER re-scope of the wire — never unilateral. Scored-never, lane-blocked; the nDCG scorer machinery landed regardless (Bench 186) | "BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval", arXiv:2407.12883 (the board's row 36) | ✓ licence clear — NO suite (lane-refused; scorer landed) |
@@ -1977,6 +1978,72 @@ Upstream pin: the zip FILE BYTES sha256
 (the board's own pin — not a git sha; upstream has no data-tagged
 revisions, so the file hash is the only honest pin; digest re-pinned on
 refetch).
+
+### 34. chessbench — `google-deepmind/searchless_chess` (the action-value bag, the board's freeze) — the knowledge rung's seventh suite (issue 114 R4a queue #7, 2026-11-13)
+
+The R4a triage's queue #7 — the LAST scoreable adapter (board row 31):
+chess action values from Stockfish 16, the board's `B mechanical: All
+legal moves from source positions`. ONE choice question per case (5,000
+cases = 5,000 questions; the board's freeze CASE_CAP exactly); option
+keys = the UCI move strings, criteria values = the SAN (the board's own
+both-notations criteria dicts); the option ORDER is the board's
+sha256(fen:move) hash order (byte-exact, deterministic — no shuffle
+seat anywhere); state = {fen, board, side_to_move} (the board's own
+shape; k 2..81, mean 29.5 at the frozen census).
+
+**The recipe is the board's, byte-exact** — the transform ports
+`adapters_scored.py::chessbench` @ clone sha `f5a6e4fd85fe` verbatim:
+the bagz reader (mmap + the trailing little-endian `<Q` offsets table)
++ the LEB128-string/big-endian-f64 record decode; per-fen value maps
+(duplicates assert equal, counted — 0 in this fetch); the eligibility
+excludes (incomplete legal-move coverage via python-chess — 0 here;
+non-decision or >255 moves — 728 here); the tie law (accepted = every
+move at the max reference value, sorted UCI); the freeze CASE_CAP
+selection (5,000 of 61,833 eligible by sha256("20260919:31:<sha256(fen)>")
+lowest — the proven cladder key format, catalog id 31). **THE TIE LAW
+IS THE SUITE METRIC**: 5.78% of the frozen positions carry tied-best
+moves (mean accepted 1.53, max 71 — one position where 71 of its moves
+are equally best); the accepted set rides the case's GOLD-SIDE `soft`
+vector (1.0 per accepted move — NEVER the model-visible state, which
+would leak the answer), `gold.idx` stays the board's `expected`
+(accepted[0], ONE representative), and `CHESS_MOVE_SUITES` arms
+[`chess_move_metrics`] — the tie-accepting accuracy is the board's
+primary metric, never folded into `hard`. The per-move reference
+VALUES never reach the envelope (answer material — the SATA/GPQA
+trap-drop class).
+
+python-chess rides the `.raw/venvs/chess` uv venv (created on demand by
+the fetch lane; untracked; the PYTHON oracle lane only — never a cargo
+dep; the triage's own scoping).
+
+Fetch 2026-11-13 (the GCS direct lane — `fetch_chessbench` + the
+`_chessbench_rows` transform, stanza #32): ONE file (the bag, sha256
+`5f73aac8f60e31734cdbf276ba3fca8d5ba5cb6171ba600e31af4f36327986b0` =
+the board's pin, VERIFIED at fetch), ONE envelope page, 5,000 rows, 0
+failed requests. Transform census: 1,838,218 records → 62,561 positions
+→ 61,833 eligible (728 excluded: 0 coverage / 728 non-decision; 0
+duplicate records); envelope page test-000 blake3
+`39f5b52b731b0913a1fc2f2e1b250d072ecbe70e409612b50c3a78cef916e6ef`.
+The harness slice digest at the birth posture: cases
+`fnv1a64-0ac235dc9636bfa1` (5,000). **CORPUS-OFF**: the train split is
+1.1 TB and is NEVER fetched (eval-only; grammar-not-answers).
+
+**The birth read** ([Bench 194](../../.benchmarks/194_chessbench_suite_birth.md)):
+laya english chess-move acc (the tie law) **0.0842** (n 5,000) — ABOVE
+the pooled chance 0.0595 (+0.025, SE ≈ 0.003 — significant) and above
+the modal floor 0.0792: real, small, input-dependent signal (the BBH
+birth class); the generic representative-only walk reads 0.0594 (below
+the majority floor 0.0656) — **the tie law is materially load-bearing**
+(+0.025 on the suite readout). ECE 0.1214 at mean confidence 0.181
+(underconfident); p50 20 ms; det ✓ n=10; posture QUOTABLE (preflight
+PASSED, load 3.22–3.09). Far below the searchless_chess paper's
+transformer rows — the gap rides R4b (owner-gated).
+
+Upstream pin: the bag FILE BYTES sha256
+`5f73aac8f60e31734cdbf276ba3fca8d5ba5cb6171ba600e31af4f36327986b0` +
+the repo `google-deepmind/searchless_chess
+@90ae0e6b121673fc3079aaeffa047580bb600c0a` (the board's own pins; the
+bag re-derivable from the GCS URL; digests re-pinned on refetch).
 
 ## ClassLabel orders (verified)
 

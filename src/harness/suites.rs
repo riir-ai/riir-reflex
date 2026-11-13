@@ -2352,6 +2352,126 @@ mod gpqa_builder_tests {
     }
 }
 
+// Issue 114 R4a queue #7: the ChessBench builder — the UCI-key/SAN-value
+// options in the transform's pinned order, the gold.idx representative,
+// the TIE LAW soft encoding, the shape refusals, and the census pin.
+// SYNTHETIC FIXTURE DATA ONLY (the builder trusts the transform's FEN as
+// opaque strings and asserts structure, never chess semantics).
+#[cfg(test)]
+mod chessbench_builder_tests {
+    use super::build_chessbench;
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    fn chess_row(sid: &str, moves: &[(&str, &str)], accepted: &[&str]) -> serde_json::Value {
+        serde_json::json!({
+            "sid": sid,
+            "fen": "synthetic-fen",
+            "board": "synthetic-board",
+            "side_to_move": "white",
+            "moves": moves.iter().map(|(u, s)| [u, s]).collect::<Vec<_>>(),
+            "accepted": accepted,
+        })
+    }
+
+    #[test]
+    fn chessbench_builds_uci_keys_san_values_and_the_tie_law_soft() {
+        // accepted[0] = "c1c2" (the board's representative), accepted
+        // carries a SECOND tied-best move ("a1a2") — the tie law.
+        let env = envelope(vec![chess_row(
+            "abc",
+            &[("b1b2", "Bb2"), ("c1c2", "Cc2"), ("a1a2", "Aa2")],
+            &["c1c2", "a1a2"],
+        )]);
+        let s = build_chessbench(&env, 1);
+        assert_eq!(s.cases.len(), 1);
+        let case = &s.cases[0];
+        assert_eq!(case.id, "chessbench:abc");
+        let q = &case.questions[0];
+        let keys: Vec<_> = q.criteria.as_object().unwrap().keys().cloned().collect();
+        assert_eq!(keys, ["b1b2", "c1c2", "a1a2"]); // the transform's pinned order
+        assert_eq!(q.criteria["c1c2"], "Cc2"); // the SAN rides the value
+        assert_eq!(
+            q.instructions,
+            "Choose the strongest legal move for the side to move. Board rows run from rank 8 to rank 1; columns a to h. Uppercase pieces are white. All legal moves are supplied."
+        );
+        assert_eq!(case.state["fen"], "synthetic-fen");
+        assert_eq!(case.state["side_to_move"], "white");
+        // gold.idx = accepted[0]'s position in the pinned order (index 1);
+        // soft = 1.0 at BOTH accepted positions, 0.0 elsewhere.
+        assert_eq!(case.gold[0].idx, 1);
+        assert_eq!(case.gold[0].soft, vec![0.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "not among the presented moves")]
+    fn chessbench_refuses_an_accepted_move_outside_the_options() {
+        let _ = build_chessbench(
+            &envelope(vec![chess_row(
+                "abc",
+                &[("e2e4", "e4"), ("d2d4", "d4")],
+                &["d7d5"],
+            )]),
+            1,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "empty accepted set")]
+    fn chessbench_refuses_an_empty_accepted_set() {
+        let _ = build_chessbench(
+            &envelope(vec![chess_row(
+                "abc",
+                &[("e2e4", "e4"), ("d2d4", "d4")],
+                &[],
+            )]),
+            1,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "eligibility bounds are 2..=255")]
+    fn chessbench_refuses_a_single_move_row() {
+        let _ = build_chessbench(
+            &envelope(vec![chess_row("abc", &[("e2e4", "e4")], &["e2e4"])]),
+            1,
+        );
+    }
+
+    #[test]
+    fn chessbench_is_deterministic() {
+        let rows: Vec<serde_json::Value> = (0..5)
+            .map(|i| {
+                chess_row(
+                    &format!("s{i}"),
+                    &[("e2e4", "e4"), ("d2d4", "d4"), ("g1f3", "Nf3")],
+                    &["e2e4"],
+                )
+            })
+            .collect();
+        let s1 = build_chessbench(&envelope(rows.clone()), 5); // nonzero cap: the census assert rests
+        let s2 = build_chessbench(&envelope(rows), 5);
+        assert_eq!(s1.cases, s2.cases);
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the pinned 5,000 cases")]
+    fn chessbench_full_load_refuses_a_drifted_population() {
+        let rows: Vec<serde_json::Value> = (0..4)
+            .map(|i| {
+                chess_row(
+                    &format!("s{i}"),
+                    &[("e2e4", "e4"), ("d2d4", "d4")],
+                    &["e2e4"],
+                )
+            })
+            .collect();
+        let _ = build_chessbench(&envelope(rows), 0); // max_rows 0 = the eval census
+    }
+}
+
 /// Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer (board
 /// row 9, the home-appliance simulator; MIT, board-generated, seed
 /// 2026091807). One case per kept household request (88 — the release-v2.1
@@ -2988,6 +3108,162 @@ pub fn build_gpqa(rows_file: &Value, max_rows: usize) -> Suite {
                              pin); LOCAL-ONLY rows (the authors' no-plain-text ask — \
                              rows under .raw/ only); corpus-off at the census (eval-only \
                              + the dataset canary; grammar-not-answers)",
+    }
+}
+
+/// Issue 114 R4a queue #7 — the ChessBench suite (board row 31,
+/// `google-deepmind/searchless_chess`: the action-value bag from their
+/// GCS bucket, the FILE BYTES pinned by sha256, the board's own pin).
+/// The board's `B mechanical: All legal moves from source positions`
+/// adaptation: ONE choice question per case (the freeze's 5,000 — the
+/// board's pin), option keys = the UCI move strings with the SAN as the
+/// criteria VALUES ("e2e4: e4" — both notations the board's own criteria
+/// dicts carry), the option ORDER is the board's sha256(fen:move) hash
+/// order (byte-exact, deterministic, no shuffle seat anywhere).
+///
+/// THE TIE LAW (the triage's named carry): all tied-best answers are
+/// accepted by the board's scorer (`chess_score`: `best_move = choice ∈
+/// accepted`, `tie_tolerance: 0.0`) — 3,654 of the 61,833 eligible
+/// positions carry ties (5.9%, census 2026-11-13). The accepted set
+/// rides the case's GOLD-SIDE `soft` vector (1.0 per accepted move, 0.0
+/// otherwise) — NEVER the model-visible state, which would leak the
+/// answer; `gold.idx` stays the board's `expected` (accepted[0], one
+/// representative) for the generic walks and the modal floor. The
+/// suite metric is [`chess_move_metrics`]/`chess_move_of`
+/// (CHESS_MOVE_SUITES) — the tie-accepting accuracy is never folded
+/// into `hard`.
+///
+/// The trap-drop: the per-move reference VALUES (the answer material)
+/// never reach the envelope — the transform keeps only the accepted
+/// names (the SATA/GPQA class).
+///
+/// CORPUS-OFF: the train split is 1.1 TB and never fetched (eval-only;
+/// grammar-not-answers) — laya-only, `modelless_lane: false`.
+#[must_use]
+pub fn build_chessbench(rows_file: &Value, max_rows: usize) -> Suite {
+    const EXPECTED_CASES: usize = 5_000;
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(sid), Some(fen), Some(board), Some(side), Some(moves), Some(accepted)) = (
+            row_str(row, "sid"),
+            row_str(row, "fen"),
+            row_str(row, "board"),
+            row_str(row, "side_to_move"),
+            row.get("moves").and_then(Value::as_array),
+            row.get("accepted").and_then(Value::as_array),
+        ) else {
+            panic!(
+                "chessbench: row {pos} drifted from the pinned transform shape \
+                 (sid/fen/board/side_to_move/moves/accepted required) — refetch \
+                 via scripts/fetch_datasets.sh"
+            );
+        };
+        assert!(
+            (2..=255).contains(&moves.len()),
+            "chessbench: row {pos} (sid {sid}) carries {} moves — the \
+             transform's eligibility bounds are 2..=255",
+            moves.len()
+        );
+        assert!(
+            !accepted.is_empty(),
+            "chessbench: row {pos} (sid {sid}) carries an empty accepted set — \
+             the transform's tie join drifted"
+        );
+        let mut texts: Vec<Option<String>> = Vec::with_capacity(moves.len());
+        let mut keys: Vec<String> = Vec::with_capacity(moves.len());
+        let mut accepted_at: Vec<Option<usize>> = Vec::with_capacity(accepted.len());
+        for (i, mv) in moves.iter().enumerate() {
+            let pair = mv.as_array().unwrap_or_else(|| {
+                panic!(
+                    "chessbench: row {pos} (sid {sid}) move {i} is not a [uci, san] \
+                     pair — the transform emits the pinned-order pairs"
+                )
+            });
+            let uci = pair.first().and_then(Value::as_str).unwrap_or_else(|| {
+                panic!("chessbench: row {pos} (sid {sid}) move {i} carries no uci string")
+            });
+            let san = pair.get(1).and_then(Value::as_str).unwrap_or_else(|| {
+                panic!("chessbench: row {pos} (sid {sid}) move {i} carries no san string")
+            });
+            assert!(
+                !san.trim().is_empty(),
+                "chessbench: row {pos} (sid {sid}) move {i} has an empty san"
+            );
+            keys.push(uci.to_string());
+            texts.push(Some(san.to_string()));
+        }
+        for a in accepted {
+            let uci = a.as_str().unwrap_or_else(|| {
+                panic!("chessbench: row {pos} (sid {sid}) accepted entry is not a string")
+            });
+            let at = keys.iter().position(|k| k == uci).unwrap_or_else(|| {
+                panic!(
+                    "chessbench: row {pos} (sid {sid}) accepted move {uci} is not \
+                         among the presented moves — the tie join drifted"
+                )
+            });
+            accepted_at.push(Some(at));
+        }
+        // gold.idx = the board's `expected` (accepted[0], ONE
+        // representative); gold.soft = the TIE LAW encoding — 1.0 per
+        // accepted move (gold-side; the scorer reads it, the encoder never
+        // sees it).
+        let gold_idx = accepted_at[0].expect("accepted non-empty asserted above");
+        let mut soft = vec![0.0; keys.len()];
+        for at in &accepted_at {
+            soft[at.expect("position resolved above")] = 1.0;
+        }
+        cases.push(SuiteCase {
+            id: format!("chessbench:{sid}"),
+            // The board's own state shape: {fen, board, side_to_move}.
+            state: json!({
+                "fen": fen,
+                "board": board,
+                "side_to_move": side,
+            }),
+            questions: vec![choice_q(
+                "move",
+                "Choose the strongest legal move for the side to move. Board rows \
+                 run from rank 8 to rank 1; columns a to h. Uppercase pieces are \
+                 white. All legal moves are supplied.",
+                &keys,
+                Some(texts),
+            )],
+            gold: vec![GoldAnswer {
+                idx: gold_idx,
+                soft,
+                gold_score: None,
+            }],
+        });
+    }
+    // The population pin binds the FULL fetched envelope (max_rows 0 —
+    // the eval posture; 5,000 = the board's freeze CASE_CAP).
+    if max_rows == 0 {
+        assert_eq!(
+            cases.len(),
+            EXPECTED_CASES,
+            "chessbench: the fetched population drifted from the pinned 5,000 cases \
+             (the board's freeze CASE_CAP of the eligible positions) — refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+    }
+    Suite {
+        name: "chessbench",
+        cases,
+        option_counts_note: "one choice question per case over ALL legal moves (k \
+                             2..=89, mean 29.7 at the birth census); option keys = the \
+                             UCI move strings, criteria values = the SAN (the board's \
+                             own both-notations shape); the order is the board's \
+                             sha256(fen:move) hash order (byte-exact, no shuffle seat); \
+                             the TIE LAW rides gold-side soft (1.0 per accepted move — \
+                             5.9% of positions carry ties, the scorer arm is \
+                             CHESS_MOVE_SUITES) and gold.idx stays the board's \
+                             representative accepted[0]; 5,000 cases (the board's freeze \
+                             CASE_CAP of 61,833 eligible by sha256(\"20260919:31:<sha256(fen)>\") \
+                             lowest); the reference VALUES never reach the envelope; \
+                             corpus-off (the 1.1 TB train split is never fetched; \
+                             grammar-not-answers)",
     }
 }
 

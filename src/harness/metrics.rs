@@ -819,6 +819,201 @@ mod case_exact_metrics_tests {
     }
 }
 
+/// Issue 114 R4a queue #7 (board row 31, ChessBench) — the board's
+/// best-move scorer accepting all exact reference ties
+/// (`chess_score`: `best_move = choice ∈ accepted`, `tie_tolerance: 0.0`)
+/// as ONE walk over the forced rows. The accepted set rides the case's
+/// `gold[0].soft` vector — gold-side data the encoder never sees (the
+/// state is model-visible and would leak the answer): `soft[j] = 1.0`
+/// for every accepted move, `0.0` otherwise, so `soft[pick] > 0.0` IS
+/// the tie-accepting hit. `gold.idx` stays the board's `expected`
+/// (accepted[0], one representative) for the generic `hard` walk and the
+/// modal floor; the tie-accepting accuracy is the SUITE metric (the
+/// board's primary), never folded into `hard`.
+///
+/// Encoding laws, all asserted loud: every soft value is exactly 0.0 or
+/// 1.0; at least one accepted (`Σsoft ≥ 1.0`); the representative IS
+/// accepted (`soft[gold] == 1.0` — the board's own
+/// `assert all(chess_score(row, move)["best_move"] for move in accepted)`
+/// shape). The pick is the first-index argmax ([`argmax_first`] — the
+/// house tie rule). The per-question chance is `1/k` (one legal move
+/// among the presented k, the board's random-move baseline); the tie
+/// census (share of questions carrying >1 accepted, mean accepted size)
+/// rides beside, report-only. Empty input is `None` (nothing measured,
+/// never a fabricated rate); misaligned rows/softs refuse loud.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ChessMoveMetrics {
+    /// Evaluated questions (restated so results.json carries its own
+    /// denominator — one question per case on this suite).
+    pub n: usize,
+    /// Fraction of questions whose pick is ANY accepted (tied-best) move —
+    /// the board's primary metric, the tie law verbatim.
+    pub best_move_accuracy: f64,
+    /// Mean `1/k` over the presented legal moves — the random-move
+    /// baseline (the §B3 re-derivation law).
+    pub chance: f64,
+    /// Share of questions carrying >1 accepted move (the tie census).
+    pub tie_share: f64,
+    /// Mean accepted-set size over questions (the tie census).
+    pub mean_accepted: f64,
+}
+
+#[must_use]
+pub fn chess_move_metrics(
+    rows: &[(usize, Vec<f64>, Vec<f64>)],
+    options_per_question: &[usize],
+) -> Option<ChessMoveMetrics> {
+    assert_eq!(
+        options_per_question.len(),
+        rows.len(),
+        "chess_move_metrics: {} per-question option counts vs {} rows — the \
+         k array must pair 1:1 with the rows or the walk would silently \
+         mis-align",
+        options_per_question.len(),
+        rows.len()
+    );
+    if rows.is_empty() {
+        return None;
+    }
+    let (mut hits, mut chance_sum, mut ties, mut accepted_sum) = (0usize, 0.0_f64, 0usize, 0.0_f64);
+    for (row, (gold, probs, soft)) in rows.iter().enumerate() {
+        let k = options_per_question[row];
+        assert!(
+            k >= 2,
+            "chess_move_metrics: row {row} carries k={k} — the transform's \
+             eligibility floor is 2 legal moves"
+        );
+        assert_eq!(
+            soft.len(),
+            probs.len(),
+            "chess_move_metrics: row {row} soft len {} vs probs len {} — the \
+             accepted-set encoding is misaligned with the presented options",
+            soft.len(),
+            probs.len()
+        );
+        let mut accepted = 0usize;
+        for (j, s) in soft.iter().enumerate() {
+            assert!(
+                *s == 0.0 || *s == 1.0,
+                "chess_move_metrics: row {row} soft[{j}] = {s} — the accepted-set \
+                 encoding is 0.0/1.0 only, never a probability"
+            );
+            if *s == 1.0 {
+                accepted += 1;
+            }
+        }
+        assert!(
+            accepted >= 1,
+            "chess_move_metrics: row {row} carries an empty accepted set — the \
+             builder's tie join drifted"
+        );
+        assert!(
+            soft[*gold] == 1.0,
+            "chess_move_metrics: row {row} gold {gold} is not accepted — the \
+             board's representative must sit inside the accepted set"
+        );
+        let (pick, _) = argmax_first(probs);
+        if soft[pick] == 1.0 {
+            hits += 1;
+        }
+        chance_sum += 1.0 / k as f64;
+        ties += usize::from(accepted > 1);
+        accepted_sum += accepted as f64;
+    }
+    let n = rows.len();
+    Some(ChessMoveMetrics {
+        n,
+        best_move_accuracy: hits as f64 / n as f64,
+        chance: chance_sum / n as f64,
+        tie_share: ties as f64 / n as f64,
+        mean_accepted: accepted_sum / n as f64,
+    })
+}
+
+#[cfg(test)]
+mod chess_move_metrics_tests {
+    use super::chess_move_metrics;
+
+    #[test]
+    fn a_pick_in_the_accepted_set_hits_even_off_the_representative() {
+        // Two tied-best moves at indices 0 and 2; the lane picked 2 — the
+        // generic hard walk would score a miss, the tie law scores a hit.
+        let rows = vec![(0, vec![0.1, 0.2, 0.7, 0.0], vec![1.0, 0.0, 1.0, 0.0])];
+        let m = chess_move_metrics(&rows, &[4]).expect("non-empty");
+        assert_eq!(m.n, 1);
+        assert!((m.best_move_accuracy - 1.0).abs() < 1e-12);
+        assert!((m.chance - 0.25).abs() < 1e-12);
+        assert!((m.tie_share - 1.0).abs() < 1e-12);
+        assert!((m.mean_accepted - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_pick_outside_the_accepted_set_misses_even_on_the_representative_row() {
+        // The lane picked index 1 (not accepted); gold 0 IS accepted —
+        // hard would score 0 here too, but this pins the scorer's own arm.
+        let rows = vec![(0, vec![0.3, 0.5, 0.1, 0.1], vec![1.0, 0.0, 0.0, 0.0])];
+        let m = chess_move_metrics(&rows, &[4]).expect("non-empty");
+        assert!((m.best_move_accuracy - 0.0).abs() < 1e-12);
+        assert!((m.tie_share - 0.0).abs() < 1e-12);
+        assert!((m.mean_accepted - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn chance_averages_the_presented_k() {
+        let rows = vec![
+            (0, vec![0.5, 0.5], vec![1.0, 0.0]),
+            (2, vec![0.2, 0.2, 0.3, 0.3], vec![0.0, 0.0, 1.0, 1.0]),
+        ];
+        let m = chess_move_metrics(&rows, &[2, 4]).expect("non-empty");
+        assert!((m.chance - (0.5 + 0.25) / 2.0).abs() < 1e-12);
+        // Both argmax_first picks land inside their accepted sets (row 1's
+        // first-index tie at 0.3 is index 2, accepted) — accuracy 1.0.
+        assert!((m.best_move_accuracy - 1.0).abs() < 1e-12);
+        assert!((m.tie_share - 0.5).abs() < 1e-12);
+        assert!((m.mean_accepted - 1.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn empty_input_is_none_never_a_zero() {
+        assert!(chess_move_metrics(&[], &[]).is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "mis-align")]
+    fn misaligned_option_counts_refuse_loudly() {
+        let rows = vec![(0, vec![1.0, 0.0], vec![1.0, 0.0])];
+        let _ = chess_move_metrics(&rows, &[2, 2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "misaligned with the presented options")]
+    fn a_soft_shorter_than_probs_refuses() {
+        let rows = vec![(0, vec![1.0, 0.0, 0.0], vec![1.0, 0.0])];
+        let _ = chess_move_metrics(&rows, &[3]);
+    }
+
+    #[test]
+    #[should_panic(expected = "0.0/1.0 only")]
+    fn a_probability_valued_soft_refuses() {
+        let rows = vec![(0, vec![0.1, 0.9], vec![0.7, 0.3])];
+        let _ = chess_move_metrics(&rows, &[2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "empty accepted set")]
+    fn an_empty_accepted_set_refuses() {
+        let rows = vec![(0, vec![1.0, 0.0], vec![0.0, 0.0])];
+        let _ = chess_move_metrics(&rows, &[2]);
+    }
+
+    #[test]
+    #[should_panic(expected = "must sit inside the accepted set")]
+    fn a_representative_outside_the_accepted_set_refuses() {
+        let rows = vec![(1, vec![1.0, 0.0], vec![1.0, 0.0])];
+        let _ = chess_move_metrics(&rows, &[2]);
+    }
+}
+
 /// One retrieval case for [`ndcg_at_10_metrics`]: the candidate documents
 /// of one query, each as (`doc_id`, relevance gain, model score). The
 /// gains are the pinned relevance ladder's levels (0 = non-relevant);

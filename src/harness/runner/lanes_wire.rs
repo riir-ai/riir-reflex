@@ -444,6 +444,9 @@ pub(super) fn assemble_laya_lane_result(
     // (`multilabel_f1_of`); the label walk reads the per-case question
     // grid the builder pinned.
     let multilabel = super::multilabel_f1_of(suite_name, &forced, cases);
+    // Issue 114 R4a queue #7: the chess-move tie-law scorer — the same
+    // one-home law (`chess_move_of`).
+    let chess_move = super::chess_move_of(suite_name, &forced, cases);
     let acc_deleaked = leak_flags.and_then(|keep| {
         let per_case: Vec<usize> = cases.iter().map(|c| c.as_ref().questions.len()).collect();
         subset_accuracy(&forced, keep, &per_case)
@@ -570,6 +573,7 @@ pub(super) fn assemble_laya_lane_result(
         jdi_skill: Some(jdi_skill),
         case_exact,
         multilabel,
+        chess_move,
         score_threshold: f32::NAN, // laya exposes no abstain knob — N/A
         distance_threshold: f32::NAN,
         threshold_recommendation: None,

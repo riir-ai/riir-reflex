@@ -47,9 +47,10 @@ use crate::engine::{
 use crate::harness::families::SynthData;
 use crate::harness::latency::{LatencyExtremes, fmt_p99_cell};
 use crate::harness::metrics::{
-    CalibrationPair, CaseExactMetrics, ConfusionRow, G1Verdict, HardMetrics, MultilabelMetrics,
-    brier_of, case_exact_metrics, conformal_naive_floor, confusion_top, ece_of, g1_verdict_of,
-    hard_metrics, multilabel_f1_metrics, score_metrics, soft_metrics, subset_accuracy,
+    CalibrationPair, CaseExactMetrics, ChessMoveMetrics, ConfusionRow, G1Verdict, HardMetrics,
+    MultilabelMetrics, brier_of, case_exact_metrics, chess_move_metrics, conformal_naive_floor,
+    confusion_top, ece_of, g1_verdict_of, hard_metrics, multilabel_f1_metrics, score_metrics,
+    soft_metrics, subset_accuracy,
 };
 use crate::harness::metrics::{chance_corrected_skill, chance_majority};
 use crate::harness::pair_heads::{
@@ -60,8 +61,8 @@ use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
     SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
-    build_bbh, build_bfcl, build_cladder, build_clinc150, build_contractnli, build_cruxeval,
-    build_emotion, build_emotion_syn, build_finentity, build_gpqa, build_gsm8k,
+    build_bbh, build_bfcl, build_chessbench, build_cladder, build_clinc150, build_contractnli,
+    build_cruxeval, build_emotion, build_emotion_syn, build_finentity, build_gpqa, build_gsm8k,
     build_hellaswag_jdi, build_home_appliance, build_isarcasm_b, build_isarcasmeval,
     build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections, build_ragtruth,
     build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sata, build_sst5, build_sst5_syn,
@@ -1035,6 +1036,38 @@ const SUITES: &[SuiteSpec] = &[
         synthetic: None,
         modelless_lane: false,
     },
+    // Issue 114 R4a queue #7 (2026-11-13) — board row 31; ChessBench
+    // (google-deepmind/searchless_chess: the action-value bag from GCS,
+    // the FILE BYTES pinned by sha256, the board's own pin). The board's
+    // `B mechanical: All legal moves` adaptation: ONE choice question per
+    // case (5,000 = the board's freeze CASE_CAP of 61,833 eligible by
+    // sha256("20260919:31:<sha256(fen)>") lowest — the proven cladder
+    // key format, catalog id 31); option keys = the UCI move strings,
+    // values = the SAN, the order = the board's sha256(fen:move) hash
+    // order (byte-exact, no shuffle seat). THE TIE LAW: all tied-best
+    // accepted (3,654 of 61,833 eligible carry ties, 5.9%) — the
+    // accepted set rides gold-side soft (CHESS_MOVE_SUITES arms the
+    // scorer), gold.idx stays the board's representative accepted[0].
+    // The reference VALUES never reach the envelope (answer material).
+    // LICENCE: DATA CC-BY 4.0 per the repo README at the pinned sha
+    // 90ae0e6 (the lichess portion CC0); CODE Apache-2.0 (read
+    // 2026-11-13). CORPUS-OFF: the 1.1 TB train split is never fetched
+    // (grammar-not-answers) — laya-only. python-chess rides the
+    // .raw/venvs/chess uv venv (the PYTHON oracle lane only, never a
+    // cargo dep).
+    SuiteSpec {
+        name: "chessbench",
+        dataset_dir: "chessbench",
+        test_cap: 0, // all 5,000 cases — the board's freeze population
+        cal_cap: 0,  // corpus-off: the 1.1 TB train split is never fetched
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: false, // variable k (2..=89 legal moves), the s1mb breadth posture
+        build: build_chessbench,
+        synthetic: None,
+        modelless_lane: false,
+    },
     // Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer
     // (board row 9, the home-appliance simulator; MIT, board-generated —
     // the fetch lane regenerates the rows with the board's own generator
@@ -1226,6 +1259,63 @@ pub(crate) fn multilabel_f1_of(
         }
     }
     multilabel_f1_metrics(&rows, grid)
+}
+
+/// The chess-move arm list (issue 114 R4a queue #7): the suites whose
+/// board metric is best-move accuracy accepting all exact reference ties
+/// (the tie law). A suite joins by appending its registry name here in
+/// the same commit its spec lands — the CASE_EXACT_SUITES law.
+const CHESS_MOVE_SUITES: &[&str] = &["chessbench"];
+
+/// The chess-move metrics for one lane's eval, or None off the arm list
+/// (`CHESS_MOVE_SUITES`). One home for the walk BOTH lanes share (the
+/// modelless assembly and the laya assembler); the forced rows are the
+/// caller's — they are lane-shaped. The accepted set comes from the
+/// cases' gold-side `soft` vectors (the builder's encoding: 1.0 per
+/// accepted move — never the model-visible state), assembled into the
+/// (gold, probs, soft) rows the scorer walks; the alignment asserts ride
+/// the scorer itself.
+pub(crate) fn chess_move_of(
+    suite_name: &str,
+    forced: &[(usize, Vec<f64>)],
+    cases: &[impl AsRef<SuiteCase>],
+) -> Option<ChessMoveMetrics> {
+    if !CHESS_MOVE_SUITES.contains(&suite_name) {
+        return None;
+    }
+    let per_case: Vec<usize> = cases.iter().map(|c| c.as_ref().questions.len()).collect();
+    if per_case.is_empty() {
+        return None;
+    }
+    assert_eq!(
+        per_case.iter().sum::<usize>(),
+        forced.len(),
+        "chess_move_of: the case grids sum to {} but {} forced rows were \
+         handed over — the walk would silently mis-align",
+        per_case.iter().sum::<usize>(),
+        forced.len()
+    );
+    let mut rows: Vec<(usize, Vec<f64>, Vec<f64>)> = Vec::with_capacity(forced.len());
+    let mut cursor = 0usize;
+    for case in cases.iter() {
+        let case = case.as_ref();
+        for (qi, q) in case.questions.iter().enumerate() {
+            assert!(
+                q.kind == QKind::Choice,
+                "chess_move_of: case {} question {qi} is not a choice — the \
+                 suite's envelope contract is one choice question per case",
+                case.id
+            );
+            let (gold, probs) = &forced[cursor];
+            rows.push((*gold, probs.clone(), case.gold[qi].soft.clone()));
+            cursor += 1;
+        }
+    }
+    let per_q_k: Vec<usize> = cases
+        .iter()
+        .flat_map(|c| c.as_ref().questions.iter().map(question_option_count))
+        .collect();
+    chess_move_metrics(&rows, &per_q_k)
 }
 
 // ── RETIRED (owner call, 2026-10-11): the code_fixtures builders
@@ -1532,6 +1622,14 @@ pub struct LaneResult {
     /// readout. None on every other suite (the leak-field wire law).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub multilabel: Option<MultilabelMetrics>,
+    /// Issue 114 R4a queue #7 — the ChessBench best-move scorer accepting
+    /// all exact reference ties (the tie law; [`CHESS_MOVE_SUITES`] is the
+    /// arm list). The accepted set rides gold-side `soft` (never the
+    /// model-visible state); `gold.idx` stays the board's representative
+    /// for the generic walks. None on every other suite (the leak-field
+    /// wire law).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chess_move: Option<ChessMoveMetrics>,
     /// Issue 039 T4: the confidence-readout CANDIDATE table on the cal
     /// slice — REPORT-ONLY (the arming lever was demoted at Bench 052; the
     /// shipped Dispatch law runs everywhere). None = thin cal.
@@ -4557,6 +4655,9 @@ fn run_modelless<const N: usize>(
     let case_exact = case_exact_of(spec.name, &forced, &suite.cases);
     // Issue 114 T13: the multilabel scorer, on the arm-list suites only.
     let multilabel = multilabel_f1_of(spec.name, &forced, &suite.cases);
+    // Issue 114 R4a queue #7: the chess-move tie-law scorer, on the
+    // arm-list suites only.
+    let chess_move = chess_move_of(spec.name, &forced, &suite.cases);
     // Issue 024 T3: the same walk restricted to the unflagged cases. None
     // (feature off / out of scope) stays an absence in results.json.
     let acc_deleaked = inp.leak_flags.and_then(|keep| {
@@ -4781,6 +4882,7 @@ fn run_modelless<const N: usize>(
             jdi_skill: Some(jdi_skill),
             case_exact,
             multilabel,
+            chess_move,
             readout_report,
             corpus_fallbacks,
             latency_extremes: lat.extremes,
@@ -5372,6 +5474,18 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             198,
             "gpqa: the fetched population drifted from the pinned \
              198 (the board's census: all prepared cases retained) — refetch \
+             via scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+    }
+    // Issue 114 R4a queue #7: the ChessBench population pin at the
+    // prepare layer (the builder pins 5,000 at max_rows 0; the
+    // home_appliance form).
+    if spec.name == "chessbench" {
+        assert_eq!(
+            suite.cases.len(),
+            5_000,
+            "chessbench: the fetched population drifted from the pinned \
+             5,000 (the board's freeze CASE_CAP) — refetch \
              via scripts/fetch_datasets.sh and re-pin the manifest digest"
         );
     }

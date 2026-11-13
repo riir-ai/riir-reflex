@@ -1490,6 +1490,201 @@ fetch_gpqa() {
     fi
 }
 
+# fetch_chessbench <suite>
+#   The ChessBench fetch (issue 114 R4a queue #7): the action-value bag
+#   from the searchless_chess GCS bucket, the FILE BYTES pinned by sha256
+#   (the board's own pin). The _chessbench_rows transform ports the
+#   board's adapters_scored.py::chessbench recipe BYTE-EXACT @ clone sha
+#   f5a6e4fd85fe: the bagz reader (mmap + the trailing <Q offsets table)
+#   + the LEB128-string/big-endian-f64 record decode VERBATIM; per-fen
+#   value maps (duplicates assert equal, counted); the eligibility
+#   excludes (incomplete legal-move coverage; non-decision or >255
+#   moves — python-chess enumerates the legal moves, the PYTHON ORACLE
+#   LANE ONLY, never a cargo dep); the board's sha256(fen:move) option
+#   order; the TIE LAW (accepted = every move at the max value, sorted
+#   UCI — the board's expected carries ONE representative,
+#   accepted[0]); the freeze CASE_CAP selection (5,000 of the eligible
+#   by sha256("20260919:31:<sha256(fen)>") lowest — freeze.py, the
+#   proven cladder key format with catalog id 31). Rows carry ONLY
+#   {sid, fen, board, side_to_move, moves [[uci,san]...] in the pinned
+#   order, accepted [uci...]} — the reference VALUES never reach the
+#   envelope (they are the answer material; only accepted survives, in
+#   the builder's gold-side soft encoding). python-chess comes from the
+#   .raw/venvs/chess uv venv (created on demand; untracked; the system
+#   python is never touched). One envelope page. Idempotent.
+CHESS_VENV="$ROOT/.raw/venvs/chess"
+_chessbench_py() {
+    if [ -x "$CHESS_VENV/bin/python" ] && "$CHESS_VENV/bin/python" -c "import chess" >/dev/null 2>&1; then
+        echo "$CHESS_VENV/bin/python"
+        return 0
+    fi
+    if have uv; then
+        # stderr: this function's stdout IS the captured python path.
+        printf '%s\n' "  note   chessbench creating the python-chess venv (uv, untracked .raw/venvs)" >&2
+        mkdir -p "$CHESS_VENV"
+        if uv venv "$CHESS_VENV" >/dev/null 2>&1 && uv pip install --python "$CHESS_VENV/bin/python" --quiet chess >/dev/null 2>&1; then
+            echo "$CHESS_VENV/bin/python"
+            return 0
+        fi
+    fi
+    return 1
+}
+_chessbench_rows() {
+    bag=$1; out=$2
+    if ! py=$(_chessbench_py); then
+        log "  FAIL   chessbench convert (no python-chess venv and no uv to build one — the ChessBench lane cannot enumerate legal moves)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    "$py" - "$bag" "$out" <<'PYEOF'
+import collections, hashlib, json, math, mmap, struct, sys
+import chess
+
+bag_path, dst = sys.argv[1], sys.argv[2]
+SEED = 20260919
+CATALOG_ID = 31
+CASE_CAP = 5000
+
+
+def bag_records(path):
+    with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as buf:
+        index = struct.unpack_from("<Q", buf, len(buf) - 8)[0]
+        assert 0 < index < len(buf) and (len(buf) - index) % 8 == 0
+        start = 0
+        for offset in range(index, len(buf), 8):
+            end = struct.unpack_from("<Q", buf, offset)[0]
+            assert start <= end <= index
+            yield buf[start:end]
+            start = end
+        assert start == index
+
+
+def decode_bag(record):
+    offset = 0
+    strings = []
+    for _ in range(2):
+        length = shift = 0
+        while True:
+            byte = record[offset]
+            offset += 1
+            length |= (byte & 127) << shift
+            if byte < 128:
+                break
+            shift += 7
+            assert shift < 64
+        strings.append(record[offset:offset + length].decode("utf-8"))
+        offset += length
+    assert len(record) - offset == 8
+    value = struct.unpack_from(">d", record, offset)[0]
+    assert math.isfinite(value) and 0 <= value <= 1
+    return strings[0], strings[1], value
+
+
+by_fen = collections.defaultdict(dict)
+record_count = duplicate_count = 0
+for record in bag_records(bag_path):
+    fen, move, value = decode_bag(record)
+    if move in by_fen[fen]:
+        assert by_fen[fen][move] == value, (fen, move, "conflicting reference value")
+        duplicate_count += 1
+    by_fen[fen][move] = value
+    record_count += 1
+
+eligible = []
+excluded_coverage = excluded_nondecision = 0
+ties_all = 0
+for fen, values in sorted(by_fen.items()):
+    board = chess.Board(fen)
+    moves = {move.uci(): move for move in board.legal_moves}
+    if set(moves) != set(values):
+        excluded_coverage += 1
+        continue
+    if not 2 <= len(moves) <= 255:
+        excluded_nondecision += 1
+        continue
+    best = max(values.values())
+    accepted = sorted(k for k, value in values.items() if value == best)
+    ties_all += len(accepted) > 1
+    order = sorted(moves, key=lambda move: hashlib.sha256((fen + ":" + move).encode()).digest())
+    sid = hashlib.sha256(fen.encode()).hexdigest()
+    prio = hashlib.sha256(f"{SEED}:{CATALOG_ID}:{sid}".encode()).digest()
+    eligible.append((prio, sid, fen, str(board), bool(board.turn), order, [board.san(moves[m]) for m in order], accepted))
+
+eligible.sort(key=lambda r: r[0])
+kept = eligible[:CASE_CAP]
+rows = []
+for _prio, sid, fen, board_str, white, order, sans, accepted in kept:
+    rows.append({
+        "sid": sid,
+        "fen": fen,
+        "board": board_str,
+        "side_to_move": "white" if white else "black",
+        "moves": [[m, s] for m, s in zip(order, sans)],
+        "accepted": accepted,
+    })
+assert len(rows) == min(CASE_CAP, len(eligible)), "chessbench: the freeze cap drifted"
+with open(dst, "w", encoding="utf-8") as g:
+    for r in rows:
+        g.write(json.dumps(r, ensure_ascii=False) + "\n")
+print(
+    f"chessbench={len(rows)} records={record_count} positions={len(by_fen)} "
+    f"eligible={len(eligible)} excluded_coverage={excluded_coverage} "
+    f"excluded_nondecision={excluded_nondecision} dupes={duplicate_count} "
+    f"ties_all={ties_all}"
+)
+PYEOF
+}
+fetch_chessbench() {
+    suite=$1
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    file="$dir/test-000.json"
+    if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+        n=$(rows_count "$file" 2>/dev/null || echo 0)
+        log "  skip   $suite/test-000 ($n rows)"
+        return 0
+    fi
+    url="https://storage.googleapis.com/searchless_chess/data/test/action_value_data.bag"
+    bag="$dir/action_value_data.bag"
+    expected_sha="5f73aac8f60e31734cdbf276ba3fca8d5ba5cb6171ba600e31af4f36327986b0"
+    ok=0
+    if http_get "$url" "$bag"; then ok=1; fi
+    if [ "$ok" -eq 0 ]; then
+        sleep 5
+        if http_get "$url" "$bag"; then ok=1; fi
+    fi
+    if [ "$ok" -eq 0 ]; then
+        rm -f "$bag"
+        log "  FAIL   $suite/test-000 (http error)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    actual=$(shasum -a 256 "$bag" | awk '{print $1}')
+    if [ "$actual" != "$expected_sha" ]; then
+        rm -f "$bag"
+        log "  FAIL   $suite/test-000 (sha256 drifted: got $actual, the board pins $expected_sha — the source moved, never refetch blind)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    rows="$dir/chessbench.rows.jsonl"
+    if ! _chessbench_rows "$bag" "$rows"; then
+        rm -f "$bag" "$rows"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    rm -f "$bag"
+    if _raw_convert "$rows" "jsonl" "$file.tmp" "$suite/test-000"; then
+        rm -f "$rows"
+        n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
+        mv "$file.tmp" "$file"
+        FILES=$((FILES + 1))
+        ROWS=$((ROWS + n))
+        log "  fetch  $suite/test-000 rows=$n"
+    else
+        rm -f "$rows"
+    fi
+}
+
 fetch_isarcasmeval() {
     suite=$1; owner_repo=$2; sha=$3
     dir="$OUT/$suite"
@@ -2334,6 +2529,28 @@ main() {
     if want_suite gpqa; then
         log "[suite] gpqa idavidrein/gpqa dataset.zip (sha256-pinned file bytes; password public in the upstream README; the board's recipe byte-exact; CC BY 4.0 data at the HF tag+cardData 2026-11-13; LOCAL-ONLY rows)"
         fetch_gpqa gpqa "idavidrein/gpqa"
+    fi
+
+    # 32. chessbench — issue 114 R4a queue #7 (board row 31, the queue's
+    #     last scoreable): the searchless_chess action-value bag (GCS,
+    #     the FILE BYTES sha256-pinned at the board's own pin — a moved
+    #     source refuses loud). The board's adapters_scored.py::chessbench
+    #     recipe ported BYTE-EXACT at the transform (the bagz reader +
+    #     decode verbatim; the legal-move eligibility excludes via
+    #     python-chess — the PYTHON ORACLE LANE only, the .raw/venvs/chess
+    #     uv venv, never a cargo dep; the sha256(fen:move) option order;
+    #     the TIE LAW — all tied-best accepted, the board's expected is
+    #     ONE representative; the freeze CASE_CAP 5,000 by
+    #     sha256("20260919:31:<sha256(fen)>") — the proven cladder key
+    #     format, catalog id 31). The reference VALUES never reach the
+    #     envelope (answer material — the SATA/GPQA trap-drop class).
+    #     LICENCE (read 2026-11-13 at the pinned repo sha 90ae0e6): DATA
+    #     CC-BY 4.0 per the repo README (the lichess portion CC0); CODE
+    #     Apache-2.0. CORPUS-OFF (the train split is 1.1 TB and never
+    #     fetched; eval-only; grammar-not-answers; laya-only).
+    if want_suite chessbench; then
+        log "[suite] chessbench searchless_chess action_value_data.bag (sha256-pinned file bytes; the board's recipe byte-exact incl. the tie law; CC-BY 4.0 data 2026-11-13; python-chess in the untracked oracle venv)"
+        fetch_chessbench chessbench
     fi
 
     log ""

@@ -20,3 +20,5 @@
 - No live-traffic mining (decstat carries no outcomes; bench capture is the disclosed posture).
 - No corpus edit outside the synth lane's echo-gated pass.
 - Success = the capture cell runs and the paired read lands a verdict; corpus improvement is the gate's call, not a promise.
+
+**Claimed:** zed-4430bf70@4090, 1794569916460, expires 2026-11-13T13:38:36Z — housekeeping routing: T1 routed to zed-41@4090 (2026-11-13) — write the `--esc-capture` arm + split-law disjointness asserts FIRST (CPU work), the capture RUN waits until the t679 GPU job (qwen38_dspine_t5, E:\scratch	679_riirinfer) clears the box; T2/T3 stay bench-gated behind it. Claim expected from the taking agent on pickup.

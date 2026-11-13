@@ -1142,6 +1142,111 @@ fetch_sata() {
     fi
 }
 
+# fetch_cladder <suite> <owner_repo> <sha>
+#   The CLadder fetch (issue 114 R4a queue #4): the single zip at the
+#   board's pinned tree sha via the GitHub raw lane (board suite.md row
+#   44: causalNLP/cladder @3d2d116, data/cladder-v1.zip, balanced
+#   questions, "5000 seeded cases"). The _cladder_rows transform ports
+#   the board's TWO board-exact steps so the Rust builder stays
+#   std-only: (1) its normalize builder (normalize_text.py::cladder @
+#   clone sha f5a6e4fd85fe) — prompt = model background + given_info +
+#   question joined by blank lines, gold = the original answer
+#   (yes/no); (2) its freeze CASE_CAP selection (freeze.py: cap 5,000
+#   of the 10,112 balanced questions, sha256-priority order
+#   sha256("20260919:44:<row id>") over the row ids, first 5,000 —
+#   byte-exact, so OUR population IS the board's). The zip carries NO
+#   train split (9 entries: seven eval question variants + models +
+#   README) — the corpus census resolves corpus-OFF at birth. The meta
+#   groundtruth/estimand columns are excluded from the rows (the
+#   board's own request_exclusion). Idempotent.
+_cladder_rows() {
+    in=$1; out=$2
+    if [ -z "$PY3" ]; then
+        if have python3 && python3 -c pass >/dev/null 2>&1; then
+            PY3="python3"
+        elif have py && py -3 -c pass >/dev/null 2>&1; then
+            PY3="py -3"
+        fi
+    fi
+    if [ -z "$PY3" ]; then
+        log "  FAIL   cladder convert (no working python3 — the CLadder lane cannot convert)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    "$PY3" - "$in" "$out" <<'PYEOF'
+import hashlib, json, sys, zipfile
+src, dst = sys.argv[1], sys.argv[2]
+SEED = 20260919
+CASE_CAP = 5000
+with zipfile.ZipFile(src) as z:
+    qs = json.loads(z.read("cladder-v1-q-balanced.json"))
+    models = {x["model_id"]: x for x in json.loads(z.read("cladder-v1-meta-models.json"))}
+rows = []
+for q in qs:
+    meta = q["meta"]
+    model = models[meta["model_id"]]
+    prompt = "\n\n".join([model["background"], q["given_info"], q["question"]])
+    ans = q["answer"]
+    assert ans in ("yes", "no"), ans
+    rows.append({
+        "id": f"CLadder:balanced:{q['question_id']}",
+        "question_id": q["question_id"],
+        "instructions": prompt,
+        "answer": ans,
+    })
+# The board's freeze CASE_CAP selection (freeze.py): sha256-priority
+# order over the row ids, first 5,000 — byte-exact.
+prio = lambda rid: hashlib.sha256(f"{SEED}:44:{rid}".encode()).hexdigest()
+rows.sort(key=lambda r: prio(r["id"]))
+rows = rows[:CASE_CAP]
+with open(dst, "w", encoding="utf-8") as g:
+    for r in rows:
+        g.write(json.dumps(r, ensure_ascii=False) + "\n")
+print(f"cladder={len(rows)}")
+PYEOF
+}
+fetch_cladder() {
+    suite=$1; owner_repo=$2; sha=$3
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    file="$dir/test-000.json"
+    if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+        n=$(rows_count "$file" 2>/dev/null || echo 0)
+        log "  skip   $suite/test-000 ($n rows)"
+        return 0
+    fi
+    url="https://raw.githubusercontent.com/$owner_repo/$sha/data/cladder-v1.zip"
+    raw="$dir/cladder-v1.zip.raw"
+    ok=0
+    if http_get "$url" "$raw"; then ok=1; fi
+    if [ "$ok" -eq 0 ]; then
+        sleep 5
+        if http_get "$url" "$raw"; then ok=1; fi
+    fi
+    if [ "$ok" -eq 0 ]; then
+        rm -f "$raw"
+        log "  FAIL   $suite/test-000 (http error)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    rows="$dir/cladder.rows.jsonl"
+    if ! _cladder_rows "$raw" "$rows"; then
+        rm -f "$raw" "$rows"
+        return 1
+    fi
+    rm -f "$raw"
+    if _raw_convert "$rows" "jsonl" "$file.tmp" "$suite/test-000"; then
+        rm -f "$rows"
+        n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
+        mv "$file.tmp" "$file"
+        FILES=$((FILES + 1))
+        ROWS=$((ROWS + n))
+        log "  fetch  $suite/test-000 rows=$n"
+    else
+        rm -f "$rows"
+    fi
+}
+
 fetch_isarcasmeval() {
     suite=$1; owner_repo=$2; sha=$3
     dir="$OUT/$suite"
@@ -1915,6 +2020,24 @@ main() {
     if want_suite sata; then
         log "[suite] sata sata-bench/sata-bench @371dd0c sata_bench_final_2025.json (single jsonl; MIT read at the pin via GitHub LICENSE + API spdx 2026-11-13; the legacy answer-letter columns never carried)"
         fetch_sata sata "sata-bench/sata-bench" "371dd0c18fe75a96fbbcf2d1507ceeaf0d5263c5"
+    fi
+
+    # 29. cladder — issue 114 R4a queue #4 (board row 44): causalNLP/
+    #     cladder @3d2d116, data/cladder-v1.zip (balanced questions;
+    #     "5000 seeded cases" = the board's freeze CASE_CAP of the
+    #     10,112-question balanced file, replicated byte-exact at the
+    #     transform — sha256-priority over the row ids, see
+    #     fetch_cladder). Original yes/no outcomes (2-choice, chance
+    #     0.5). MIT (read 2026-11-13, two GitHub surfaces — the hub
+    #     probe does not apply): the repo's LICENSE at the pinned sha
+    #     is the full MIT text ("Copyright (c) 2023 CausalNLP") + the
+    #     GitHub API reports spdx_id MIT. CORPUS-OFF at the census (the
+    #     zip carries seven EVAL question variants + models + README —
+    #     no train split anywhere; the questions themselves are
+    #     eval-only, grammar-not-answers; laya-only).
+    if want_suite cladder; then
+        log "[suite] cladder causalNLP/cladder @3d2d116 data/cladder-v1.zip (balanced -> the board's 5,000-case freeze, byte-exact; MIT read at the pin via GitHub LICENSE + API spdx 2026-11-13)"
+        fetch_cladder cladder "causalNLP/cladder" "3d2d1169b4b939a09048a6a75956c8972a93cc38"
     fi
 
     log ""

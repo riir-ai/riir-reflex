@@ -60,13 +60,13 @@ use crate::harness::suites::typed_gold_events;
 use crate::harness::suites::{
     BFCL_ABSTAIN_KEY, CLINC150_KEYS, CONTRACTNLI_KEYS, ISARCASM_KEYS, QKind, Suite, SuiteCase,
     SuiteQuestion, TrainDoc, build_ag_news, build_anli_jdi, build_api_bank, build_banking77_mteb,
-    build_bbh, build_bfcl, build_clinc150, build_contractnli, build_emotion, build_emotion_syn,
-    build_finentity, build_gsm8k, build_hellaswag_jdi, build_home_appliance, build_isarcasm_b,
-    build_isarcasmeval, build_massive_intent_en, build_mmlupro_jdi, build_prompt_injections,
-    build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score, build_sata, build_sst5,
-    build_sst5_syn, build_thai_sib200, build_thai_wisesight, build_typed_decisions, build_wanli_en,
-    build_when2call, build_winogrande_jdi, build_xnli_en, stratified_selection_slices,
-    stratified_split, train_docs, train_row_label,
+    build_bbh, build_bfcl, build_cladder, build_clinc150, build_contractnli, build_emotion,
+    build_emotion_syn, build_finentity, build_gsm8k, build_hellaswag_jdi, build_home_appliance,
+    build_isarcasm_b, build_isarcasmeval, build_massive_intent_en, build_mmlupro_jdi,
+    build_prompt_injections, build_ragtruth, build_s1mb_choice, build_s1mb_noul, build_s1mb_score,
+    build_sata, build_sst5, build_sst5_syn, build_thai_sib200, build_thai_wisesight,
+    build_typed_decisions, build_wanli_en, build_when2call, build_winogrande_jdi, build_xnli_en,
+    stratified_selection_slices, stratified_split, train_docs, train_row_label,
 };
 use crate::pyjson::serialize_state;
 use crate::readout::ReadoutMode;
@@ -945,6 +945,33 @@ const SUITES: &[SuiteSpec] = &[
         named_only: true,
         coverage_audit: false, // per-case k (3..16 candidates → 3..16 binary questions)
         build: build_sata,
+        synthetic: None,
+        modelless_lane: false,
+    },
+    // Issue 114 R4a queue #4 (2026-11-13) — board row 44; CLadder
+    // (causalNLP/cladder @3d2d116, data/cladder-v1.zip, the BALANCED
+    // questions). ONE choice question per case, the fixed binary set
+    // [yes, no] in the board's own order (gold yes→0, no→1); state EMPTY
+    // (the prompt is the instructions — the board's normalize recipe,
+    // ported at the fetch transform). THE POPULATION IS THE BOARD'S,
+    // BYTE-EXACT: the transform replicates the board's freeze CASE_CAP
+    // (sha256-priority over the row ids, 5,000 of 10,112 — freeze.py),
+    // so the reads are directly board-comparable. 2-choice chance 0.5
+    // (the board's pin; the selected 5,000 split no 2,505 / yes 2,495).
+    // LICENCE: MIT at two GitHub surfaces (LICENSE at the pin + API
+    // spdx_id, read 2026-11-13). CORPUS-OFF at the census: the zip
+    // carries seven EVAL question variants + models + README — no train
+    // split (grammar-not-answers) — laya-only.
+    SuiteSpec {
+        name: "cladder",
+        dataset_dir: "cladder",
+        test_cap: 0, // all 5,000 cases — the board's freeze population
+        cal_cap: 0,  // corpus-off at the census: no train split exists
+        corpus_cap_per_label: 0,
+        eval_split: "test",
+        named_only: true,
+        coverage_audit: false, // the fixed binary set
+        build: build_cladder,
         synthetic: None,
         modelless_lane: false,
     },
@@ -5251,6 +5278,18 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
             nq, 15_517,
             "sata: the fetched question census drifted from the \
              pinned 15,517 (the source rows' fields changed) — refetch via \
+             scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+    }
+    // Issue 114 R4a queue #4: the CLadder population pin at the prepare
+    // layer (the builder pins 5,000 at max_rows 0; this arm makes a
+    // builder drift loud at prepare — the home_appliance form).
+    if spec.name == "cladder" {
+        assert_eq!(
+            suite.cases.len(),
+            5_000,
+            "cladder: the fetched population drifted from the pinned \
+             5,000 (the board's freeze CASE_CAP) — refetch via \
              scripts/fetch_datasets.sh and re-pin the manifest digest"
         );
     }

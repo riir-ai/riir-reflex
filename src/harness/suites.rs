@@ -2080,6 +2080,90 @@ mod sata_builder_tests {
     }
 }
 
+// Issue 114 R4a queue #4: the CLadder builder — the binary gold law
+// (yes→0, no→1, the board's own order), the empty-state shape, the
+// question_id-keyed case id, the answer refusals, and the census pin.
+#[cfg(test)]
+mod cladder_builder_tests {
+    use super::build_cladder;
+    use crate::harness::suites::question_option_count;
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    fn cladder_row(qid: &str, answer: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": format!("CLadder:balanced:{qid}"),
+            "question_id": qid,
+            "instructions": "Background text.\n\nGiven info.\n\nQuestion?",
+            "answer": answer,
+        })
+    }
+
+    #[test]
+    fn cladder_builds_binary_cases_in_the_board_order() {
+        let env = envelope(vec![cladder_row("1", "yes"), cladder_row("2", "no")]);
+        let s = build_cladder(&env, 2); // nonzero cap: the census assert rests
+        assert_eq!(s.cases.len(), 2);
+        let (yes_case, no_case) = (&s.cases[0], &s.cases[1]);
+        // Criteria insertion order IS the label order: yes first, no second
+        // (the board's gold maps yes→A/0, no→B/1).
+        let keys: Vec<_> = yes_case.questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, ["yes", "no"]);
+        assert_eq!(yes_case.gold[0].idx, 0);
+        assert_eq!(no_case.gold[0].idx, 1);
+        // The case id keys on the source question_id; the qid is the
+        // board's own q1; the state is the board's EMPTY object.
+        assert_eq!(yes_case.id, "cladder:1");
+        assert_eq!(yes_case.questions[0].qid, "q1");
+        assert_eq!(yes_case.state, serde_json::json!({}));
+        // The instructions ride VERBATIM (the board's prompt recipe is
+        // ported at the fetch transform).
+        assert_eq!(
+            yes_case.questions[0].instructions,
+            "Background text.\n\nGiven info.\n\nQuestion?"
+        );
+        // The fixed binary k feeds the per-question folds.
+        assert_eq!(question_option_count(&yes_case.questions[0]), 2);
+    }
+
+    #[test]
+    fn cladder_determinism_same_input_same_output() {
+        let mk = || envelope(vec![cladder_row("7", "no"), cladder_row("8", "yes")]);
+        let s1 = build_cladder(&mk(), 2); // nonzero cap: the census assert rests
+        let s2 = build_cladder(&mk(), 2);
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    #[should_panic(expected = "is binary yes/no")]
+    fn cladder_refuses_a_non_binary_answer() {
+        let _ = build_cladder(&envelope(vec![cladder_row("1", "maybe")]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the pinned transform shape")]
+    fn cladder_refuses_a_missing_field() {
+        let bad = serde_json::json!({ "id": "CLadder:balanced:1", "question_id": "1" });
+        let _ = build_cladder(&envelope(vec![bad]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the pinned 5,000 cases")]
+    fn cladder_full_load_refuses_a_drifted_population() {
+        let rows: Vec<serde_json::Value> =
+            (0..6).map(|i| cladder_row(&i.to_string(), "yes")).collect();
+        let _ = build_cladder(&envelope(rows), 0); // max_rows 0 = the eval census
+    }
+}
+
 /// Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer (board
 /// row 9, the home-appliance simulator; MIT, board-generated, seed
 /// 2026091807). One case per kept household request (88 — the release-v2.1
@@ -2393,6 +2477,103 @@ pub fn build_sata(rows_file: &Value, max_rows: usize) -> Suite {
                              board pin, re-derived 0.0131290 on the kept set) read off \
                              the case_exact column; corpus-optional (no train split \
                              exists and the candidates are case-specific texts — \
+                             grammar-not-answers)",
+    }
+}
+
+/// Issue 114 R4a queue #4 — the CLadder suite (board row 44,
+/// `causalNLP/cladder` @3d2d116, `data/cladder-v1.zip`, the BALANCED
+/// questions file; "5000 seeded cases" = the board's freeze CASE_CAP of
+/// the 10,112-question balanced file). ONE choice question per case
+/// (5,000 cases = 5,000 questions); options are the fixed binary set
+/// [yes, no] in the board's own order (its gold maps yes→A/0, no→B/1);
+/// state is EMPTY (the board's own shape — the prompt IS the
+/// instructions: model background + given_info + question joined by
+/// blank lines, the board's normalize builder recipe verbatim, ported
+/// at the fetch transform so the Rust side stays std-only). THE
+/// POPULATION IS THE BOARD'S, BYTE-EXACT: the fetch transform replicates
+/// the board's freeze CASE_CAP selection (sha256-priority order
+/// sha256("20260919:44:<row id>") over the row ids, first 5,000 —
+/// freeze.py, verified id-for-id at fetch), so our accuracy reads are
+/// DIRECTLY board-comparable (no re-seating, unlike gsm8k/sata's
+/// shuffles — here the selection IS the population and it is ported
+/// exactly). The meta groundtruth/estimand columns never reach the
+/// envelope (the board's own request_exclusion; the answer rides the
+/// transform's output as the only gold). LICENCE: MIT at two GitHub
+/// surfaces (LICENSE "Copyright (c) 2023 CausalNLP" + API spdx_id,
+/// read 2026-11-13). CORPUS-OFF at the census: the zip carries seven
+/// EVAL question variants + models + README — no train split anywhere
+/// (the triage's "possible corpus-ON" resolves OFF at birth; the
+/// questions themselves are eval-only, grammar-not-answers) —
+/// `modelless_lane: false`, laya-only.
+#[must_use]
+pub fn build_cladder(rows_file: &Value, max_rows: usize) -> Suite {
+    const EXPECTED_CASES: usize = 5_000;
+    const CLADDER_KEYS: [&str; 2] = ["yes", "no"]; // the board's own order (yes→A/0, no→B/1)
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(instructions), Some(answer)) =
+            (row_str(row, "instructions"), row_str(row, "answer"))
+        else {
+            panic!(
+                "cladder: row {pos} drifted from the pinned transform shape \
+                 (instructions/answer required) — refetch via \
+                 scripts/fetch_datasets.sh"
+            );
+        };
+        assert!(
+            answer == "yes" || answer == "no",
+            "cladder: row {pos} carries answer {answer:?} — the pinned source \
+             is binary yes/no (the transform asserts it too)"
+        );
+        let gold_idx = if answer == "yes" { 0 } else { 1 };
+        let mut crit = Map::new();
+        crit.insert("yes".to_string(), Value::String("Yes".to_string()));
+        crit.insert("no".to_string(), Value::String("No".to_string()));
+        cases.push(SuiteCase {
+            id: row_str(row, "question_id")
+                .map(|qid| format!("cladder:{qid}"))
+                .unwrap_or_else(|| format!("cladder:{pos}")),
+            // The board's own state shape: EMPTY (the prompt is the
+            // instructions; there is no separate state payload).
+            state: json!({}),
+            questions: vec![SuiteQuestion {
+                qid: "q1".to_string(), // the board's own qid
+                kind: QKind::Choice,
+                instructions: instructions.to_string(),
+                criteria: Value::Object(crit),
+            }],
+            gold: vec![GoldAnswer {
+                idx: gold_idx,
+                soft: vec![0.0; CLADDER_KEYS.len()],
+                gold_score: None,
+            }],
+        });
+    }
+    // The population pin binds the FULL fetched envelope (max_rows 0 —
+    // the eval posture; the board's freeze selection is the whole
+    // population, so a partial fetch reds loud).
+    if max_rows == 0 {
+        assert_eq!(
+            cases.len(),
+            EXPECTED_CASES,
+            "cladder: the fetched population drifted from the pinned 5,000 cases \
+             (the board's freeze CASE_CAP) — a partial or revised fetch; refetch \
+             via scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+    }
+    Suite {
+        name: "cladder",
+        cases,
+        option_counts_note: "every question carries the fixed two-option set [yes, no] \
+                             in the board's own order (gold yes→0, no→1); one choice \
+                             question per case (5,000 = the board's freeze CASE_CAP of \
+                             the 10,112-question balanced file, replicated byte-exact at \
+                             the fetch transform — sha256-priority over the row ids); \
+                             state is EMPTY (the prompt is the instructions, the board's \
+                             own shape); corpus-off at the census (the zip carries seven \
+                             eval question variants + models + README — no train split; \
                              grammar-not-answers)",
     }
 }

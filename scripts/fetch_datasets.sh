@@ -1052,6 +1052,96 @@ fetch_bbh() {
 #   technique columns; the same pinned sha the T10 MIT read covers) when
 #   the caller names isarcasm_b — the B/C/Arabic re-open note narrows:
 #   track B is LANED, C/Arabic stay the recorded re-opens.
+# fetch_sata <suite> <owner_repo> <sha>
+#   The SATA-Bench fetch (issue 114 R4a queue #3): the single prepared json
+#   at the board's pinned tree sha via the GitHub raw lane (the hub
+#   /resolve does not serve GitHub; board suite.md row 33: sata-bench/
+#   sata-bench @371dd0c, sata_bench_final_2025.json, "All prepared cases
+#   retained"). JSONL, one case per line: {paragraph, question, choices:
+#   [[text, bool], ...], dataset, ... legacy answer/symbol}. The legacy
+#   answer/symbol columns are the board's documented DIFFERENT-PERMUTATION
+#   trap (its gold_rule: "legacy answer letters refer to a different
+#   permutation; matching upstream sata_prompt_provider.py the
+#   per-candidate bool is the gold") — the _sata_rows transform carries
+#   ONLY {paragraph, question, choices, dataset} so the trap columns never
+#   land on disk. One envelope page (1,650 rows = the board's population).
+#   Idempotent (skip on a valid cached page, FORCE refetches).
+_sata_rows() {
+    in=$1; out=$2
+    if [ -z "$PY3" ]; then
+        if have python3 && python3 -c pass >/dev/null 2>&1; then
+            PY3="python3"
+        elif have py && py -3 -c pass >/dev/null 2>&1; then
+            PY3="py -3"
+        fi
+    fi
+    if [ -z "$PY3" ]; then
+        log "  FAIL   sata convert (no working python3 — the SATA lane cannot convert)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    "$PY3" - "$in" "$out" <<'PYEOF'
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+n = 0
+with open(src, encoding="utf-8") as f, open(dst, "w", encoding="utf-8") as g:
+    for line in f:
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        keep = {
+            "paragraph": row["paragraph"],
+            "question": row["question"],
+            "choices": row["choices"],
+            "dataset": row.get("dataset"),
+        }
+        g.write(json.dumps(keep, ensure_ascii=False) + "\n")
+        n += 1
+print(f"sata={n}")
+PYEOF
+}
+fetch_sata() {
+    suite=$1; owner_repo=$2; sha=$3
+    dir="$OUT/$suite"
+    mkdir -p "$dir"
+    file="$dir/test-000.json"
+    if [ "$FORCE" != "1" ] && [ -s "$file" ] && rows_valid "$file"; then
+        n=$(rows_count "$file" 2>/dev/null || echo 0)
+        log "  skip   $suite/test-000 ($n rows)"
+        return 0
+    fi
+    url="https://raw.githubusercontent.com/$owner_repo/$sha/src/satabench/methods/data/sata_bench_final_2025.json"
+    raw="$dir/sata_bench_final_2025.json.raw"
+    ok=0
+    if http_get "$url" "$raw"; then ok=1; fi
+    if [ "$ok" -eq 0 ]; then
+        sleep 5
+        if http_get "$url" "$raw"; then ok=1; fi
+    fi
+    if [ "$ok" -eq 0 ]; then
+        rm -f "$raw"
+        log "  FAIL   $suite/test-000 (http error)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    rows="$dir/sata.rows.jsonl"
+    if ! _sata_rows "$raw" "$rows"; then
+        rm -f "$raw" "$rows"
+        return 1
+    fi
+    rm -f "$raw"
+    if _raw_convert "$rows" "jsonl" "$file.tmp" "$suite/test-000"; then
+        rm -f "$rows"
+        n=$(rows_count "$file.tmp" 2>/dev/null || echo 0)
+        mv "$file.tmp" "$file"
+        FILES=$((FILES + 1))
+        ROWS=$((ROWS + n))
+        log "  fetch  $suite/test-000 rows=$n"
+    else
+        rm -f "$rows"
+    fi
+}
+
 fetch_isarcasmeval() {
     suite=$1; owner_repo=$2; sha=$3
     dir="$OUT/$suite"
@@ -1803,6 +1893,28 @@ main() {
     if want_suite bbh; then
         log "[suite] bbh suzgunmirac/BIG-Bench-Hard @9ee07bd bbh/*.json (23 fixed-option tasks; MIT read at the pin via GitHub LICENSE + API spdx 2026-11-13; the four free-form tasks never fetched)"
         fetch_bbh bbh "suzgunmirac/BIG-Bench-Hard" "9ee07bd481feebf959a6b59d61ea57bdcf30964d"
+    fi
+
+    # 28. sata — issue 114 R4a queue #3 (board row 33): sata-bench/
+    #     sata-bench @371dd0c, sata_bench_final_2025.json (the single
+    #     prepared jsonl; "All prepared cases retained" — 1,650 cases =
+    #     the board's population exactly). Select-all alternatives are
+    #     scored per-candidate as independent binary questions by the
+    #     builder; the case-exact scorer arms for this suite (board
+    #     chance 0.0131 = random whole-case guesses). The legacy
+    #     answer/symbol columns are the board's documented
+    #     different-permutation trap — the transform never lands them
+    #     (see fetch_sata). LICENCE (read 2026-11-13, two GitHub
+    #     surfaces — the hub probe does not apply, this source is a
+    #     GitHub repo not a hub dataset): the repo's LICENSE at the
+    #     pinned sha is the full MIT text ("Copyright (c) 2025
+    #     sata-bench") + the GitHub API reports spdx_id MIT.
+    #     CORPUS-OPTIONAL (single eval json, no train split; the
+    #     candidates are case-specific texts — grammar-not-answers;
+    #     laya-only).
+    if want_suite sata; then
+        log "[suite] sata sata-bench/sata-bench @371dd0c sata_bench_final_2025.json (single jsonl; MIT read at the pin via GitHub LICENSE + API spdx 2026-11-13; the legacy answer-letter columns never carried)"
+        fetch_sata sata "sata-bench/sata-bench" "371dd0c18fe75a96fbbcf2d1507ceeaf0d5263c5"
     fi
 
     log ""

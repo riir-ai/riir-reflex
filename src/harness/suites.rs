@@ -1921,6 +1921,165 @@ mod gsm8k_builder_tests {
     }
 }
 
+// Issue 114 R4a queue #3: the SATA builder — the per-candidate binary
+// question shape + gold law, the shuffle laws (deterministic, carries the
+// (text, label) multiset, permutation-invariant gold set), the two-option
+// k constant feeding case_exact, the shape refusals, and the census pins.
+#[cfg(test)]
+mod sata_builder_tests {
+    use super::{build_sata, question_option_count};
+
+    fn envelope(rows: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({ "rows": rows.into_iter().map(|r| { serde_json::json!({ "row": r }) }).collect::<Vec<_>>() })
+    }
+
+    fn sata_row(question: &str, choices: &[(&str, bool)]) -> serde_json::Value {
+        serde_json::json!({
+            "paragraph": "Some passage.",
+            "question": question,
+            "choices": choices.iter().map(|(t, b)| serde_json::json!([t, b])).collect::<Vec<_>>(),
+            "dataset": "d1",
+        })
+    }
+
+    #[test]
+    fn sata_builds_one_case_with_per_candidate_binary_questions() {
+        let env = envelope(vec![sata_row(
+            "Who leads the team?",
+            &[
+                ("the father", true),
+                ("a stranger", false),
+                ("no one", false),
+            ],
+        )]);
+        let s = build_sata(&env, 1);
+        assert_eq!(s.cases.len(), 1);
+        let case = &s.cases[0];
+        assert_eq!(case.id, "sata:0");
+        assert_eq!(case.questions.len(), 3);
+        // Criteria insertion order IS the label order: no first, yes second.
+        let keys: Vec<_> = case.questions[0]
+            .criteria
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, ["no", "yes"]);
+        assert_eq!(case.questions[0].criteria["yes"], "Yes");
+        // The instructions embed the candidate text (the board's wording).
+        let texts: Vec<&str> = case
+            .questions
+            .iter()
+            .map(|q| {
+                q.instructions
+                    .split("Candidate: ")
+                    .nth(1)
+                    .expect("candidate line")
+            })
+            .collect();
+        let mut sorted = texts.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, ["a stranger", "no one", "the father"]);
+        // The shuffled state options carry the same multiset.
+        let mut state_sorted: Vec<&str> = case.state["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().expect("str option"))
+            .collect();
+        state_sorted.sort_unstable();
+        assert_eq!(state_sorted, ["a stranger", "no one", "the father"]);
+        // Gold law: exactly one yes per case, at the true candidate's question.
+        let yes_count = case.gold.iter().filter(|g| g.idx == 1).count();
+        assert_eq!(yes_count, 1);
+        let yes_q = case
+            .questions
+            .iter()
+            .position(|q| q.instructions.ends_with("Candidate: the father"))
+            .expect("the true candidate's question");
+        assert_eq!(case.gold[yes_q].idx, 1);
+    }
+
+    #[test]
+    fn sata_shuffle_is_deterministic_and_permutation_invariant_in_gold() {
+        let mk = || {
+            envelope(vec![sata_row(
+                "Q?",
+                &[("a", true), ("b", false), ("c", false), ("d", false)],
+            )])
+        };
+        let s1 = build_sata(&mk(), 1);
+        let s2 = build_sata(&mk(), 1);
+        // Same input → same shuffled order (the seeded-fold key sort).
+        let order1: Vec<String> = s1.cases[0].state["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().expect("str").to_string())
+            .collect();
+        let order2: Vec<String> = s2.cases[0].state["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().expect("str").to_string())
+            .collect();
+        assert_eq!(order1, order2);
+        // Source order is NOT the shuffle (4! orders; the fold sort almost
+        // surely differs from identity — and if it ever matched, this test
+        // would still hold, it just proves less).
+        // The gold set is order-independent: exactly one yes, and the yes
+        // question names candidate "a".
+        let yes = s1.cases[0]
+            .questions
+            .iter()
+            .position(|q| q.instructions.ends_with("Candidate: a"))
+            .expect("yes question");
+        assert_eq!(s1.cases[0].gold[yes].idx, 1);
+        assert_eq!(s1.cases[0].gold.iter().filter(|g| g.idx == 1).count(), 1);
+    }
+
+    #[test]
+    fn sata_every_question_carries_k_two_for_the_case_exact_fold() {
+        let env = envelope(vec![sata_row("Q?", &[("a", true), ("b", false)])]);
+        let s = build_sata(&env, 1);
+        for q in &s.cases[0].questions {
+            assert_eq!(question_option_count(q), 2, "the fixed binary set");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a [text, bool] pair")]
+    fn sata_refuses_a_non_bool_label() {
+        let bad = serde_json::json!({
+            "paragraph": "p",
+            "question": "q",
+            "choices": [["a", true], ["b", "no"]],
+        });
+        let _ = build_sata(&envelope(vec![bad]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "carries no candidates")]
+    fn sata_refuses_an_empty_choice_set() {
+        let bad = serde_json::json!({
+            "paragraph": "p",
+            "question": "q",
+            "choices": [],
+        });
+        let _ = build_sata(&envelope(vec![bad]), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "drifted from the pinned 1,650 cases")]
+    fn sata_full_load_refuses_a_drifted_population() {
+        let rows: Vec<serde_json::Value> = (0..4)
+            .map(|i| sata_row("Q?", &[("a", i % 2 == 0), ("b", false), ("c", false)]))
+            .collect();
+        let _ = build_sata(&envelope(rows), 0); // max_rows 0 = the eval census
+    }
+}
+
 /// Issue 114 T11 — the JDI ladder wave-2 machinery's first consumer (board
 /// row 9, the home-appliance simulator; MIT, board-generated, seed
 /// 2026091807). One case per kept household request (88 — the release-v2.1
@@ -2076,6 +2235,165 @@ pub fn build_home_appliance(rows_file: &Value, max_rows: usize) -> Suite {
                              exact expectation) read off the case_exact column; \
                              corpus-optional (the board publishes no train pool — the dev \
                              split is the dedupe reference, never a corpus)",
+    }
+}
+
+/// Issue 114 R4a queue #3 — the SATA-Bench suite (board row 33,
+/// `sata-bench/sata-bench` @371dd0c, `sata_bench_final_2025.json`, fetched
+/// WHOLE — 1,650 rows = the board's population exactly; single eval json,
+/// no train split). Select-all scored the board's way: each source row is
+/// ONE case; every candidate becomes an independent binary yes/no question
+/// ("Does this candidate correctly answer the question?"); the case passes
+/// only when EVERY candidate's yes/no is right — the board's `case exact
+/// accuracy` (the `case_exact` column arms for this suite). The board pins
+/// chance 0.0131 ("random whole-case guesses"); the §B3 re-derivation over
+/// the pinned population (mean over cases of ∏ 1/2 = 2^-k, k 3..16) gives
+/// 0.0131290 — Δ 0.2% against the pin. The candidate order within a case
+/// is the board's per-source-index seeded shuffle RE-SEATED on the house
+/// fold (the gsm8k disclosure: METHOD-identical, NOT byte-identical — the
+/// board seeds Python MT19937 with the string `20260918:SATA:<i>`; this
+/// port key-sorts on the house FNV fold of the same seed family; the
+/// case-exact metric is permutation-invariant, so the shuffle is
+/// provenance fidelity, never score-bearing). The legacy `answer`/`symbol`
+/// columns never reach the envelope — the board's own gold_rule: those
+/// letters refer to a DIFFERENT permutation, and the per-candidate bool is
+/// the only gold (the fetch transform drops the trap columns so they never
+/// land on disk). LICENCE: MIT at two GitHub surfaces (the repo LICENSE at
+/// the pin is the full MIT text "Copyright (c) 2025 sata-bench" + the
+/// GitHub API spdx_id, both read 2026-11-13; the hub-side probe does not
+/// apply — GitHub repo, not a hub dataset). CORPUS-OPTIONAL
+/// (`modelless_lane: false`): no train split exists and the candidates are
+/// case-specific TEXTS (grammar-not-answers) — laya-only.
+#[must_use]
+pub fn build_sata(rows_file: &Value, max_rows: usize) -> Suite {
+    const EXPECTED_CASES: usize = 1_650;
+    const EXPECTED_QUESTIONS: usize = 15_517;
+    const SATA_KEYS: [&str; 2] = ["no", "yes"];
+    let all = rows_of(rows_file);
+    let mut cases = Vec::new();
+    let mut total_questions = 0usize;
+    for (pos, row) in sampled(&all, max_rows).iter().enumerate() {
+        let (Some(paragraph), Some(question), Some(choices)) = (
+            row_str(row, "paragraph"),
+            row_str(row, "question"),
+            row.get("choices").and_then(Value::as_array),
+        ) else {
+            panic!(
+                "sata: row {pos} drifted from the pinned source shape \
+                 (paragraph/question/choices required, choices an array) — \
+                 refetch via scripts/fetch_datasets.sh"
+            );
+        };
+        // The board's own build-time asserts (its normalize_text.py::sata):
+        // non-empty choices, every element a [text, bool] pair. The source
+        // is pinned; structural drift refuses loud — a silent drop would
+        // misreport the board row (the population pins below are the
+        // count-level guard; this is the shape-level one).
+        assert!(
+            !choices.is_empty(),
+            "sata: row {pos} carries no candidates — the pinned source \
+             asserts every case has at least one"
+        );
+        // The shuffle: the board's random.Random(f"20260918:SATA:{i}")
+        // re-seated as a key-sort (the gsm8k analogue) — each candidate
+        // sorts by its own fold; the original index breaks the
+        // (theoretical) fold tie. Deterministic per source row.
+        let mut keyed: Vec<(u64, usize, &Value)> = Vec::with_capacity(choices.len());
+        for (orig, pair) in choices.iter().enumerate() {
+            let Some(arr) = pair.as_array() else {
+                panic!(
+                    "sata: row {pos} candidate {orig} is not a [text, label] pair — \
+                     the envelope drifted"
+                );
+            };
+            if arr.len() != 2 || !arr[0].is_string() || !arr[1].is_boolean() {
+                panic!(
+                    "sata: row {pos} candidate {orig} is not a [text, bool] pair — \
+                     the envelope drifted"
+                );
+            }
+            keyed.push((
+                house_fold(&format!("20260918:SATA:{pos}:{orig}")),
+                orig,
+                pair,
+            ));
+        }
+        keyed.sort_unstable_by_key(|a| (a.0, a.1));
+        let mut qs = Vec::with_capacity(keyed.len());
+        let mut gold = Vec::with_capacity(keyed.len());
+        let mut options = Vec::with_capacity(keyed.len());
+        for (j, (_, _, pair)) in keyed.iter().enumerate() {
+            let arr = pair.as_array().expect("validated above");
+            let text = arr[0].as_str().expect("validated above");
+            let label = arr[1].as_bool().expect("validated above");
+            options.push(text.to_string());
+            // Criteria insertion order IS the label order (preserve_order):
+            // index 0 = "no", index 1 = "yes" — gold = usize::from(label).
+            let mut crit = Map::new();
+            for (k, v) in SATA_KEYS.iter().zip(["No", "Yes"]) {
+                crit.insert((*k).to_string(), Value::String(v.to_string()));
+            }
+            qs.push(SuiteQuestion {
+                qid: format!("option_{j}"),
+                kind: QKind::Choice,
+                instructions: format!(
+                    "Question: {question}\nDoes this candidate correctly answer the question?\
+                     \nCandidate: {text}"
+                ),
+                criteria: Value::Object(crit),
+            });
+            gold.push(GoldAnswer {
+                idx: usize::from(label),
+                soft: vec![0.0; SATA_KEYS.len()],
+                gold_score: None,
+            });
+        }
+        total_questions += qs.len();
+        cases.push(SuiteCase {
+            id: format!("sata:{pos}"),
+            // The board's own state shape (paragraph + question + the
+            // shuffled candidate texts); the fetch carries the row's
+            // `dataset` subset through for provenance — the builder never
+            // reads it (the board's metadata carries it the same way).
+            state: json!({
+                "paragraph": paragraph,
+                "question": question,
+                "options": options,
+            }),
+            questions: qs,
+            gold,
+        });
+    }
+    // The population pins bind the FULL fetched envelope (max_rows 0 — the
+    // eval posture; the home_appliance form). A partial or drifted fetch
+    // reds loud instead of misreporting the board row.
+    if max_rows == 0 {
+        assert_eq!(
+            cases.len(),
+            EXPECTED_CASES,
+            "sata: the fetched population drifted from the pinned 1,650 cases \
+             (the board's own census) — a partial or revised fetch; refetch \
+             via scripts/fetch_datasets.sh and re-pin the manifest digest"
+        );
+        assert_eq!(
+            total_questions, EXPECTED_QUESTIONS,
+            "sata: the fetched question census drifted from the pinned 15,517 — \
+             the source rows' fields changed; refetch and re-pin"
+        );
+    }
+    Suite {
+        name: "sata",
+        cases,
+        option_counts_note: "every question carries the fixed two-option set \
+                             [no, yes] (the per-candidate binary read); one case per \
+                             source row (1,650 = the board's population), questions per \
+                             case = the row's candidate count (k 3..16, 15,517 total); \
+                             the board metric is CASE EXACT ACCURACY — the case passes \
+                             only when every candidate's yes/no is right (chance 0.0131 \
+                             board pin, re-derived 0.0131290 on the kept set) read off \
+                             the case_exact column; corpus-optional (no train split \
+                             exists and the candidates are case-specific texts — \
+                             grammar-not-answers)",
     }
 }
 

@@ -23,6 +23,12 @@
 # Exit: 0 = fit to bench (the provenance line is on stdout, QUOTE IT in the
 # record); 1 = refused, reason named; 2 = the instrument itself could not read
 # the box (never a green zero).
+#
+# Issue 118: the POWER axis is cross-OS — pmset on macOS, a Win32_Battery
+# PowerShell probe on Windows (Git Bash), /sys/class/power_supply on Linux.
+# The macOS-only axes (powermode enum, pmset settle history) degrade to a
+# disclosed warn off macOS; an unreadable power state still exits 2 and a
+# battery source still refuses, on every arm.
 
 set -eu
 
@@ -51,22 +57,100 @@ fail=0
 note() { printf '%s\n' "$*"; }
 refuse() { note "REFUSE — $*"; fail=1; }
 
-# ---- 1. power source ------------------------------------------------------
-ps_out=$(pmset -g ps 2>/dev/null || true)
-if [ -z "$ps_out" ]; then
-    note "⛔ pmset unreadable — the power axis is UNKNOWN, not fine"
-    exit 2
-fi
-case "$ps_out" in
-    *"'AC Power'"*) note "ok   power        AC" ;;
-    *"'Battery Power'"*)
-        pct=$(printf '%s' "$ps_out" | grep -o '[0-9]\{1,3\}%' | head -1 || true)
-        refuse "on BATTERY (${pct:-?}) — Apple Silicon sheds sustained GPU clock off AC; plug in and re-run"
+# ---- 1. power source (Issue 118: cross-OS) --------------------------------
+os_name=$(uname -s 2>/dev/null || echo unknown)
+power_state=""
+ps_out=""
+case "$os_name" in
+    Darwin)
+        ps_out=$(pmset -g ps 2>/dev/null || true)
+        if [ -z "$ps_out" ]; then
+            note "⛔ pmset unreadable — the power axis is UNKNOWN, not fine"
+            exit 2
+        fi
+        case "$ps_out" in
+            *"'AC Power'"*) power_state="AC"; note "ok   power        AC" ;;
+            *"'Battery Power'"*)
+                pct=$(printf '%s' "$ps_out" | grep -o '[0-9]\{1,3\}%' | head -1 || true)
+                power_state="BATT ${pct:-?}%"
+                refuse "on BATTERY (${pct:-?}) — Apple Silicon sheds sustained GPU clock off AC; plug in and re-run"
+                ;;
+            *) note "⛔ power source unrecognised in: $ps_out"; exit 2 ;;
+        esac
         ;;
-    *) note "⛔ power source unrecognised in: $ps_out"; exit 2 ;;
+    Linux)
+        # AC adapters expose A*/online (1 = present); batteries expose
+        # BAT*/status. No readable supply at all is UNKNOWN, never a green.
+        ac_online=""
+        for ac_f in /sys/class/power_supply/A*; do
+            [ -e "$ac_f/online" ] || continue
+            if [ "$(cat "$ac_f/online" 2>/dev/null)" = "1" ]; then ac_online=1; break; fi
+        done
+        if [ "$ac_online" = "1" ]; then
+            power_state="AC"
+            note "ok   power        AC (sysfs)"
+        else
+            bat_status=""
+            bat_cap=""
+            for bat_f in /sys/class/power_supply/BAT*; do
+                [ -e "$bat_f/status" ] || continue
+                bat_status=$(cat "$bat_f/status" 2>/dev/null || true)
+                bat_cap=$(cat "$bat_f/capacity" 2>/dev/null || true)
+                break
+            done
+            case "$bat_status" in
+                Charging|Full|"Not charging")
+                    power_state="AC"
+                    note "ok   power        AC (battery ${bat_cap:-?}% ${bat_status:-plugged})"
+                    ;;
+                Discharging)
+                    power_state="BATT ${bat_cap:-?}%"
+                    refuse "on BATTERY (${bat_cap:-?}%) — sustained clocks shed off AC; plug in and re-run"
+                    ;;
+                *)
+                    note "⛔ power state unrecognised (sysfs status '${bat_status:-missing}')"
+                    exit 2
+                    ;;
+            esac
+        fi
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        # Win32_Battery.BatteryStatus: on-AC = 2 (AC), 3 (full), 6-9 + 11
+        # (charging variants); discharging = 1, 4, 5; anything else UNKNOWN.
+        # No battery at all = a desktop: AC assumed, DISCLOSED, never silent.
+        ps_probe=$(powershell.exe -NoProfile -NonInteractive -Command '
+$b = Get-CimInstance -ClassName Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($null -eq $b) { "NONE" }
+elseif ($b.BatteryStatus -in 2,3,6,7,8,9,11) { "AC" }
+elseif ($b.BatteryStatus -in 1,4,5) { "BATT " + [int]$b.EstimatedChargeRemaining }
+else { "UNKNOWN " + $b.BatteryStatus }
+' 2>/dev/null || true)
+        case "$ps_probe" in
+            NONE)
+                power_state="AC-desktop"
+                note "ok   power        AC assumed (no battery present — desktop, disclosed)"
+                ;;
+            AC)
+                power_state="AC"
+                note "ok   power        AC (Win32_Battery on-AC)"
+                ;;
+            BATT\ *)
+                power_state="$ps_probe"
+                refuse "on BATTERY (${ps_probe#BATT }%) — plug in and re-run"
+                ;;
+            *)
+                note "⛔ power axis unreadable on Windows (probe: '${ps_probe:-empty}')"
+                exit 2
+                ;;
+        esac
+        ;;
+    *)
+        note "⛔ unsupported OS for the power axis: $os_name"
+        exit 2
+        ;;
 esac
 
-# ---- 2. power mode ---------------------------------------------------------
+# ---- 2. power mode (macOS-only axis; disclosed n/a elsewhere — Issue 118) --
 # `pmset powermode` on a 14"/16" Apple Silicon MacBook Pro is a THREE-state
 # enum, not a Low-Power-Mode boolean: 0 = Automatic, 1 = Low Power, 2 = High
 # Power. The first version of this gate read "not 0" as Low Power and refused
@@ -74,38 +158,49 @@ esac
 # profile is powermode 2, its battery profile 0). Only 1 refuses; 0 and 2 are
 # both fit but are DIFFERENT arms, so the mode is named in the provenance
 # line and a canary reference is only comparable within one mode.
-pmode=$(pmset -g 2>/dev/null | awk '/powermode/{print $2}' || true)
-case "$pmode" in
-    "") note "warn powermode    unreadable (disclosed, not assumed)"; pmode_name="?" ;;
-    0)  pmode_name="auto"; note "ok   powermode    0 (Automatic)" ;;
-    1)  pmode_name="low";  refuse "Low Power Mode is ON (powermode=1) — it caps clocks by design" ;;
-    2)  pmode_name="high"; note "ok   powermode    2 (High Power)" ;;
-    *)  pmode_name="unknown"; note "⛔ powermode=$pmode is not a value this gate knows (0/1/2)"; exit 2 ;;
-esac
+pmode=""
+pmode_name="?"
+if [ "$os_name" = "Darwin" ]; then
+    pmode=$(pmset -g 2>/dev/null | awk '/powermode/{print $2}' || true)
+    case "$pmode" in
+        "") note "warn powermode    unreadable (disclosed, not assumed)"; pmode_name="?" ;;
+        0)  pmode_name="auto"; note "ok   powermode    0 (Automatic)" ;;
+        1)  pmode_name="low";  refuse "Low Power Mode is ON (powermode=1) — it caps clocks by design" ;;
+        2)  pmode_name="high"; note "ok   powermode    2 (High Power)" ;;
+        *)  pmode_name="unknown"; note "⛔ powermode=$pmode is not a value this gate knows (0/1/2)"; exit 2 ;;
+    esac
+else
+    note "warn powermode    n/a on $os_name (macOS-only axis, disclosed)"
+    pmode_name="n/a"
+fi
 
-# ---- 3. settle window since the last power transition ---------------------
+# ---- 3. settle window since the last power transition (macOS-only axis) ----
 # A box plugged in one minute ago is still carrying the heat it built on
 # battery; AC is necessary, not sufficient. ENFORCED, not just disclosed:
 # the first version printed the transition and left the arithmetic to a
 # reader, who is exactly the person in a hurry to bench.
-last=$(pmset -g log 2>/dev/null | grep -E "Using (AC|Batt)" | tail -1 || true)
-if [ -n "$last" ]; then
-    last_ts=$(printf '%s' "$last" | cut -c1-19)
-    last_kind=$(printf '%s' "$last" | grep -oE "Using (AC|Batt)" | head -1)
-    note "info last power transition: $last_ts ($last_kind)"
-    last_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$last_ts" +%s 2>/dev/null || true)
-    if [ -n "$last_epoch" ] && [ "$last_kind" = "Using AC" ]; then
-        on_ac_min=$(( ( $(date +%s) - last_epoch ) / 60 ))
-        if [ "$on_ac_min" -lt "$SETTLE_MIN" ]; then
-            refuse "on AC for only ${on_ac_min} min (< SETTLE_MIN=${SETTLE_MIN}) — still carrying battery-era heat"
-        else
-            note "ok   settle       on AC ${on_ac_min} min (>= ${SETTLE_MIN})"
+if [ "$os_name" = "Darwin" ]; then
+    last=$(pmset -g log 2>/dev/null | grep -E "Using (AC|Batt)" | tail -1 || true)
+    if [ -n "$last" ]; then
+        last_ts=$(printf '%s' "$last" | cut -c1-19)
+        last_kind=$(printf '%s' "$last" | grep -oE "Using (AC|Batt)" | head -1)
+        note "info last power transition: $last_ts ($last_kind)"
+        last_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$last_ts" +%s 2>/dev/null || true)
+        if [ -n "$last_epoch" ] && [ "$last_kind" = "Using AC" ]; then
+            on_ac_min=$(( ( $(date +%s) - last_epoch ) / 60 ))
+            if [ "$on_ac_min" -lt "$SETTLE_MIN" ]; then
+                refuse "on AC for only ${on_ac_min} min (< SETTLE_MIN=${SETTLE_MIN}) — still carrying battery-era heat"
+            else
+                note "ok   settle       on AC ${on_ac_min} min (>= ${SETTLE_MIN})"
+            fi
+        elif [ -z "$last_epoch" ]; then
+            note "warn settle window UNVERIFIED — could not parse '$last_ts'"
         fi
-    elif [ -z "$last_epoch" ]; then
-        note "warn settle window UNVERIFIED — could not parse '$last_ts'"
+    else
+        note "warn no power-transition history — settle window UNVERIFIED"
     fi
 else
-    note "warn no power-transition history — settle window UNVERIFIED"
+    note "warn settle window UNVERIFIED — no power-transition history axis on $os_name"
 fi
 
 # ---- 4. load --------------------------------------------------------------
@@ -175,7 +270,11 @@ else
 fi
 
 # ---- provenance -----------------------------------------------------------
-prov="power=$(printf '%s' "$ps_out" | grep -o "'[A-Za-z ]*Power'" | head -1 | tr -d "'")"
+if [ "$os_name" = "Darwin" ]; then
+    prov="power=$(printf '%s' "$ps_out" | grep -o "'[A-Za-z ]*Power'" | head -1 | tr -d "'")"
+else
+    prov="power=$power_state"
+fi
 if [ -n "$canary" ]; then canary_prov="${canary}us/best${canary_n}"; else canary_prov="skipped"; fi
 prov="$prov load=$la swap=${swap:-?}M canary=${canary_prov} powermode=${pmode:-?}(${pmode_name})"
 note ""

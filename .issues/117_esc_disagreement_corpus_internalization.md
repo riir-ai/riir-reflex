@@ -1,6 +1,8 @@
 # Issue 117: ESC-disagreement corpus internalization (the VoI outcome join)
 
 **Status:** Open — unclaimed
+**Claimed:** zed-m3-i117-esc-cap, 1794665942, expires 2026-11-16T14:19:02Z
+(scope of the claim: the capture RUN on the amo rig — the T1 re-route's own target — plus the small `--gate-rho` harness flag the armed posture needs; T2/T3 stay unclaimed until the capture output exists)
 **Source:** arXiv:2611.13410 SteerDistill via [riir-rethink/.research/025](../riir-rethink/.research/025_SteerDistill_Closed_Loop_Teacher_Steering.md)
 **Related:** rethink `src/esc_voi.rs` (RECEIPTS-ONLY blind until an outcome join lands — its own doc says so); reflex `harness/runner/{synth,echo_gates,corpus_ab}.rs`
 

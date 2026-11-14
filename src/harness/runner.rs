@@ -5094,6 +5094,15 @@ struct Prepared {
     slices: Option<super::slice_guard::SliceFacts>,
 }
 
+/// Issue 117 split law: a dataset suite's cal ids must never collide with
+/// its test ids (both builders spell positional ids, so the cal slice is
+/// namespaced `<suite>:cal:<pos>`). One home — the capture's disjointness
+/// guard (esc_capture clause 3) and every future id-keyed consumer read
+/// this spelling.
+fn namespaced_cal_id(suite: &str, pos: usize) -> String {
+    format!("{suite}:cal:{pos}")
+}
+
 fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
     if let Some(synth) = spec.synthetic {
         if !spec.modelless_lane && !cfg!(feature = "laya-riir") && !cfg!(feature = "clm-lane") {
@@ -5644,15 +5653,24 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
     }
 
     // Calibration cases: the SAME builder over the stratified cal front
-    // (identical question shapes; gold from the train labels).
+    // (identical question shapes; gold from the train labels). The builder
+    // assigns POSITIONAL ids within the front it receives, so cal and test
+    // cases would both spell `massive_intent_en:0` — ambiguous to every
+    // downstream id-keyed consumer. Issue 117's split law reads ids as row
+    // identity, so dataset cal ids carry the slice namespace (the
+    // families.rs precedent: `{name}:{slice}:{i}`); the capture's
+    // disjointness guard stays byte-identical and still refuses a genuine
+    // collision.
     let (cal_cases, cal_state_strs) = if spec.cal_cap > 0 {
-        let cal_suite = (spec.build)(&cal_split.front, 0);
-        let strs = cal_suite
-            .cases
+        let mut cal_cases = (spec.build)(&cal_split.front, 0).cases;
+        for (i, case) in cal_cases.iter_mut().enumerate() {
+            case.id = namespaced_cal_id(spec.name, i);
+        }
+        let strs = cal_cases
             .iter()
             .map(|c| serialize_state(&c.state))
             .collect();
-        (cal_suite.cases, strs)
+        (cal_cases, strs)
     } else {
         (Vec::new(), Vec::new())
     };
@@ -7542,5 +7560,30 @@ mod corpus_digest_tests {
             corpus_digest("s", &labels, &drafter, None),
             corpus_digest("s", &labels2, &drafter2, None)
         );
+    }
+}
+
+#[cfg(test)]
+mod cal_namespace_tests {
+    use super::namespaced_cal_id;
+
+    /// Issue 117 split law, pin half: the dataset cal namespace is
+    /// `<suite>:cal:<pos>` — positionally distinct from the test ids
+    /// (`<suite>:<pos>`) for EVERY position, so the capture's disjointness
+    /// guard can never fire on a well-formed split (the real-data run
+    /// found the collision: cal front row 0 and eval front row 0 both
+    /// spelled `massive_intent_en:0`).
+    #[test]
+    fn cal_ids_are_namespaced_against_test_ids() {
+        let suite = "massive_intent_en";
+        for pos in 0..250usize {
+            let cal = namespaced_cal_id(suite, pos);
+            let test = format!("{suite}:{pos}");
+            assert_ne!(cal, test, "pos {pos}");
+            assert!(cal.starts_with(&format!("{suite}:cal:")), "{cal}");
+        }
+        // And the same law for a suite whose ids embed sub-positions.
+        let other = "finentity";
+        assert_eq!(namespaced_cal_id(other, 7), "finentity:cal:7");
     }
 }

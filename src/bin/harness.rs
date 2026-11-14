@@ -478,6 +478,22 @@ fn harness_main() {
             "--worth-ab" => opts.worth_ab = true,
             "--gate-fit-selection" => opts.gate_fit_selection = true,
             "--gate-distance-only" => opts.gate_distance_only = true,
+            // Issue 044 lane — the caller-choosable rate target: re-fits
+            // the fused gate at that cal-slice quantile (None keeps the
+            // shipped ρ=30%). The ESC-armed postures' per-suite rhos live
+            // rethink-side (ESC_GATE_RHOS); a capture/GOAT instrument
+            // passes the armed value to mirror the lane byte-faithfully.
+            "--gate-rho" => {
+                i += 1;
+                let rho: f64 = args
+                    .get(i)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_else(|| die("--gate-rho needs a quantile in (0, 1)"));
+                if !(rho > 0.0 && rho < 1.0) {
+                    die("--gate-rho needs a quantile in (0, 1) exclusive");
+                }
+                opts.gate_rho = Some(rho);
+            }
             "--gate-fit-calibrated" => opts.gate_fit_calibrated = true,
             "--no-gate-fit-calibrated" => opts.gate_fit_calibrated = false,
             // Issue 112 T4 — the certified-abstention REPORT lever: fits

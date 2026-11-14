@@ -6388,6 +6388,14 @@ pub struct RunOptions {
     /// test abstain at the armed postures while the distance axis held
     /// ~31–32% in every posture). Default off = the shipped fused gate.
     pub gate_distance_only: bool,
+    /// Issue 044 lane (rethink plan 016): the caller-choosable rate target
+    /// (`gate_rho`) — `None` = the shipped ρ=30%, byte-identical; `Some(rho)`
+    /// re-fits the fused gate at that cal-slice quantile (the ESC-armed
+    /// postures' per-suite rhos — ESC_GATE_RHOS rethink-side). The harness
+    /// CLI arm (`--gate-rho <F>`) exists so a capture/GOAT instrument can
+    /// mirror an armed suite's rate posture byte-faithfully; the ESC serve
+    /// lane itself still arms through the seat knobs.
+    pub gate_rho: Option<f64>,
     /// Issue 056 direction 0 — PROMOTED default-on 2026-09-30 (verdict
     /// round 2, the units-bug adjudication): fit the score-axis threshold on
     /// the CALIBRATED scale the deployed gate applies — closing the
@@ -6784,6 +6792,11 @@ impl RunOptions {
             cascade_worthiness_lcb: None,
             gate_fit_selection: false,
             gate_distance_only: false,
+            // Issue 044 lane — the caller-choosable rate target is OFF by
+            // default (None = the shipped ρ=30%, byte-identical);
+            // `--gate-rho <F>` arms it (the ESC-armed postures' per-suite
+            // rhos, ESC_GATE_RHOS rethink-side).
+            gate_rho: None,
             // Issue 056 direction 0 — PROMOTED default-on 2026-09-30 (verdict
             // round 2, the units-bug adjudication): the gate-fit probe observes
             // on the SAME scale the deployed gate applies. At a monotone fit the

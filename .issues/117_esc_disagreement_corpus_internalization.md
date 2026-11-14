@@ -1,6 +1,7 @@
 # Issue 117: ESC-disagreement corpus internalization (the VoI outcome join)
 
-**Status:** Open — unclaimed
+**Status:** Open — T2 CLAIMED
+**Claimed (T2):** zed-amo-hk-633 (amo), 1763168063, expires 2026-11-18T12:00:00+00:00 — T2 only (the synth-corpus artifact + its bench record); T3's frozen `--corpus-ab` read and T4 stay unclaimed. Execution posture: the openthai teacher server boots via the `scripts/thai_rerun.sh` staging pattern (`.raw/openthai-systemone` @ `5d04bcca`, uvicorn :8000); the whole build+serve+synth cell is routed through `agent-mail rig run amo --exclusive` so it serializes behind the 633 RTFx cells (the cell's outputs are a sealed artifact + counts, never latency — but the box law still holds).
 **Lease closed:** zed-m3-i117-esc-cap, 1794665942, was expires 2026-11-16T14:19:02Z — the claimed unit (the capture RUN + the `--gate-rho` flag it needed) LANDED `a0f6e57` + `c300600` + Bench 195 in the same session; T2/T3 reopened unclaimed (unblocked by the 68 disagreement rows), the mammoth-serve redirect is recorded in Bench 195's test-half disclosure.
 **Source:** arXiv:2611.13410 SteerDistill via [riir-rethink/.research/025](../riir-rethink/.research/025_SteerDistill_Closed_Loop_Teacher_Steering.md)
 **Related:** rethink `src/esc_voi.rs` (RECEIPTS-ONLY blind until an outcome join lands — its own doc says so); reflex `harness/runner/{synth,echo_gates,corpus_ab}.rs`

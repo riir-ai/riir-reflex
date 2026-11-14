@@ -1,0 +1,16 @@
+{
+  "suite": "massive_intent_en",
+  "cal_cases": 200,
+  "cal_questions": 200,
+  "gate_fired": 117,
+  "gate_fired_served": 117,
+  "disagreements": 68,
+  "think_correct": 82,
+  "cheap_correct": 65,
+  "think_wins": 35,
+  "cheap_wins": 18,
+  "armed": true,
+  "probe_n": 117,
+  "probe_delta": 0.14529914529914523,
+  "triples_written": 200
+}

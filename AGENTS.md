@@ -155,6 +155,15 @@ cargo run --release --bin harness -- --routing-state-probe --out .benchmarks/<N>
 # traffic), never a re-tune):
 cargo run --release --features pick_latch --bin harness -- --route-census --out .benchmarks/<N>_route_census
 cargo run --release --features pick_latch --bin harness -- --pick-latch [--pick-latch-temp T] --out .benchmarks/<N>_pick_latch_ab
+# ESC-disagreement capture (Issue 117 T1, Bench 195 — the cal-side (cheap, think, gold) join under the ESC-armed
+# gate posture; split law enforced in esc_capture::capture — massive_intent_en only, cal ids :cal:-namespaced,
+# test-id disjointness asserted; rides cascade + worthiness; the run's T2/T3 consume the triples via the synth
+# lane):
+LAYA_DEVICE=metal cargo run --release --features laya-riir-metal --bin harness -- \
+  --datasets-dir .raw/datasets_t20k --suites massive_intent_en --nb-select --oc-select --ridge-select \
+  --cascade --cascade-worthiness --cascade-worthiness-margin 0.05 \
+  --gate-fit-selection --gate-distance-only --gate-rho 0.60 \
+  --esc-capture .benchmarks/<N>_esc_capture/capture --out .benchmarks/<N>_esc_capture/run
 
 # Harness Warm-tier store (Issue 007 P1, opt-in `corpus_db`; ndb from NDB_BIN else PATH):
 NDB_BIN=../riir-neuron-db/target/release/ndb \

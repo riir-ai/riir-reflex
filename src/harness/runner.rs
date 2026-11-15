@@ -148,6 +148,14 @@ pub use perm_probe::{
     PermProbeOptions, PermProbeOutput, PermSuiteReport, render_perm_probe_markdown, run_perm_probe,
 };
 
+// Issue 119 — the context-invariance probe (additive input transforms,
+// placebo-controlled; the pure core is `crate::harness::context_transform`).
+mod ctx_probe;
+pub use ctx_probe::{
+    CtxProbeMeta, CtxProbeOptions, CtxProbeOutput, CtxPooled, CtxSuiteReport, DEFAULT_CTX_K,
+    DEFAULT_CTX_MAX_CASES, render_ctx_probe_markdown, run_ctx_probe,
+};
+
 // riir-train 657 R8 — the label-PERMUTATION accuracy probe (lane-agnostic
 // over the `ChoiceOracle` seam; the pure core is `crate::harness::label_perm`;
 // pairs through the `robust_ab` degradation statistic).

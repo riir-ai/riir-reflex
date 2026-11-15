@@ -345,6 +345,11 @@ fn harness_main() {
     let mut perm_probe = false;
     let mut perm_k = 0usize;
     let mut perm_max_cases = 0usize;
+    // Issue 119 — the context-invariance probe (exclusive early-exit
+    // mode; report-only, placebo-controlled).
+    let mut ctx_probe = false;
+    let mut ctx_k = 0usize;
+    let mut ctx_max_cases = 0usize;
     // riir-train 657 R8 — the label-PERMUTATION accuracy probe (exclusive
     // early-exit mode; REPORT-ONLY — no exit-code gate, the delta IS the
     // measurement).
@@ -698,6 +703,21 @@ fn harness_main() {
             }
             "--e0" => e0 = true,
             "--perm-probe" => perm_probe = true,
+            "--ctx-probe" => ctx_probe = true,
+            "--ctx-k" => {
+                i += 1;
+                ctx_k = args
+                    .get(i)
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_else(|| die("--ctx-k needs a number (the primary K, 2..=8)"));
+            }
+            "--ctx-max-cases" => {
+                i += 1;
+                ctx_max_cases = args
+                    .get(i)
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_else(|| die("--ctx-max-cases needs a number"));
+            }
             "--perm-k" => {
                 i += 1;
                 perm_k = args
@@ -1248,6 +1268,72 @@ fn harness_main() {
              disclosed; wrote {} + {}",
             out.suites.len(),
             out.red_cells,
+            json_path.display(),
+            md_path.display()
+        );
+        return;
+    }
+    // Issue 119 — the context-invariance probe: an exclusive early-exit
+    // REPORT-ONLY mode (additive input transforms × placebo control, the
+    // modelless production decide path only). G1 (the identity control)
+    // red refuses the run verdict (exit 1) — a harness bug, never a quiet
+    // pass.
+    if ctx_probe {
+        if ctx_k != 0 && !(2..=8).contains(&ctx_k) {
+            die("--ctx-k needs 2..=8 (the primary K prefixes the 8-transform \
+                 decision set; identity is always [0])");
+        }
+        let copts = runner::CtxProbeOptions {
+            k: if ctx_k == 0 {
+                runner::DEFAULT_CTX_K
+            } else {
+                ctx_k
+            },
+            max_cases: if ctx_max_cases == 0 {
+                runner::DEFAULT_CTX_MAX_CASES
+            } else {
+                ctx_max_cases
+            },
+        };
+        println!(
+            "harness --ctx-probe: datasets {} · suites {:?} · K primary {} of \
+             the 8-transform set · ≤{} case(s)/suite · lane: modelless (the \
+             production decide path)",
+            opts.datasets_dir.display(),
+            opts.suites,
+            copts.k,
+            copts.max_cases,
+        );
+        let out = match runner::run_ctx_probe(&opts, &copts) {
+            Ok(r) => r,
+            Err(e) => die(&e),
+        };
+        if let Err(e) = std::fs::create_dir_all(&out_dir) {
+            die(&format!("create {}: {e}", out_dir.display()));
+        }
+        let json_path = out_dir.join("ctx_probe.json");
+        let md_path = out_dir.join("CTX_PROBE.md");
+        let json = serde_json::to_string_pretty(&out).expect("ctx probe serialize");
+        let md = runner::render_ctx_probe_markdown(&out);
+        if let Err(e) = std::fs::write(&json_path, json) {
+            die(&format!("write {}: {e}", json_path.display()));
+        }
+        if let Err(e) = std::fs::write(&md_path, &md) {
+            die(&format!("write {}: {e}", md_path.display()));
+        }
+        print!("{md}");
+        if !out.g1_identity_holds {
+            die(
+                "--ctx-probe: the G1 identity control BROKE — the identity \
+                 transform's decide diverged from the raw case's (a harness \
+                 bug or an engine invariant failure). The record is on disk \
+                 (never a quiet pass).",
+            );
+        }
+        println!(
+            "harness --ctx-probe: DONE — {} suite(s) · G2a: {} · wrote {} + {}",
+            out.suites.len(),
+            out.pooled.g2a,
             json_path.display(),
             md_path.display()
         );

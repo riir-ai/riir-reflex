@@ -1,7 +1,7 @@
 # Issue 119 — the context-invariance probe (`--ctx-probe`): additive input-transform agreement, measured once with a placebo control
 
-**Status:** OPEN — claimed (see below); report-only harness lane; ANY serving wiring exists only behind G4 passing.
-**Claimed:** zed-63b21113@m3 (m3), 1794764141, expires 2026-11-16T05:35:41+00:00
+**Status:** CLOSED 2026-11-15 — G3 FIRED at the pre-registered cell ([Bench 198](../.benchmarks/198_ctx_probe_issue119.md), m3, PROVENANCE quoted): g2a_sem_plac pooled LB95 −2.95 pp (n 241, 7 suites), g2a_sem_fused empty-at-fused (the score gate abstains heavily on this seat — n=0 cells named, never fabricated), g2b NEGATIVE (placebo channel −7.69). G1 identity HOLDS every suite. **Scope: this run table, THIS engine (bag-of-hashed-words additive features), the tested families — not the class.** Re-open trigger: an engine with order-/context-sensitive features (position-aware n-grams, attention, structure beyond one bigram). Machinery landed ungated (T1–T4): `src/harness/context_transform.rs` + `src/harness/runner/ctx_probe.rs` + `--ctx-probe`.
+**Lease closed:** zed-63b21113@m3 (m3), 1794764141, was expires 2026-11-16T05:35:41+00:00 — claimed 2026-11-15, the lane landed + closed under it same day.
 
 **Ref:** [`.research/017_Against_All_Likelihood_Invariance_Serving.md`](../.research/017_Against_All_Likelihood_Invariance_Serving.md) (arXiv:2611.09385 "Against All Likelihood", Lopez-Paz 2026)
 

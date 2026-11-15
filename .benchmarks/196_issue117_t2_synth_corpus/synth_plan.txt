@@ -1,0 +1,74 @@
+harness --synth-plan: teacher openthai · datasets .raw/datasets_t20k · suites ["massive_intent_en"]
+# synth plan — teacher "openthai" · max 2048 accepted / 128 per label · span ≤ 4
+
+## massive_intent_en — 212912 candidate(s) / 59 label(s) · pool 11314 rows
+
+weighting: per-intent E0 rumor fraction (bag view, n<4, own-tables; unmeasured labels take the mean)
+
+| label | weight | candidates | allocated | sample |
+|---|---|---|---|---|
+| alarm_query | 0.250 | 3462 | 35 | about upcoming |
+| alarm_remove | 0.250 | 1554 | 35 | alarm |
+| alarm_set | 0.000 | 4552 | 1 | add |
+| audio_volume_down | 1.000 | 1121 | 128 | can you speak |
+| audio_volume_mute | 0.750 | 2368 | 103 | activate |
+| audio_volume_other | 0.667 | 229 | 92 | a pleasant sound |
+| audio_volume_up | 0.000 | 2430 | 1 | a bit |
+| calendar_query | 0.000 | 13328 | 1 | a |
+| calendar_remove | 0.000 | 8765 | 1 | alexa please delete all |
+| calendar_set | 0.333 | 8158 | 46 | a calendar event |
+| cooking_recipe | 0.333 | 3617 | 46 | a burger |
+| datetime_convert | 0.000 | 16 | 1 | change central and eastern |
+| datetime_query | 0.250 | 9107 | 35 | a date |
+| email_addcontact | 0.000 | 1079 | 1 | a new contact |
+| email_query | 0.333 | 8230 | 46 | about a job offer |
+| email_querycontact | 0.667 | 2130 | 92 | alexa look up bill |
+| email_sendemail | 0.000 | 4407 | 1 | a confirmation email |
+| general_greet | 1.000 | 259 | 128 | afternoon |
+| general_joke | 0.333 | 1399 | 46 | a dirty |
+| general_quirky | 0.000 | 5455 | 1 | a bad day |
+| iot_cleaning | 1.000 | 2203 | 128 | activate my |
+| iot_coffee | 0.000 | 3688 | 1 | a cappuccino |
+| iot_hue_lightchange | 0.000 | 2751 | 1 | a contrast one |
+| iot_hue_lightdim | 0.000 | 1957 | 1 | a little more |
+| iot_hue_lightoff | 0.250 | 5193 | 35 | all bathrooms |
+| iot_hue_lighton | 0.667 | 368 | 92 | alexa please turn on |
+| iot_hue_lightup | 0.250 | 1841 | 35 | a little bit |
+| iot_wemo_off | 0.000 | 1699 | 1 | can you please turn |
+| iot_wemo_on | 0.000 | 1084 | 1 | activate the wemo |
+| lists_createoradd | 0.333 | 4150 | 46 | a blank |
+| lists_query | 0.000 | 5182 | 1 | a list of |
+| lists_remove | 0.333 | 3621 | 46 | a list please |
+| music_dislikeness | 0.000 | 5 | 1 | do not enjoy this song |
+| music_likeness | 0.250 | 2025 | 35 | a five star |
+| music_query | 0.500 | 3671 | 69 | about this song |
+| music_settings | 1.000 | 1177 | 128 | after current |
+| news_query | 0.000 | 9149 | 1 | a flash briefing |
+| play_audiobook | 0.333 | 2123 | 46 | a rock |
+| play_game | 0.333 | 1933 | 46 | a angry |
+| play_music | 0.000 | 12026 | 1 | a disco track |
+| play_podcasts | 0.333 | 4614 | 46 | a podcast |
+| play_radio | 0.333 | 4956 | 46 | a classical station |
+| qa_currency | 0.000 | 1893 | 1 | against the pound |
+| qa_definition | 0.333 | 4502 | 46 | a banana |
+| qa_factoid | 0.333 | 7162 | 46 | a bowling ball cost |
+| qa_maths | 0.667 | 1193 | 92 | answer to |
+| qa_stock | 0.000 | 2608 | 1 | a stock of apple |
+| recommendation_events | 0.667 | 3959 | 91 | activity in the area |
+| recommendation_locations | 0.000 | 2177 | 0 | a good restaurant |
+| recommendation_movies | 0.000 | 787 | 0 | any good |
+| social_post | 0.000 | 3465 | 0 | a complaint |
+| social_query | 0.000 | 1797 | 0 | account |
+| takeaway_order | 0.250 | 1802 | 34 | a byron from deliveroo |
+| takeaway_query | 0.000 | 2385 | 0 | allow call in orders |
+| transport_query | 0.000 | 1771 | 0 | are the train times |
+| transport_taxi | 0.000 | 1745 | 0 | a cab |
+| transport_ticket | 0.000 | 1927 | 0 | a plane ticket to |
+| transport_traffic | 0.333 | 1839 | 45 | accident or normal |
+| weather_query | 0.333 | 14818 | 45 | a coat |
+
+dedup: pool 65 · cal 27 · dup 4598 · outside-universe 0
+
+total allocated: 2048
+
+harness --synth-plan: DONE — nothing written (report-only)

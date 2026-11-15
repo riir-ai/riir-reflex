@@ -1,0 +1,570 @@
+{
+  "meta": {
+    "date_utc": "2026-11-15T02:22:21Z",
+    "git_sha": "1796ad6",
+    "host": "bmo",
+    "datasets_dir": ".raw/datasets_t20k",
+    "max_accepted": 2048,
+    "max_per_label": 128,
+    "max_span_len": 4
+  },
+  "suites": [
+    {
+      "name": "massive_intent_en",
+      "teacher": "openthai",
+      "teacher_provenance": "openthai:openthai-systemone",
+      "weighting_rule": "per-intent E0 rumor fraction (bag view, n<4, own-tables; unmeasured labels take the mean)",
+      "pool_rows": 11314,
+      "candidates_total": 212912,
+      "accepted": 2048,
+      "veto_rejected": 1475,
+      "dedup_pool": 65,
+      "dedup_cal": 27,
+      "dedup_dup": 4598,
+      "outside_universe": 0,
+      "veto_forwards": 3523,
+      "latency_p50_ms": 355.0,
+      "latency_p99_ms": 357.0,
+      "seconds": 1387.221916167,
+      "path": ".benchmarks/196_issue117_t2_synth_corpus/massive_intent_en_synth.jsonl",
+      "blake3": "f47ef5552043d9e4",
+      "density_rule": null,
+      "rescue_rejected": 0,
+      "rescue_rule": null,
+      "per_label": {
+        "alarm_query": {
+          "candidates": 3462,
+          "allocated": 35,
+          "accepted": 35,
+          "veto_rejected": 35,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.25
+        },
+        "alarm_remove": {
+          "candidates": 1554,
+          "allocated": 35,
+          "accepted": 35,
+          "veto_rejected": 113,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.25
+        },
+        "alarm_set": {
+          "candidates": 4552,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 1,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "audio_volume_down": {
+          "candidates": 1121,
+          "allocated": 128,
+          "accepted": 128,
+          "veto_rejected": 21,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 1.0
+        },
+        "audio_volume_mute": {
+          "candidates": 2368,
+          "allocated": 103,
+          "accepted": 103,
+          "veto_rejected": 128,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.75
+        },
+        "audio_volume_other": {
+          "candidates": 229,
+          "allocated": 92,
+          "accepted": 92,
+          "veto_rejected": 115,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.6666666666666666
+        },
+        "audio_volume_up": {
+          "candidates": 2430,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 6,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "calendar_query": {
+          "candidates": 13328,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 2,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "calendar_remove": {
+          "candidates": 8765,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 94,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "calendar_set": {
+          "candidates": 8158,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 46,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "cooking_recipe": {
+          "candidates": 3617,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 4,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "datetime_convert": {
+          "candidates": 16,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 6,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "datetime_query": {
+          "candidates": 9107,
+          "allocated": 35,
+          "accepted": 35,
+          "veto_rejected": 31,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.25
+        },
+        "email_addcontact": {
+          "candidates": 1079,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "email_query": {
+          "candidates": 8230,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 10,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "email_querycontact": {
+          "candidates": 2130,
+          "allocated": 92,
+          "accepted": 92,
+          "veto_rejected": 79,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.6666666666666666
+        },
+        "email_sendemail": {
+          "candidates": 4407,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 1,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "general_greet": {
+          "candidates": 259,
+          "allocated": 128,
+          "accepted": 128,
+          "veto_rejected": 48,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 1.0
+        },
+        "general_joke": {
+          "candidates": 1399,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 27,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "general_quirky": {
+          "candidates": 5455,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "iot_cleaning": {
+          "candidates": 2203,
+          "allocated": 128,
+          "accepted": 128,
+          "veto_rejected": 36,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 1.0
+        },
+        "iot_coffee": {
+          "candidates": 3688,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "iot_hue_lightchange": {
+          "candidates": 2751,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 1,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "iot_hue_lightdim": {
+          "candidates": 1957,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 8,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "iot_hue_lightoff": {
+          "candidates": 5193,
+          "allocated": 35,
+          "accepted": 35,
+          "veto_rejected": 57,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.25
+        },
+        "iot_hue_lighton": {
+          "candidates": 368,
+          "allocated": 92,
+          "accepted": 92,
+          "veto_rejected": 32,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.6666666666666666
+        },
+        "iot_hue_lightup": {
+          "candidates": 1841,
+          "allocated": 35,
+          "accepted": 35,
+          "veto_rejected": 22,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.25
+        },
+        "iot_wemo_off": {
+          "candidates": 1699,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 3,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "iot_wemo_on": {
+          "candidates": 1084,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "lists_createoradd": {
+          "candidates": 4150,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 19,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "lists_query": {
+          "candidates": 5182,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "lists_remove": {
+          "candidates": 3621,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 91,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "music_dislikeness": {
+          "candidates": 5,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "music_likeness": {
+          "candidates": 2025,
+          "allocated": 35,
+          "accepted": 35,
+          "veto_rejected": 47,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.25
+        },
+        "music_query": {
+          "candidates": 3671,
+          "allocated": 69,
+          "accepted": 69,
+          "veto_rejected": 19,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.5
+        },
+        "music_settings": {
+          "candidates": 1177,
+          "allocated": 128,
+          "accepted": 128,
+          "veto_rejected": 84,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 1.0
+        },
+        "news_query": {
+          "candidates": 9149,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 1,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "play_audiobook": {
+          "candidates": 2123,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 63,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "play_game": {
+          "candidates": 1933,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 21,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "play_music": {
+          "candidates": 12026,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "play_podcasts": {
+          "candidates": 4614,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 20,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "play_radio": {
+          "candidates": 4956,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 41,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "qa_currency": {
+          "candidates": 1893,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "qa_definition": {
+          "candidates": 4502,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 6,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "qa_factoid": {
+          "candidates": 7162,
+          "allocated": 46,
+          "accepted": 46,
+          "veto_rejected": 24,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "qa_maths": {
+          "candidates": 1193,
+          "allocated": 92,
+          "accepted": 92,
+          "veto_rejected": 4,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.6666666666666666
+        },
+        "qa_stock": {
+          "candidates": 2608,
+          "allocated": 1,
+          "accepted": 1,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "recommendation_events": {
+          "candidates": 3959,
+          "allocated": 91,
+          "accepted": 91,
+          "veto_rejected": 50,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.6666666666666666
+        },
+        "recommendation_locations": {
+          "candidates": 2177,
+          "allocated": 0,
+          "accepted": 0,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "recommendation_movies": {
+          "candidates": 787,
+          "allocated": 0,
+          "accepted": 0,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "social_post": {
+          "candidates": 3465,
+          "allocated": 0,
+          "accepted": 0,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "social_query": {
+          "candidates": 1797,
+          "allocated": 0,
+          "accepted": 0,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "takeaway_order": {
+          "candidates": 1802,
+          "allocated": 34,
+          "accepted": 34,
+          "veto_rejected": 14,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.25
+        },
+        "takeaway_query": {
+          "candidates": 2385,
+          "allocated": 0,
+          "accepted": 0,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "transport_query": {
+          "candidates": 1771,
+          "allocated": 0,
+          "accepted": 0,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "transport_taxi": {
+          "candidates": 1745,
+          "allocated": 0,
+          "accepted": 0,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "transport_ticket": {
+          "candidates": 1927,
+          "allocated": 0,
+          "accepted": 0,
+          "veto_rejected": 0,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.0
+        },
+        "transport_traffic": {
+          "candidates": 1839,
+          "allocated": 45,
+          "accepted": 45,
+          "veto_rejected": 28,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        },
+        "weather_query": {
+          "candidates": 14818,
+          "allocated": 45,
+          "accepted": 45,
+          "veto_rejected": 17,
+          "density_rejected": 0,
+          "rescue_rejected": 0,
+          "weight": 0.3333333333333333
+        }
+      }
+    }
+  ],
+  "skipped": []
+}

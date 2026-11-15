@@ -1,6 +1,7 @@
 # Issue 119 — the context-invariance probe (`--ctx-probe`): additive input-transform agreement, measured once with a placebo control
 
-**Status:** OPEN — unclaimed; routed: the next reflex idle lane (boss re-fire backstop). Report-only harness lane; ANY serving wiring exists only behind G4 passing.
+**Status:** OPEN — claimed (see below); report-only harness lane; ANY serving wiring exists only behind G4 passing.
+**Claimed:** zed-63b21113@m3 (m3), 1794764141, expires 2026-11-16T05:35:41+00:00
 
 **Ref:** [`.research/017_Against_All_Likelihood_Invariance_Serving.md`](../.research/017_Against_All_Likelihood_Invariance_Serving.md) (arXiv:2611.09385 "Against All Likelihood", Lopez-Paz 2026)
 

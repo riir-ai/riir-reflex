@@ -180,6 +180,7 @@ fn router_suite<const N: usize>(
         mc_ab: None,
         density_gate: false,
         set_refine: None,
+        gate_fit_cases_override: None,
         leak_flags: None,
     };
     let FittedPosture {

@@ -3326,6 +3326,14 @@ struct ModellessInput<'a> {
     /// None = the arm is off / the feature compiled out.
     #[cfg_attr(not(feature = "set_refine"), allow(dead_code))]
     pub set_refine: Option<(f32, f32)>,
+    /// The gate-fit slice OVERRIDE (rethink plan 018's `--cal-from-val`
+    /// defect-repair): the fused-gate thresholds fit on THESE cases instead
+    /// of the stratified selection slice, while the corpus stays `train`
+    /// minus the override cases' texts (the same anti-inclusion law — for
+    /// eval-split override rows that is the full train pool, which is
+    /// exactly the deployed test-side corpus). Borrowed; None = the shipped
+    /// gate_fit_selection posture, byte-identical.
+    pub gate_fit_cases_override: Option<(&'a [SuiteCase], &'a [String])>,
     /// Issue 024 T3: one leak flag per eval case (true = the case has an
     /// exact/near twin in the corpus∪cal side — drop from acc_deleaked).
     /// None = the `slice_leak` feature is off or the suite is out of scope.
@@ -4184,7 +4192,35 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
     // fit: the fused gate degenerates to the corpus-distance half — the
     // axis that held ~31–32% test abstain in every measured posture while
     // the score axis read 90–99%.
-    let gate_fit_slice = if inp.gate_fit_selection
+    let gate_fit_slice = if let Some((cases, strs)) = inp.gate_fit_cases_override {
+        // Plan 018's override: the thresholds fit on the caller's cases
+        // (the val-held-out carve) with the corpus = train minus their
+        // texts — the SAME anti-inclusion law as the stratified path. For
+        // eval-split rows that is the full train pool: the exact corpus
+        // the deployed gate scores test rows against, so the observed
+        // distance geometry matches the test side.
+        let excluded: HashSet<&str> = cases
+            .iter()
+            .filter_map(|c| c.state.as_str())
+            .collect();
+        let pool: Vec<TrainDoc> = inp
+            .train
+            .iter()
+            .filter(|d| !excluded.contains(d.text.as_str()))
+            .cloned()
+            .collect();
+        eprintln!(
+            "    gate-fit: OVERRIDE slice {} case(s); corpora pool {} → {} doc(s)",
+            cases.len(),
+            inp.train.len(),
+            pool.len()
+        );
+        Some(SelSlice {
+            cases: cases.to_vec(),
+            state_strs: strs.to_vec(),
+            pool,
+        })
+    } else if inp.gate_fit_selection
         && spec.synthetic.is_none()
         && spec.corpus_cap_per_label != usize::MAX
     {
@@ -5785,6 +5821,12 @@ pub mod seat {
         /// programmatic gold, and its published row must disclose the
         /// posture (never render as a dataset row).
         pub synthetic: bool,
+        /// Plan 018's gate-fit slice override (the ESC `--cal-from-val`
+        /// defect-repair): the fused-gate thresholds fit on these cases
+        /// (the val-held-out carve) instead of the stratified selection
+        /// slice; the engine selections stay on the seat's own cal front.
+        /// None = the shipped posture, byte-identical.
+        pub gate_fit_cases: Option<(Vec<SuiteCase>, Vec<String>)>,
         /// The seated synth corpus (Plan 426 T5's V5-PASS lever, seated at
         /// Plan 426 T6): blake3-verified at [`prepare_seat_with_synth`],
         /// in-universe filtered, applied at [`build_seat_engine`] BUILD time
@@ -5844,6 +5886,7 @@ pub mod seat {
             labels: p.labels,
             pool_rows: p.pool_rows,
             synthetic,
+            gate_fit_cases: None,
             synth: None,
         })
     }
@@ -6136,6 +6179,10 @@ pub mod seat {
             cal_cases: &s.cal_cases,
             cal_state_strs: &s.cal_state_strs,
             labels: &s.labels,
+            gate_fit_cases_override: s
+                .gate_fit_cases
+                .as_ref()
+                .map(|(c, strs)| (&c[..], &strs[..])),
             want_by_type: false,
             corpus_cap_per_label: spec.corpus_cap_per_label,
             head_scale: 0.0,

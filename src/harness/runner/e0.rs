@@ -257,6 +257,7 @@ fn e0_suite(spec: &SuiteSpec, dir: &Path, kn_route: bool) -> Result<E0Suite, Str
         mc_ab: None,
         density_gate: false,
         set_refine: None,
+        gate_fit_cases_override: None,
         leak_flags: None,
     };
     // The states: the stratified selection slice (the shared cal-side

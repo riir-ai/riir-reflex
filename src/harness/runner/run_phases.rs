@@ -758,6 +758,7 @@ fn run_modelless_suite(
         #[cfg(feature = "mc_ensemble")]
         mc_ab: opts.mc_ab.then_some(&mc_cfg),
         density_gate: opts.density_gate,
+        gate_fit_cases_override: None,
         head_scale: opts.head_scale,
         head_select: opts.head_select,
         nb_select: opts.nb_select,

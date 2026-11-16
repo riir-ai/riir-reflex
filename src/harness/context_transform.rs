@@ -134,31 +134,87 @@ fn suffix_noise_b(s: &str) -> String {
 /// The SEMANTIC family: `[0]` identity + 7 transforms (the K≤8 sweep fits
 /// without extra decides — the K sweep is a prefix of ONE decision set).
 pub const SEMANTIC_FAMILY: &[ContextTransform] = &[
-    ContextTransform { name: "identity", family: Family::Semantic, apply: identity },
-    ContextTransform { name: "persona_linguist", family: Family::Semantic, apply: prefix_linguist },
-    ContextTransform { name: "persona_economist", family: Family::Semantic, apply: prefix_economist },
-    ContextTransform { name: "persona_lawyer", family: Family::Semantic, apply: prefix_lawyer },
+    ContextTransform {
+        name: "identity",
+        family: Family::Semantic,
+        apply: identity,
+    },
+    ContextTransform {
+        name: "persona_linguist",
+        family: Family::Semantic,
+        apply: prefix_linguist,
+    },
+    ContextTransform {
+        name: "persona_economist",
+        family: Family::Semantic,
+        apply: prefix_economist,
+    },
+    ContextTransform {
+        name: "persona_lawyer",
+        family: Family::Semantic,
+        apply: prefix_lawyer,
+    },
     ContextTransform {
         name: "persona_physician",
         family: Family::Semantic,
         apply: prefix_physician,
     },
-    ContextTransform { name: "suffix_consider", family: Family::Semantic, apply: suffix_consider },
-    ContextTransform { name: "suffix_answer", family: Family::Semantic, apply: suffix_answer },
-    ContextTransform { name: "normalize_space", family: Family::Semantic, apply: normalize_space },
+    ContextTransform {
+        name: "suffix_consider",
+        family: Family::Semantic,
+        apply: suffix_consider,
+    },
+    ContextTransform {
+        name: "suffix_answer",
+        family: Family::Semantic,
+        apply: suffix_answer,
+    },
+    ContextTransform {
+        name: "normalize_space",
+        family: Family::Semantic,
+        apply: normalize_space,
+    },
 ];
 
 /// The PLACEBO family: index-aligned noise twins of [`SEMANTIC_FAMILY`]
 /// (same word counts, zero semantic content — the additive-hash-noise
 /// control the G2a verdict adjusts by).
 pub const PLACEBO_FAMILY: &[ContextTransform] = &[
-    ContextTransform { name: "identity", family: Family::Placebo, apply: identity },
-    ContextTransform { name: "noise_prefix_a", family: Family::Placebo, apply: prefix_noise_a },
-    ContextTransform { name: "noise_prefix_b", family: Family::Placebo, apply: prefix_noise_b },
-    ContextTransform { name: "noise_prefix_c", family: Family::Placebo, apply: prefix_noise_c },
-    ContextTransform { name: "noise_prefix_d", family: Family::Placebo, apply: prefix_noise_d },
-    ContextTransform { name: "noise_suffix_a", family: Family::Placebo, apply: suffix_noise_a },
-    ContextTransform { name: "noise_suffix_b", family: Family::Placebo, apply: suffix_noise_b },
+    ContextTransform {
+        name: "identity",
+        family: Family::Placebo,
+        apply: identity,
+    },
+    ContextTransform {
+        name: "noise_prefix_a",
+        family: Family::Placebo,
+        apply: prefix_noise_a,
+    },
+    ContextTransform {
+        name: "noise_prefix_b",
+        family: Family::Placebo,
+        apply: prefix_noise_b,
+    },
+    ContextTransform {
+        name: "noise_prefix_c",
+        family: Family::Placebo,
+        apply: prefix_noise_c,
+    },
+    ContextTransform {
+        name: "noise_prefix_d",
+        family: Family::Placebo,
+        apply: prefix_noise_d,
+    },
+    ContextTransform {
+        name: "noise_suffix_a",
+        family: Family::Placebo,
+        apply: suffix_noise_a,
+    },
+    ContextTransform {
+        name: "noise_suffix_b",
+        family: Family::Placebo,
+        apply: suffix_noise_b,
+    },
     ContextTransform {
         name: "normalize_space",
         family: Family::Placebo,
@@ -174,11 +230,7 @@ pub const PLACEBO_FAMILY: &[ContextTransform] = &[
 /// states transform exactly like string ones. Questions, option order and
 /// gold ride untouched. The case id names the family transform so every
 /// record row is traceable.
-pub fn transformed_case(
-    case: &SuiteCase,
-    family: Family,
-    rep: usize,
-) -> Result<SuiteCase, String> {
+pub fn transformed_case(case: &SuiteCase, family: Family, rep: usize) -> Result<SuiteCase, String> {
     let table = match family {
         Family::Semantic => SEMANTIC_FAMILY,
         Family::Placebo => PLACEBO_FAMILY,
@@ -233,7 +285,12 @@ pub enum CoreClass {
 pub fn agreement_of(picks: &[usize], k: usize) -> CaseAgreement {
     let k = k.min(picks.len());
     if k == 0 {
-        return CaseAgreement { picks: Vec::new(), seat: None, class: CoreClass::NoCore, seat_votes: 0 };
+        return CaseAgreement {
+            picks: Vec::new(),
+            seat: None,
+            class: CoreClass::NoCore,
+            seat_votes: 0,
+        };
     }
     let used = &picks[..k];
     let mut counts: Vec<(usize, usize)> = Vec::new();
@@ -252,7 +309,12 @@ pub fn agreement_of(picks: &[usize], k: usize) -> CaseAgreement {
     } else {
         (None, CoreClass::NoCore)
     };
-    CaseAgreement { picks: used.to_vec(), seat, class, seat_votes: top.1 }
+    CaseAgreement {
+        picks: used.to_vec(),
+        seat,
+        class,
+        seat_votes: top.1,
+    }
 }
 
 /// The G1 anchor: the identity transform reproduces the input case
@@ -267,8 +329,8 @@ pub fn identity_is_passthrough(case: &SuiteCase, family: Family) -> Result<bool,
 
 #[cfg(test)]
 mod tests {
-    use crate::harness::suites::{GoldAnswer, QKind, SuiteQuestion};
     use super::*;
+    use crate::harness::suites::{GoldAnswer, QKind, SuiteQuestion};
     use serde_json::{Map, Value};
 
     fn text_case() -> SuiteCase {
@@ -281,7 +343,11 @@ mod tests {
                 instructions: "pick".to_string(),
                 criteria: Value::Object(Map::new()),
             }],
-            gold: vec![GoldAnswer { idx: 1, soft: vec![], gold_score: None }],
+            gold: vec![GoldAnswer {
+                idx: 1,
+                soft: vec![],
+                gold_score: None,
+            }],
         }
     }
 
@@ -325,8 +391,7 @@ mod tests {
             assert_eq!(
                 sem_words, plac_words,
                 "row {rep}: {} vs {} word counts must match (the additive-mass pairing)",
-                SEMANTIC_FAMILY[rep].name,
-                PLACEBO_FAMILY[rep].name
+                SEMANTIC_FAMILY[rep].name, PLACEBO_FAMILY[rep].name
             );
         }
     }
@@ -343,7 +408,10 @@ mod tests {
         let t = transformed_case(&c, Family::Semantic, 1).expect("persona");
         let s = t.state.as_str().expect("string");
         assert!(s.starts_with("From the perspective of a linguist, "));
-        assert!(s.contains("the client wants a refund"), "the serialized body rides: {s}");
+        assert!(
+            s.contains("the client wants a refund"),
+            "the serialized body rides: {s}"
+        );
     }
 
     #[test]
@@ -376,10 +444,18 @@ mod tests {
     #[test]
     fn families_are_index_aligned() {
         assert_eq!(SEMANTIC_FAMILY.len(), PLACEBO_FAMILY.len());
-        for (s, p) in SEMANTIC_FAMILY.iter().zip(PLACEBO_FAMILY.iter()) {
+        // The first row pair only: identity rows share the name and the
+        // rewrite. (Index alignment of the WHOLE families is the
+        // len-equality above + the per-row loop's zip — a full-family
+        // loop here would re-assert rows the other tests own.)
+        let (s, p) = (SEMANTIC_FAMILY.first(), PLACEBO_FAMILY.first());
+        if let (Some(s), Some(p)) = (s, p) {
             assert_eq!(s.name, p.name, "identity rows share the name");
-            assert_eq!((s.apply)("x"), (p.apply)("x"), "identity rows share the rewrite");
-            break;
+            assert_eq!(
+                (s.apply)("x"),
+                (p.apply)("x"),
+                "identity rows share the rewrite"
+            );
         }
     }
 }

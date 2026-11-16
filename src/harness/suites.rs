@@ -5239,13 +5239,22 @@ pub(crate) fn jdi_row_identity_hash_pub(suite: &str, row: &Value) -> u64 {
     jdi_row_identity_hash(suite, row)
 }
 
+/// Issue 120's seat-path carve needs a suite-GENERIC row identity for the
+/// overlap guard: `row_key`-shaped (the slice_guard law — the exact serde
+/// bytes of the envelope's inner row), house-folded to u64. Distinct from
+/// [`jdi_row_identity_hash`], which re-derives the SAMPLE ORDER (its
+/// suite-keyed identity-field extraction is the order law for the two
+/// hash-ordered JDI suites) — never use this function for ordering, and
+/// never use the JDI hash for the overlap guard (a JDI suite's full-row
+/// bytes and its identity field agree TODAY, but the guard must not
+/// depend on that coincidence).
+pub(crate) fn eval_row_identity_hash(row: &Value) -> u64 {
+    house_fold(&serde_json::to_string(row).unwrap_or_else(|_| row.to_string()))
+}
+
 /// [`wrap_rows`] at crate visibility — the val_cal_carve helper re-wraps
 /// its carved cal front into the envelope shape the builders consume.
-pub(crate) fn wrap_rows_pub(
-    rows: &[&Value],
-    idxs: &[usize],
-    features: Option<&Value>,
-) -> Value {
+pub(crate) fn wrap_rows_pub(rows: &[&Value], idxs: &[usize], features: Option<&Value>) -> Value {
     wrap_rows(rows, idxs, features)
 }
 

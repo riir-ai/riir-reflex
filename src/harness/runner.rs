@@ -152,7 +152,7 @@ pub use perm_probe::{
 // placebo-controlled; the pure core is `crate::harness::context_transform`).
 mod ctx_probe;
 pub use ctx_probe::{
-    CtxProbeMeta, CtxProbeOptions, CtxProbeOutput, CtxPooled, CtxSuiteReport, DEFAULT_CTX_K,
+    CtxPooled, CtxProbeMeta, CtxProbeOptions, CtxProbeOutput, CtxSuiteReport, DEFAULT_CTX_K,
     DEFAULT_CTX_MAX_CASES, render_ctx_probe_markdown, run_ctx_probe,
 };
 
@@ -4199,10 +4199,7 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
         // eval-split rows that is the full train pool: the exact corpus
         // the deployed gate scores test rows against, so the observed
         // distance geometry matches the test side.
-        let excluded: HashSet<&str> = cases
-            .iter()
-            .filter_map(|c| c.state.as_str())
-            .collect();
+        let excluded: HashSet<&str> = cases.iter().filter_map(|c| c.state.as_str()).collect();
         let pool: Vec<TrainDoc> = inp
             .train
             .iter()
@@ -5877,7 +5874,13 @@ pub mod seat {
             ));
         }
         let p = prepare(spec, dir)?;
-        Ok(Seat {
+        // Issue 120 site 1: for a carve-eligible suite, the gate-fit slice
+        // PREFERENCES the suite's own eval split (the val carve outside the
+        // test identity set) over the train-carved cal front — the same
+        // distribution the deployed gate scores against. Engine selections
+        // stay on the seat's cal front (the minimal repair); `None` (any
+        // non-JDI suite or carve refusal) = byte-identical shipped posture.
+        let seat0 = Seat {
             suite: p.suite,
             train: p.train,
             state_strs: p.state_strs,
@@ -5888,6 +5891,11 @@ pub mod seat {
             synthetic,
             gate_fit_cases: None,
             synth: None,
+        };
+        let gate_fit_cases = seat0.val_gate_fit_cases(dir);
+        Ok(Seat {
+            gate_fit_cases,
+            ..seat0
         })
     }
 
@@ -5959,6 +5967,7 @@ pub mod seat {
     /// hashes of BOTH sets (test front first `skip`, cal next `take`) so the
     /// consumer can digest + assert disjointness with its own hasher —
     /// `pub mod harness` stays blake3-free at --no-default-features.
+    #[allow(clippy::type_complexity)] // the 4-tuple IS the contract (cases, states, test ids, cal ids)
     pub fn val_cal_carve(
         name: &str,
         dir: &Path,
@@ -5969,7 +5978,7 @@ pub mod seat {
             .iter()
             .find(|s| s.name == name)
             .ok_or_else(|| format!("val_cal_carve: unknown suite {name}"))?;
-        if !matches!(name, "hellaswag_jdi" | "mmlupro_jdi") {
+        if !carve_eligible_suite(name) {
             return Err(format!(
                 "val_cal_carve: {name} is not a hash-ordered JDI-capped suite — the \
                  carve law (jdi_row_identity_hash ascending) is theirs; refuse, \
@@ -6012,7 +6021,11 @@ pub mod seat {
         let cal_hashes: Vec<u64> = keyed[skip..skip + take].iter().map(|(h, _)| *h).collect();
         // The disjointness guard is the caller's loud refusal input: the
         // partition is disjoint by construction; assert it anyway so a
-        // future order-law change cannot silently overlap the sets.
+        // future order-law change cannot silently overlap the sets. TWO
+        // identities, both asserted: the ORDER identity above (a row
+        // re-entering the other side of the SAME split is a law break)
+        // and Issue 120's FULL-ROW byte identity (a row whose identity
+        // field collides must not silently land on both sides either).
         let mut sorted_test = test_hashes.clone();
         sorted_test.sort_unstable();
         let mut sorted_cal = cal_hashes.clone();
@@ -6026,7 +6039,32 @@ pub mod seat {
                  leak guard fires, the carve is unusable"
             ));
         }
+        let test_guard: Vec<u64> = keyed[..skip]
+            .iter()
+            .map(|(_, ri)| crate::harness::suites::eval_row_identity_hash(all[*ri]))
+            .collect();
+        let mut sorted_test_guard = test_guard.clone();
+        sorted_test_guard.sort_unstable();
         let cal_picks: Vec<usize> = keyed[skip..skip + take].iter().map(|(_, ri)| *ri).collect();
+        // Issue 120's overlap guard reads the FULL-ROW identity (the
+        // slice_guard `row_key` law), not the order identity: the JDI
+        // order identity is the identity FIELD (e.g. `ind`), so two rows
+        // sharing an identity field are NOT the same row — byte identity
+        // is the honest population identity.
+        let mut cal_guard: Vec<u64> = keyed[skip..skip + take]
+            .iter()
+            .map(|(_, ri)| crate::harness::suites::eval_row_identity_hash(all[*ri]))
+            .collect();
+        cal_guard.sort_unstable();
+        if sorted_test_guard
+            .iter()
+            .any(|h| cal_guard.binary_search(h).is_ok())
+        {
+            return Err(format!(
+                "val_cal_carve: {name} cal byte-identity set overlaps the test byte-identity \
+                 set — leak guard fires, the carve is unusable"
+            ));
+        }
         let cal_rows = crate::harness::suites::wrap_rows_pub(&all, &cal_picks, None);
         let mut cal_cases = (spec.build)(&cal_rows, 0).cases;
         for (i, case) in cal_cases.iter_mut().enumerate() {
@@ -6037,6 +6075,14 @@ pub mod seat {
             .map(|c| serialize_state(&c.state))
             .collect();
         Ok((cal_cases, strs, sorted_test, sorted_cal))
+    }
+
+    /// Issue 120: does this suite admit the val-carve gate-fit preference?
+    /// The ONE membership site (the seat wiring, the gate-drift census
+    /// assertion, and any future consumer all read this — never a second
+    /// hand-typed name list).
+    pub fn carve_eligible_suite(name: &str) -> bool {
+        matches!(name, "hellaswag_jdi" | "mmlupro_jdi")
     }
 
     impl Seat {
@@ -6050,6 +6096,31 @@ pub mod seat {
         /// consumer calls THIS).
         pub fn cases_digest(&self) -> String {
             cases_digest(self.suite.name, &self.suite.cases)
+        }
+
+        /// Issue 120 site 1: populate the gate-fit override for a seat whose
+        /// suite admits a same-distribution cal carve. The JDI class only
+        /// (the carve LAW is theirs — hash-ordered eval sample, so the
+        /// carve's `skip = test_cap` front reproduces the seat's own test
+        /// identity set exactly; every other suite's front is a stratified
+        /// order this helper cannot reconstruct, and a mis-reconstructed
+        /// test set would make the overlap guard vacuous). Returns `None`
+        /// for every suite outside the class, for any carve failure
+        /// (test_cap 0, no room, overlap), and on any datasets-dir I/O —
+        /// each with one loud disclosure line; the caller keeps the shipped
+        /// train-cal posture on `None`. Read-only over the dataset files.
+        pub fn val_gate_fit_cases(&self, dir: &Path) -> Option<(Vec<SuiteCase>, Vec<String>)> {
+            let spec = SUITES.iter().find(|s| s.name == self.suite.name)?;
+            if !carve_eligible_suite(spec.name) {
+                return None;
+            }
+            match val_cal_carve(spec.name, dir, spec.test_cap, spec.cal_cap) {
+                Ok((cases, strs, _, _)) => Some((cases, strs)),
+                Err(e) => {
+                    eprintln!("    seat gate-fit carve: {e} — keeping the train-cal gate fit");
+                    None
+                }
+            }
         }
     }
 
@@ -7744,5 +7815,141 @@ mod cal_namespace_tests {
         // And the same law for a suite whose ids embed sub-positions.
         let other = "finentity";
         assert_eq!(namespaced_cal_id(other, 7), "finentity:cal:7");
+    }
+}
+
+#[cfg(test)]
+mod val_carve_wiring_tests {
+    //! Issue 120 site 1: the seat-path gate-fit carve preference. The
+    //! membership predicate, the JDI-front reconstruction premise (the
+    //! stratified_split order law IS the carve order law for the pinned
+    //! class), and the identity-hash separation law. The datasets-dir
+    //! happy path is the rethink example's cell (esc_mammoth_items_fit
+    //! --cal-from-val); these tests pin the CLASS boundary, not the data.
+
+    use super::seat::{carve_eligible_suite, val_cal_carve};
+    use super::*;
+
+    /// The membership law is a FUNCTION, never a second hand-typed list:
+    /// exactly the two hash-ordered JDI suites, everything else refused —
+    /// and `val_cal_carve`'s own pin reads the same predicate (a new
+    /// eligible suite moves BOTH in one edit).
+    #[test]
+    fn carve_membership_is_exactly_the_jdi_pair() {
+        assert!(carve_eligible_suite("hellaswag_jdi"));
+        assert!(carve_eligible_suite("mmlupro_jdi"));
+        for s in SUITES {
+            let eligible = carve_eligible_suite(s.name);
+            assert_eq!(
+                eligible,
+                matches!(s.name, "hellaswag_jdi" | "mmlupro_jdi"),
+                "suite {}",
+                s.name
+            );
+            if !eligible {
+                assert!(
+                    val_cal_carve(s.name, Path::new("/nonexistent"), 1, 1).is_err(),
+                    "non-eligible suite {} must refuse the carve (never a silent fallback)",
+                    s.name
+                );
+            }
+        }
+    }
+
+    /// The premise the whole wiring stands on: for the JDI class the
+    /// seat's test sample IS the carve's `skip` front (one order law —
+    /// `stratified_split`'s hash-ascending branch and `val_cal_carve`'s
+    /// keyed sort are the same keyed sort over the same envelope). Pinned
+    /// against a synthetic envelope; a DUPLICATE identity field is
+    /// included deliberately: the two same-`ind` rows occupy adjacent
+    /// keyed slots (the row-index tiebreak), so a skip boundary between
+    /// them splits the pair across front/rest — the carve's BYTE-identity
+    /// guard is what catches that class (distinct full-row bytes), and
+    /// the test asserts the split front is still exactly hash-ascending.
+    #[test]
+    fn jdi_split_order_is_the_carve_order() {
+        // 5 rows; the duplicate pair (ind=1) carries DIFFERENT labels so
+        // their full-row bytes differ — the byte guard separates what the
+        // order guard cannot. (Two rows identical in BOTH would be a real
+        // leak — the same envelope row literally entering both sets.)
+        let wrapped: Vec<Value> = [(3i64, 0), (1, 0), (4, 0), (1, 1), (5, 0)]
+            .iter()
+            .enumerate()
+            .map(|(i, (id, label))| {
+                serde_json::json!({ "row_idx": i, "row": { "ind": id, "label": label } })
+            })
+            .collect();
+        let envelope = serde_json::json!({ "rows": wrapped });
+        let split = crate::harness::suites::stratified_split(&envelope, "hellaswag_jdi", 3);
+        // Front = the 3 hash-ascending picks; the duplicate-identity pair
+        // (ind=1 at row idx 1 and 3) sits keyed-adjacent, the later index
+        // in rest — where the byte-identity guard is the safety net.
+        let front_rows = crate::harness::slice_guard::envelope_rows(&split.front);
+        let front_hashes: Vec<u64> = front_rows
+            .iter()
+            .map(|r| crate::harness::suites::jdi_row_identity_hash_pub("hellaswag_jdi", r))
+            .collect();
+        let mut sorted_front = front_hashes.clone();
+        sorted_front.sort_unstable();
+        assert_eq!(front_hashes, sorted_front, "front is hash-ascending");
+        // The rest's ORDER identities outside the front's set — EXCEPT a
+        // duplicate identity field straddling the skip boundary (adjacent
+        // keyed slots), which is exactly the class the byte-identity
+        // guard exists for; assert the straddle is detectable by bytes.
+        let rest_rows = crate::harness::slice_guard::envelope_rows(&split.rest);
+        let rest_hashes: Vec<u64> = rest_rows
+            .iter()
+            .map(|r| crate::harness::suites::jdi_row_identity_hash_pub("hellaswag_jdi", r))
+            .collect();
+        let straddling: Vec<&u64> = rest_hashes
+            .iter()
+            .filter(|h| sorted_front.binary_search(h).is_ok())
+            .collect();
+        // Any order-identity overlap MUST be a duplicate-field straddle:
+        // the corresponding full rows differ in bytes, so the byte guard
+        // fires where the order guard cannot.
+        for h in straddling {
+            let front_match = front_rows
+                .iter()
+                .find(|r| {
+                    crate::harness::suites::jdi_row_identity_hash_pub("hellaswag_jdi", r) == *h
+                })
+                .unwrap();
+            let rest_match = rest_rows
+                .iter()
+                .find(|r| {
+                    crate::harness::suites::jdi_row_identity_hash_pub("hellaswag_jdi", r) == *h
+                })
+                .unwrap();
+            assert_ne!(
+                *front_match, *rest_match,
+                "an order-identity overlap with IDENTICAL bytes would be a real leak"
+            );
+            assert_ne!(
+                crate::harness::suites::eval_row_identity_hash(front_match),
+                crate::harness::suites::eval_row_identity_hash(rest_match),
+                "the byte guard separates what the order guard cannot"
+            );
+        }
+    }
+
+    /// The overlap-guard identity (full-row bytes) and the order identity
+    /// (the suite's identity field) are DIFFERENT functions; the guard
+    /// must never silently swap one for the other. Pinned by a pair of
+    /// rows whose identity field is equal but whose full-row bytes differ.
+    #[test]
+    fn eval_identity_hash_is_full_row_not_identity_field() {
+        let a = serde_json::json!({ "ind": 7, "label": 0 });
+        let b = serde_json::json!({ "ind": 7, "label": 1 });
+        assert_eq!(
+            crate::harness::suites::jdi_row_identity_hash_pub("hellaswag_jdi", &a),
+            crate::harness::suites::jdi_row_identity_hash_pub("hellaswag_jdi", &b),
+            "the ORDER identity is the identity field"
+        );
+        assert_ne!(
+            crate::harness::suites::eval_row_identity_hash(&a),
+            crate::harness::suites::eval_row_identity_hash(&b),
+            "the GUARD identity is the full row — a label difference must move it"
+        );
     }
 }

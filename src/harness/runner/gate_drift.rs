@@ -195,6 +195,12 @@ pub struct GateDriftSizeCell {
     /// support — the birth constant is the fallback posture).
     pub refit_threshold: Option<f32>,
     pub refit_cal_observations: usize,
+    /// Issue 120 site 2's disclosure: where the refit cal slice came from.
+    /// `"train-cal"` = the shipped stratified train carve (all current
+    /// family suites); a future carve-eligible family suite would read
+    /// `"eval-cal"` — the record MUST say which, so a drift read is never
+    /// compared across carve sources.
+    pub refit_cal_source: &'static str,
     /// The desert on the corpus-shaped routed read: positive
     /// `clearance_off` = the off-corpus p99 still below the midpoint;
     /// positive `in_floor_above_mid` = the in-corpus p05 still above it.
@@ -592,6 +598,7 @@ fn run_size<const N: usize>(
         in_engine_shaped,
         refit_threshold,
         refit_cal_observations,
+        refit_cal_source: "train-cal",
         clearance_off,
         in_floor_above_mid,
     };
@@ -677,6 +684,22 @@ fn load_suite_artefacts(
         .iter()
         .map(|c| serialize_state(&c.state))
         .collect();
+    // Issue 120 site 2 — the gate-drift refit's cal-source disclosure. The
+    // instrument's refit consumes the train-carved cal front (the shipped
+    // `prepare` construction) — the same under-prediction bias the ESC
+    // lane measured. None of the CURRENT family suites admits a val carve
+    // (the carve law is the two hash-ordered JDI suites', and the guard
+    // wiring in `Seat::val_gate_fit_cases` refuses everything else), so
+    // the source is pinned `train-cal` here BY CONSTRUCTION with the
+    // census assertion right below: if a family suite ever becomes
+    // carve-eligible, the pin moves IN THE SAME COMMIT with the re-fit
+    // — a drift record must never silently switch carve sources.
+    debug_assert!(
+        GATE_DRIFT_FAMILY
+            .iter()
+            .all(|n| !crate::harness::runner::seat::carve_eligible_suite(n)),
+        "a GATE_DRIFT_FAMILY suite became carve-eligible — move the refit_cal_source pin with the re-fit, never silently"
+    );
     // Eval front (the registry test sample) — both in-corpus surfaces.
     let eval_rows = load_rows(&dir, spec.eval_split)?;
     let eval_front = stratified_split(&eval_rows, spec.name, spec.test_cap).front;
@@ -856,13 +879,14 @@ pub fn render_gate_drift_markdown(out: &GateDriftOutput) -> String {
         );
         let _ = writeln!(
             s,
-            "\nPer-domain rows: {:?} · refit threshold: {} (cal n = {})",
+            "\nPer-domain rows: {:?} · refit threshold: {} (cal n = {}, cal source = {})",
             c.per_domain_rows,
             c.refit_threshold
                 .map_or("THIN SUPPORT — birth fallback".to_string(), |t| format!(
                     "{t:.4}"
                 )),
-            c.refit_cal_observations
+            c.refit_cal_observations,
+            c.refit_cal_source
         );
         let _ = writeln!(
             s,

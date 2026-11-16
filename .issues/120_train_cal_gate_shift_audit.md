@@ -1,6 +1,8 @@
 # Issue 120 — the train-carved gate cal under-predicts test escalation: audit the shift at BOTH carve sites and re-audit the three served suites
 
 **Status:** OPEN — filed from rethink plan 018 (verdict session `7c0cb628` r2 AGREE, condition R4: fix the cause once, not per-suite).
+**Claimed:** zed-731af8cd@amo, 1794860770, expires 2026-11-18T20:30:00Z
+Claim scope: the served-suites shift re-audit row + the `test_cap: 0` no-pool disclosure row (read+record; benches 077/086/087 + the suite registry). The site-1/site-2 code wiring is NOT this lease (compile-heavy; separate window).
 
 ## The defect (measured, rethink benches 101/102)
 

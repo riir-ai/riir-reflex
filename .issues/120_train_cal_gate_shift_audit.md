@@ -3,6 +3,8 @@
 **Status:** OPEN — filed from rethink plan 018 (verdict session `7c0cb628` r2 AGREE, condition R4: fix the cause once, not per-suite). **Re-audit + no-pool disclosure rows EXECUTED 2026-11-16 (read-only; this session) — the site-1/site-2 code wiring remains OPEN.**
 **Lease closed:** zed-731af8cd@amo, 1794860770, closed 2026-11-16T20:58Z, was expires 2026-11-18T20:30:00Z — the lease's two scoped rows LANDED same session (re-audit `b127f9b` + the no-pool census; read-only); the site-1/site-2 code wiring stays OPEN and unclaimed.
 Claim scope was: the served-suites shift re-audit row + the `test_cap: 0` no-pool disclosure row (read+record; benches 077/086/087 + the suite registry). The site-1/site-2 code wiring was NOT this lease (compile-heavy; separate window).
+**Claimed:** zed-731af8cd@amo, 1794861654, expires 2026-11-18T21:00:00Z
+Claim scope (second lease, same session): the site-1/site-2 code wiring rows — the JDI-class val-carve PREFERENCE at the two sites, the carve-availability gate on SuiteSpec, tests, and the guards' running; the served suites (emotion_syn/massive_intent_en/banking77) keep their train-cal carve and arming evidence UNTOUCHED (their carve-shift is small and the arming records bind to it — re-seating them is its own measured lane per the landed-repair paragraph below).
 
 ## The defect (measured, rethink benches 101/102)
 

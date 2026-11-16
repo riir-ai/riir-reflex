@@ -356,6 +356,16 @@ ships to crates.io so a future publish needs no sibling-strip. (`367766c` · `93
 - `REFLEX_BENCH_HOST` is REQUIRED on the 4090 (unset label refuses at row birth); a lane nobody owns renders as `not run` on the board — a documented default posture, not a defect.
 - Density/synthesis gates: echo gates (abstention-entropy KL + OOD word-dropout) are mandatory on every `--corpus-ab` pass; a clean V5 PASS with a negative gate-rung reads ECHO = the lane dies.
 
+## 2026-11-15 — Issue 119 context-invariance probe CLOSED — G3 FIRED (Bench 198)
+
+G3 fired at the pre-registered cell (Bench 198, m3, PROVENANCE quoted): g2a_sem_plac pooled LB95 −2.95 pp (n 241, 7 suites),
+g2a_sem_fused empty-at-fused (the score gate abstains heavily on this seat — n=0 cells named, never fabricated), g2b NEGATIVE
+(placebo channel −7.69); G1 identity HOLDS every suite. **Scope: that run table, THAT engine (bag-of-hashed-words additive
+features), the tested families — not the class.** Re-open trigger: an engine with order-/context-sensitive features
+(position-aware n-grams, attention, structure beyond one bigram). Machinery landed ungated (T1–T4):
+`src/harness/context_transform.rs` + `src/harness/runner/ctx_probe.rs` + `--ctx-probe` (issue file removed 2026-11-17;
+this row is the record).
+
 ## 2026-09-22..24 — releases v0.2.2 / v0.2.3 + the reflex bin rename (moved from AGENTS.md, 2026-10-30)
 
 v0.2.2: bin `riir-reflex` → `reflex` + fitted Tetris head + Metal-default laya (p50 78.1 vs 176.8 ms) (`367766c`, `932a2a3`);

@@ -5892,6 +5892,110 @@ pub mod seat {
         Ok(seat)
     }
 
+    /// The val-held-out cal carve (rethink plan 018 / Issue 059 T4-followup,
+    /// verdict session 7c0cb628 round 2 AGREE, 2026-11-16): cal cases carved
+    /// from the suite's OWN eval split OUTSIDE the test identity set, in the
+    /// SAME sample order the test front uses.
+    ///
+    /// Why: the gate-cal defect (the 091/092 fits) — `prepare` carves cal
+    /// from the TRAIN split, so cal rows sit systematically closer to the
+    /// train-built corpus than validation rows do, and every rate-targeted
+    /// gate fit under-predicts the test escalation rate (hswag: +12.6..+21.9pp
+    /// — the shift guard refused every arm above ρ 0.10). Fitting the SAME
+    /// thresholds on same-distribution held-out eval rows repairs the
+    /// transfer measurand. Calibration-only rows: never the test claim rows
+    /// (skipped by identity), never corpus/training data.
+    ///
+    /// JDI-capped suites only for now (the hash-order sample law is theirs):
+    /// a suite whose `test_cap` is 0 (winogrande_jdi — the whole validation
+    /// split IS the test panel) refuses LOUD with that disclosure — never a
+    /// silent fallback to train-cal.
+    ///
+    /// Returns the carved cal cases (namespaced cal ids, the `prepare`
+    /// convention), their serialized state strings, and the sorted identity
+    /// hashes of BOTH sets (test front first `skip`, cal next `take`) so the
+    /// consumer can digest + assert disjointness with its own hasher —
+    /// `pub mod harness` stays blake3-free at --no-default-features.
+    pub fn val_cal_carve(
+        name: &str,
+        dir: &Path,
+        skip: usize,
+        take: usize,
+    ) -> Result<(Vec<SuiteCase>, Vec<String>, Vec<u64>, Vec<u64>), String> {
+        let spec = SUITES
+            .iter()
+            .find(|s| s.name == name)
+            .ok_or_else(|| format!("val_cal_carve: unknown suite {name}"))?;
+        if !matches!(name, "hellaswag_jdi" | "mmlupro_jdi") {
+            return Err(format!(
+                "val_cal_carve: {name} is not a hash-ordered JDI-capped suite — the \
+                 carve law (jdi_row_identity_hash ascending) is theirs; refuse, \
+                 never a silent fallback"
+            ));
+        }
+        if skip == 0 {
+            return Err(format!(
+                "val_cal_carve: {name} carries test_cap 0 — the whole eval split IS the \
+                 test panel, no held-out cal pool exists (disclosed; never a silent \
+                 fallback to train-cal)"
+            ));
+        }
+        if take == 0 {
+            return Err("val_cal_carve: take 0 — an empty cal pool refuses".to_string());
+        }
+        let rows = load_rows(&dir.join(spec.dataset_dir), spec.eval_split)?;
+        let all = crate::harness::suites::rows_of_pub(&rows);
+        // The SAME order law the test front used: hash ascending, row index
+        // tiebreak. skip = the test set; take = the cal carve right after it.
+        let mut keyed: Vec<(u64, usize)> = all
+            .iter()
+            .enumerate()
+            .map(|(ri, row)| {
+                (
+                    crate::harness::suites::jdi_row_identity_hash_pub(name, row),
+                    ri,
+                )
+            })
+            .collect();
+        keyed.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+        if keyed.len() < skip + take {
+            return Err(format!(
+                "val_cal_carve: {name} eval pool {} rows < skip {skip} + take {take} — \
+                 no room for a held-out cal carve",
+                keyed.len()
+            ));
+        }
+        let test_hashes: Vec<u64> = keyed[..skip].iter().map(|(h, _)| *h).collect();
+        let cal_hashes: Vec<u64> = keyed[skip..skip + take].iter().map(|(h, _)| *h).collect();
+        // The disjointness guard is the caller's loud refusal input: the
+        // partition is disjoint by construction; assert it anyway so a
+        // future order-law change cannot silently overlap the sets.
+        let mut sorted_test = test_hashes.clone();
+        sorted_test.sort_unstable();
+        let mut sorted_cal = cal_hashes.clone();
+        sorted_cal.sort_unstable();
+        if sorted_test
+            .iter()
+            .any(|h| sorted_cal.binary_search(h).is_ok())
+        {
+            return Err(format!(
+                "val_cal_carve: {name} cal identity set overlaps the test identity set — \
+                 leak guard fires, the carve is unusable"
+            ));
+        }
+        let cal_picks: Vec<usize> = keyed[skip..skip + take].iter().map(|(_, ri)| *ri).collect();
+        let cal_rows = crate::harness::suites::wrap_rows_pub(&all, &cal_picks, None);
+        let mut cal_cases = (spec.build)(&cal_rows, 0).cases;
+        for (i, case) in cal_cases.iter_mut().enumerate() {
+            case.id = namespaced_cal_id(spec.name, i);
+        }
+        let strs = cal_cases
+            .iter()
+            .map(|c| serialize_state(&c.state))
+            .collect();
+        Ok((cal_cases, strs, sorted_test, sorted_cal))
+    }
+
     impl Seat {
         /// Population identity of this seat's test cases — the SAME law the
         /// harness's `SuiteResult.cases_digest` uses ([`cases_digest`]:

@@ -5214,7 +5214,7 @@ pub fn stratified_split(rows_file: &Value, suite: &str, budget: usize) -> StratS
 /// the multiplier would re-order every JDI sample and invalidate every
 /// recorded number for them — a measured-wire break, deliberately NOT
 /// taken; the constant stays and the docs name it.
-fn jdi_row_identity_hash(suite: &str, row: &Value) -> u64 {
+pub(crate) fn jdi_row_identity_hash(suite: &str, row: &Value) -> u64 {
     let identity: String = match suite {
         "mmlupro_jdi" => row
             .get("question_id")
@@ -5225,6 +5225,28 @@ fn jdi_row_identity_hash(suite: &str, row: &Value) -> u64 {
     }
     .unwrap_or_else(|| row.to_string());
     house_fold(&identity)
+}
+
+/// [`rows_of`] at crate visibility — the val_cal_carve helper (runner.rs)
+/// consumes the same envelope the suite builders do.
+pub(crate) fn rows_of_pub(file: &Value) -> Vec<&Value> {
+    rows_of(file)
+}
+
+/// [`jdi_row_identity_hash`] at crate visibility — the val_cal_carve helper
+/// re-derives the sample order to carve the held-out cal front.
+pub(crate) fn jdi_row_identity_hash_pub(suite: &str, row: &Value) -> u64 {
+    jdi_row_identity_hash(suite, row)
+}
+
+/// [`wrap_rows`] at crate visibility — the val_cal_carve helper re-wraps
+/// its carved cal front into the envelope shape the builders consume.
+pub(crate) fn wrap_rows_pub(
+    rows: &[&Value],
+    idxs: &[usize],
+    features: Option<&Value>,
+) -> Value {
+    wrap_rows(rows, idxs, features)
 }
 
 /// The house FNV-1a 64 fold (the `jdi_row_identity_hash` multiplier law —

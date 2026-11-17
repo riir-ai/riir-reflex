@@ -101,10 +101,12 @@ pub mod nb_scope;
 
 /// Issue 121 A1 — the BM25 lexical floor scorer (report-only; std-only,
 /// no deps — the floor baseline the corpus-is-the-model engine must beat).
-/// Ungated by design: the lane's cost is one index build + one search per
-/// question, and a report-only floor behind a feature flag would just hide
-/// the violations it exists to find. See the module doc for the pinned
-/// constants and the A-pre redundancy law.
+/// Rides the `modelless` feature: the floor's whole purpose is comparing
+/// against the engine over the SAME corpora (the embed module owns the
+/// shared word rule), so a floor outside the modelless posture is a
+/// comparison with nothing on the other side. See the module doc for the
+/// pinned constants and the A-pre redundancy law.
+#[cfg(feature = "modelless")]
 pub mod bm25_floor;
 
 /// Option-conditioned count tables (issue 038 T7b): one table per

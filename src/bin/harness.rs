@@ -360,6 +360,11 @@ fn harness_main() {
     // (exclusive early-exit mode; the comparison lanes reuse
     // --drex/--d1/--agentjev).
     let mut null_probe = false;
+    // Issue 121 B1/B2 — the per-row flip census (exclusive early-exit
+    // mode; named suites via --suites; the deletion cap via
+    // --row-flip-max-rows, default 512).
+    let mut row_flip_census = false;
+    let mut row_flip_max_rows = 512usize;
     // Issue 094 T2 — the depth probe (feature `twt_profile`).
     #[cfg(feature = "twt_profile")]
     let mut depth_probe = false;
@@ -585,6 +590,12 @@ fn harness_main() {
                     opts.route_census = true;
                 }
             }
+            "--bm25-floor" => {
+                // Issue 121: the BM25 lexical floor lane (report-only;
+                // ungated — the scorer is std-only and the lane's cost is
+                // one index build per suite).
+                opts.bm25_floor = true;
+            }
             "--drafter-fix" => {
                 i += 1;
                 let mode = args
@@ -742,6 +753,14 @@ fn harness_main() {
             }
             "--label-perm-keep-corpus" => label_perm_keep_corpus = true,
             "--null-probe" => null_probe = true,
+            "--row-flip-census" => row_flip_census = true,
+            "--row-flip-max-rows" => {
+                i += 1;
+                row_flip_max_rows = args
+                    .get(i)
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_else(|| die("--row-flip-max-rows needs a number"));
+            }
             #[cfg(feature = "twt_profile")]
             "--depth-probe" => depth_probe = true,
             #[cfg(feature = "twt_profile")]
@@ -1280,8 +1299,10 @@ fn harness_main() {
     // pass.
     if ctx_probe {
         if ctx_k != 0 && !(2..=8).contains(&ctx_k) {
-            die("--ctx-k needs 2..=8 (the primary K prefixes the 8-transform \
-                 decision set; identity is always [0])");
+            die(
+                "--ctx-k needs 2..=8 (the primary K prefixes the 8-transform \
+                 decision set; identity is always [0])",
+            );
         }
         let copts = runner::CtxProbeOptions {
             k: if ctx_k == 0 {
@@ -1323,12 +1344,10 @@ fn harness_main() {
         }
         print!("{md}");
         if !out.g1_identity_holds {
-            die(
-                "--ctx-probe: the G1 identity control BROKE — the identity \
+            die("--ctx-probe: the G1 identity control BROKE — the identity \
                  transform's decide diverged from the raw case's (a harness \
                  bug or an engine invariant failure). The record is on disk \
-                 (never a quiet pass).",
-            );
+                 (never a quiet pass).");
         }
         println!(
             "harness --ctx-probe: DONE — {} suite(s) · G2a: {} · wrote {} + {}",
@@ -1397,6 +1416,44 @@ fn harness_main() {
     // the three is an engine defect or a harness bug, never a quiet
     // pass. A1's drift curve itself is characterized, not gated (the
     // issue's own ⚠: max-of-K drift is the measured quantity).
+    // Issue 121 B1/B2 — the row-flip census (exclusive early-exit mode).
+    if row_flip_census {
+        let copts = runner::RowFlipCensusOptions {
+            max_rows: row_flip_max_rows,
+        };
+        println!(
+            "harness --row-flip-census: datasets {} · suites {:?} · ≤{} row deletion(s)/suite \
+             · the deployed modelless engine at each suite's fitted posture",
+            opts.datasets_dir.display(),
+            opts.suites,
+            copts.max_rows,
+        );
+        let out = match runner::run_row_flip_census(&opts, &copts) {
+            Ok(r) => r,
+            Err(e) => die(&e),
+        };
+        if let Err(e) = std::fs::create_dir_all(&out_dir) {
+            die(&format!("create {}: {e}", out_dir.display()));
+        }
+        let json_path = out_dir.join("row_flip_census.json");
+        let md_path = out_dir.join("ROW_FLIP_CENSUS.md");
+        let json = serde_json::to_string_pretty(&out).expect("row-flip census serialize");
+        let md = runner::render_row_flip_census_markdown(&out);
+        if let Err(e) = std::fs::write(&json_path, json) {
+            die(&format!("write {}: {e}", json_path.display()));
+        }
+        if let Err(e) = std::fs::write(&md_path, &md) {
+            die(&format!("write {}: {e}", md_path.display()));
+        }
+        print!("{md}");
+        println!(
+            "harness --row-flip-census: DONE — {} suite(s); wrote {} + {}",
+            out.suites.len(),
+            json_path.display(),
+            md_path.display()
+        );
+        return;
+    }
     if null_probe {
         let nopts = runner::NullProbeOptions {
             k_set: if null_k.is_empty() {

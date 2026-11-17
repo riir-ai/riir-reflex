@@ -99,6 +99,14 @@ pub mod label_heads;
 #[cfg(feature = "nb_scope")]
 pub mod nb_scope;
 
+/// Issue 121 A1 — the BM25 lexical floor scorer (report-only; std-only,
+/// no deps — the floor baseline the corpus-is-the-model engine must beat).
+/// Ungated by design: the lane's cost is one index build + one search per
+/// question, and a report-only floor behind a feature flag would just hide
+/// the violations it exists to find. See the module doc for the pinned
+/// constants and the A-pre redundancy law.
+pub mod bm25_floor;
+
 /// Option-conditioned count tables (issue 038 T7b): one table per
 /// (question id, option key), fitted from the gold events — the typed
 /// suite's state-side signal, which the domain-level tables can never arm

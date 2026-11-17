@@ -593,6 +593,7 @@ pub(super) fn assemble_laya_lane_result(
         ridge_selection: None,
         genome_selection: None, // the laya lanes run no joint selection
         transductive: None,
+        bm25_floor: None,
         confusion: None, // the pair probe is the modelless lane's instrument
         items,
         pair_head_ab: None,

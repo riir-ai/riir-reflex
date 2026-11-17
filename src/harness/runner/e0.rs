@@ -232,6 +232,7 @@ fn e0_suite(spec: &SuiteSpec, dir: &Path, kn_route: bool) -> Result<E0Suite, Str
         pick_latch: None,
         // the probes stay census-off (the measurement lane is the main lane)
         route_census: false,
+        bm25_floor: false,
         suite: &prepared.suite,
         train: &prepared.train,
         state_strs: &prepared.state_strs,

@@ -802,6 +802,7 @@ fn routing_probe_suite<const N: usize>(
         pick_latch: None,
         // the probes stay census-off (the measurement lane is the main lane)
         route_census: false,
+        bm25_floor: false,
         suite: &prepared.suite,
         train: &prepared.train,
         state_strs: &prepared.state_strs,

@@ -39,9 +39,7 @@ use serde::Serialize;
 
 use super::perm_probe::stride_indices;
 use super::*;
-use crate::harness::context_transform::{
-    agreement_of, transformed_case, CoreClass, Family,
-};
+use crate::harness::context_transform::{CoreClass, Family, agreement_of, transformed_case};
 use crate::harness::permutation::{ChoiceOracle, OrderingAnswer};
 
 /// Transforms per slot per family, INCLUDING the identity (the decision
@@ -170,7 +168,10 @@ impl<const N: usize> CtxOracle<'_, N> {
     /// leaves the slot in the scratch): `(abstained, cause)`. `None` = no
     /// slot (a decide bug).
     fn last_fused_verdict(&self) -> Option<(bool, &'static str)> {
-        self.sc.slots.last().map(|s| (s.abstained, s.cause.as_str()))
+        self.sc
+            .slots
+            .last()
+            .map(|s| (s.abstained, s.cause.as_str()))
     }
 }
 
@@ -389,7 +390,11 @@ fn decide_slot<const N: usize>(
     skips: &mut Vec<String>,
 ) -> Result<Option<(CtxCaseFacts, bool)>, String> {
     let q = &case.questions[qi];
-    let n_options = q.criteria.as_object().map(serde_json::Map::len).unwrap_or(0);
+    let n_options = q
+        .criteria
+        .as_object()
+        .map(serde_json::Map::len)
+        .unwrap_or(0);
     let gold_idx = case.gold.get(qi).map(|g| g.idx).unwrap_or(0);
     // The single-question reduction (the perm probe's wrapping — one
     // question per decide, gold rides along).
@@ -505,6 +510,7 @@ fn ctx_suite<const N: usize>(
         drafter_fix: crate::engine::DrafterFix::Off,
         pick_latch: None,
         route_census: false,
+        bm25_floor: false,
         suite: &prepared.suite,
         train: &prepared.train,
         state_strs: &prepared.state_strs,
@@ -556,7 +562,11 @@ fn ctx_suite<const N: usize>(
             default_cfg.nb_scale
         ));
     }
-    let cfg = EngineConfig { score_threshold, distance_threshold, ..default_cfg };
+    let cfg = EngineConfig {
+        score_threshold,
+        distance_threshold,
+        ..default_cfg
+    };
     let (mut engine, fallbacks) = build_engine_with::<N>(
         spec.name,
         &prepared.train,
@@ -576,7 +586,10 @@ fn ctx_suite<const N: usize>(
     }
     let mut sc = Scratch::<EMBED_DIM>::new();
     sc.prepare(1);
-    let mut oracle = CtxOracle { engine: &mut engine, sc };
+    let mut oracle = CtxOracle {
+        engine: &mut engine,
+        sc,
+    };
     let mut skipped: Vec<String> = Vec::new();
     let mut facts: Vec<CtxCaseFacts> = Vec::with_capacity(slots.len());
     let mut g1_ok = true;
@@ -598,11 +611,19 @@ fn ctx_suite<const N: usize>(
     for family in [Family::Semantic, Family::Placebo] {
         let rows: Vec<&FamilyRow> = facts
             .iter()
-            .map(|f| if family == Family::Semantic { &f.semantic } else { &f.placebo })
+            .map(|f| {
+                if family == Family::Semantic {
+                    &f.semantic
+                } else {
+                    &f.placebo
+                }
+            })
             .collect();
         let n = rows.len();
         let cnt_at = |class: CoreClass, k: usize| {
-            rows.iter().filter(|r| agreement_of(&r.picks, k).class == class).count()
+            rows.iter()
+                .filter(|r| agreement_of(&r.picks, k).class == class)
+                .count()
         };
         let rate_at = |k: usize| {
             if n == 0 {
@@ -635,7 +656,8 @@ fn ctx_suite<const N: usize>(
         // G2a(ii): the seat vs the fused gate at matched coverage — both
         // must answer.
         if let (Some(s), true) = (sem_seat, f.fused_answered) {
-            d.g2a_sem_fused.push((i8::from(s) - i8::from(f.fused_correct)) as f64);
+            d.g2a_sem_fused
+                .push((i8::from(s) - i8::from(f.fused_correct)) as f64);
         }
         // G2b: the channel arm on the fused-answered set — the fused pick
         // withheld (scored 0) when the core is empty; the coverage cost
@@ -653,8 +675,7 @@ fn ctx_suite<const N: usize>(
                     - i8::from(f.fused_correct) as f64,
             );
             d.g2b_channel_plac.push(
-                channel(f.placebo.class_k4 == CoreClass::NoCore)
-                    - i8::from(f.fused_correct) as f64,
+                channel(f.placebo.class_k4 == CoreClass::NoCore) - i8::from(f.fused_correct) as f64,
             );
         }
     }
@@ -702,10 +723,7 @@ fn ctx_suite<const N: usize>(
 /// Run the probe over the requested suites. `Err` = a loud refusal
 /// (missing datasets, a posture drift); per-suite preparation failures
 /// are named exclusions in the record.
-pub fn run_ctx_probe(
-    opts: &RunOptions,
-    copts: &CtxProbeOptions,
-) -> Result<CtxProbeOutput, String> {
+pub fn run_ctx_probe(opts: &RunOptions, copts: &CtxProbeOptions) -> Result<CtxProbeOutput, String> {
     if !opts.datasets_dir.exists() {
         return Err(format!(
             "ctx probe: datasets dir {} is absent — the lane is datasets-required \
@@ -777,7 +795,11 @@ pub fn run_ctx_probe(
             sampled.len(),
             copts.k,
             CTX_K_RUN,
-            if below_floor { " · OPERATOR OVERRIDE (below the floor)" } else { "" },
+            if below_floor {
+                " · OPERATOR OVERRIDE (below the floor)"
+            } else {
+                ""
+            },
         );
         macro_rules! dispatch {
             ($n_lit:literal) => {
@@ -874,20 +896,19 @@ pub fn run_ctx_probe(
 /// The pooled verdict across the run suites' raw deltas.
 fn build_pooled(suites: &[CtxSuiteReport]) -> CtxPooled {
     let pick = |name: &'static str| {
-        let cells: Vec<(&str, &[f64])> =
-            suites.iter().map(|s| (s.suite.as_str(), s.deltas.cell(name))).collect();
+        let cells: Vec<(&str, &[f64])> = suites
+            .iter()
+            .map(|s| (s.suite.as_str(), s.deltas.cell(name)))
+            .collect();
         pooled_suite_delta(&cells)
     };
     let g2a_sem_plac = pick("g2a_sem_plac");
     let g2a_sem_fused = pick("g2a_sem_fused");
     let g2b_channel_sem = pick("g2b_channel_sem");
     let g2b_channel_plac = pick("g2b_channel_plac");
-    let both_positive = |a: &Option<PooledDelta>, b: &Option<PooledDelta>| {
-        matches!((a, b), (Some(x), Some(y)) if x.lb95_pct > 0.0 && y.lb95_pct > 0.0)
-    };
+    let both_positive = |a: &Option<PooledDelta>, b: &Option<PooledDelta>| matches!((a, b), (Some(x), Some(y)) if x.lb95_pct > 0.0 && y.lb95_pct > 0.0);
     let any_positive = |a: &Option<PooledDelta>, b: &Option<PooledDelta>| {
-        a.as_ref().is_some_and(|x| x.lb95_pct > 0.0)
-            || b.as_ref().is_some_and(|y| y.lb95_pct > 0.0)
+        a.as_ref().is_some_and(|x| x.lb95_pct > 0.0) || b.as_ref().is_some_and(|y| y.lb95_pct > 0.0)
     };
     let g2a_pass = both_positive(&g2a_sem_plac, &g2a_sem_fused);
     let g2a_fail = !any_positive(&g2a_sem_plac, &g2a_sem_fused);
@@ -915,8 +936,7 @@ fn build_pooled(suites: &[CtxSuiteReport]) -> CtxPooled {
              plan instead of a seat)"
                 .to_string()
         } else {
-            "NEGATIVE — the empty-core channel shows no placebo-separated lift"
-                .to_string()
+            "NEGATIVE — the empty-core channel shows no placebo-separated lift".to_string()
         },
         g3_fired: g2a_fail,
     }
@@ -959,7 +979,9 @@ pub fn render_ctx_probe_markdown(out: &CtxProbeOutput) -> String {
         },
     ));
     s.push_str("## Family agreement census (K=4 primary; the sweep rungs beside)\n\n");
-    s.push_str("| suite | family | n | unanimous | majority | no-core | no-core@K2 | no-core@K8 |\n");
+    s.push_str(
+        "| suite | family | n | unanimous | majority | no-core | no-core@K2 | no-core@K8 |\n",
+    );
     s.push_str("|---|---|---|---|---|---|---|---|\n");
     for suite in &out.suites {
         for f in &suite.family_stats {
@@ -986,9 +1008,15 @@ pub fn render_ctx_probe_markdown(out: &CtxProbeOutput) -> String {
                 suite.suite,
                 c.cell,
                 c.n,
-                c.mean_pct.map(|v| format!("{v:.2}")).unwrap_or_else(|| "—".into()),
-                c.se_pct.map(|v| format!("{v:.2}")).unwrap_or_else(|| "—".into()),
-                c.lb95_pct.map(|v| format!("{v:.2}")).unwrap_or_else(|| "—".into()),
+                c.mean_pct
+                    .map(|v| format!("{v:.2}"))
+                    .unwrap_or_else(|| "—".into()),
+                c.se_pct
+                    .map(|v| format!("{v:.2}"))
+                    .unwrap_or_else(|| "—".into()),
+                c.lb95_pct
+                    .map(|v| format!("{v:.2}"))
+                    .unwrap_or_else(|| "—".into()),
             ));
         }
     }
@@ -1029,7 +1057,7 @@ pub fn render_ctx_probe_markdown(out: &CtxProbeOutput) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{paired_delta, pooled_suite_delta, lb95};
+    use super::{lb95, paired_delta, pooled_suite_delta};
 
     #[test]
     fn paired_delta_needs_two_cases_and_reads_mean_se() {

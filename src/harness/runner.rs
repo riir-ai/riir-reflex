@@ -259,6 +259,17 @@ pub use risk_target::{
     extract_rows as risk_target_extract_rows, render_markdown as render_risk_target_markdown,
 };
 
+// Issue 121 — the BM25 lexical floor lane (report-only; the scorer lives
+// in `crate::bm25_floor`, this is the harness wiring).
+mod bm25_lane;
+pub use bm25_lane::Bm25FloorReport;
+
+// Issue 121 B1/B2 — the per-row flip census (report-only exclusive mode).
+mod row_flip;
+pub use row_flip::{
+    RowFlipCensusOptions, RowFlipCensusOutput, render_row_flip_census_markdown, run_row_flip_census,
+};
+
 // Issue 108 — the gold-support ceiling probe (report-only, judge seat).
 pub(crate) mod ceiling_probe;
 pub use ceiling_probe::{
@@ -1549,6 +1560,11 @@ pub struct LaneResult {
     /// beside `hard.accuracy`, never inside it. None unless the count
     /// tables are armed on this row.
     pub transductive: Option<TransductiveReport>,
+    /// Issue 121 — the BM25 lexical floor row (report-only, additive wire;
+    /// skip-when-None so a lever-off run serializes nothing). A suite where
+    /// the modelless engine scores UNDER this floor is a corpus-defect
+    /// finding (issue 121 A2), never an auto-fix.
+    pub bm25_floor: Option<bm25_lane::Bm25FloorReport>,
     /// Top-K categorical (gold → pred) confusion pairs, forced raw eval
     /// (modelless only; Issue 013 lever-3 probe instrumentation — report-
     /// only, never a gate). None on the laya lanes.
@@ -3401,6 +3417,10 @@ struct ModellessInput<'a> {
     /// disagreements stay 0 there by construction).
     #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
     pub route_census: bool,
+    /// Issue 121 (`--bm25-floor`): the BM25 lexical floor pass (report-
+    /// only) — the floor row lands beside the modelless row; the A-pre
+    /// redundancy comparators ride whatever selection levers also ran.
+    pub bm25_floor: bool,
 }
 
 /// The cal-slice cap-selection measurement (Issue 013 lever-1 protocol
@@ -4858,6 +4878,20 @@ fn run_modelless<const N: usize>(
         (),
     )?;
 
+    // Issue 121 — the BM25 lexical floor pass (report-only; `--bm25-floor`).
+    // Here, AFTER the selection levers resolved (the A-pre comparators ride
+    // their rows) and BEFORE the LaneResult literal consumes the selection
+    // values by move. The ridge comparator exists only behind nb_ridge.
+    let bm25_floor = if inp.bm25_floor {
+        #[cfg(feature = "nb_ridge")]
+        let floor = bm25_lane::bm25_floor_pass(inp, nb_selected.as_ref(), ridge_selected.as_ref());
+        #[cfg(not(feature = "nb_ridge"))]
+        let floor = bm25_lane::bm25_floor_pass(inp, nb_selected.as_ref(), ());
+        Some(floor?)
+    } else {
+        None
+    };
+
     let cap_source = if selection.is_some() {
         "cal-slice selection (stratified slice; corpora exclude the selection docs)"
     } else if spec.synthetic.is_some() || spec.corpus_cap_per_label == usize::MAX {
@@ -4957,6 +4991,7 @@ fn run_modelless<const N: usize>(
             ridge_selection: ridge_selected,
             genome_selection: genome_selected,
             transductive,
+            bm25_floor,
             confusion: Some(confusion_rows(&raw_eval, &suite.cases, CONFUSION_TOP)),
             items,
             pair_head_ab: if inp.pair_head_ab {
@@ -6244,6 +6279,9 @@ pub mod seat {
             // lane; the arena's manifest posture stays untouched).
             pick_latch: None,
             route_census: false,
+            // Issue 121: the seat never arms the floor lane (the arena's
+            // face is the manifest posture; the floor is a harness report).
+            bm25_floor: false,
             suite: &s.suite,
             train: &s.train,
             state_strs: &s.state_strs,
@@ -6683,6 +6721,9 @@ pub struct RunOptions {
     /// default (byte-identical run, no counters paid).
     #[cfg_attr(not(feature = "pick_latch"), allow(dead_code))]
     pub route_census: bool,
+    /// Issue 121 (`--bm25-floor`): the BM25 lexical floor pass (report-
+    /// only; the row rides every modelless lane result this run).
+    pub bm25_floor: bool,
     /// Issue 111 T1/T2 (`--collective-worth`): the collective-worth probe
     /// — agreement-on-error lane pairs + the size-aware committee verdict
     /// over the cal slice, serialized into the worthiness verdict.
@@ -7073,6 +7114,9 @@ impl RunOptions {
             // Issue 116 — the flip census is OFF by default (report-only
             // when armed; `--route-census`).
             route_census: false,
+            // Issue 121 — the BM25 floor lane is OFF by default
+            // (report-only; `--bm25-floor` arms it).
+            bm25_floor: false,
             // Issue 111 T1/T2 — the collective-worth probe is OFF by
             // default (report-only; needs `--cascade --cascade-worthiness`;
             // `--collective-worth` arms it).

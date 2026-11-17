@@ -25,4 +25,5 @@ Why: the incumbent gate predicts "cheap lane unsure", which is not "escalation w
 - No new capture lanes if the Bench 195 lane still runs — reuse it.
 - If the corpus is label-degenerate in the δ sense (e.g. escalations almost never flip the outcome), that IS the honest no-signal verdict (T4), not a reason to re-sweep thresholds until something moves.
 
-Unclaimed — no lease line yet. Whoever picks this up appends the `**Claimed:** <session>, <epoch>, expires <ISO-UTC>` line under the Status line per the house rules.
+**Claimed:** zed-amo-i122escdelta@amo, 1794936100, expires 2026-11-19T18:00:00+00:00
+(scope: T1–T6 — the fit machinery rides the incumbent `gate_fit_calibrated` seams; T3's fresh disjoint test capture is the only GPU-side leg, ~capture-lane runtime)

@@ -26,8 +26,8 @@ pub mod item_dump;
 // permutation application, label-space mapping, spread math, the ≤ 2 pt
 // gate, and the canary. Ungated + pure; the lanes live in the runner half
 // (`runner/perm_probe.rs`) behind the `ChoiceOracle` seam.
-pub mod permutation;
 pub mod context_transform;
+pub mod permutation;
 // riir-train 657 R8 — the label-PERMUTATION accuracy probe (pure core): the
 // seeded Sattolo derangement over a suite's option-key alphabet, the
 // key-renaming case builders, and the corpus relabel half. Ungated + pure;

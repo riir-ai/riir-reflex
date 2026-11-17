@@ -5229,12 +5229,26 @@ pub(crate) fn jdi_row_identity_hash(suite: &str, row: &Value) -> u64 {
 
 /// [`rows_of`] at crate visibility — the val_cal_carve helper (runner.rs)
 /// consumes the same envelope the suite builders do.
+#[cfg_attr(
+    not(feature = "modelless"),
+    allow(
+        dead_code,
+        reason = "the no-defaults posture compiles no in-crate caller — the consumer is the seat's val_cal_carve, whose own call chain runs through the modelless-gated posture internals; the helpers stay for the external seat consumer (riir-rethink esc_mammoth_items_fit) at the crate-visibility law"
+    )
+)]
 pub(crate) fn rows_of_pub(file: &Value) -> Vec<&Value> {
     rows_of(file)
 }
 
 /// [`jdi_row_identity_hash`] at crate visibility — the val_cal_carve helper
 /// re-derives the sample order to carve the held-out cal front.
+#[cfg_attr(
+    not(feature = "modelless"),
+    allow(
+        dead_code,
+        reason = "the no-defaults posture compiles no in-crate caller — the consumer is the seat's val_cal_carve, whose own call chain runs through the modelless-gated posture internals; the helpers stay for the external seat consumer (riir-rethink esc_mammoth_items_fit) at the crate-visibility law"
+    )
+)]
 pub(crate) fn jdi_row_identity_hash_pub(suite: &str, row: &Value) -> u64 {
     jdi_row_identity_hash(suite, row)
 }
@@ -5248,12 +5262,26 @@ pub(crate) fn jdi_row_identity_hash_pub(suite: &str, row: &Value) -> u64 {
 /// never use the JDI hash for the overlap guard (a JDI suite's full-row
 /// bytes and its identity field agree TODAY, but the guard must not
 /// depend on that coincidence).
+#[cfg_attr(
+    not(feature = "modelless"),
+    allow(
+        dead_code,
+        reason = "the no-defaults posture compiles no in-crate caller — the consumer is the seat's val_cal_carve, whose own call chain runs through the modelless-gated posture internals; the helpers stay for the external seat consumer (riir-rethink esc_mammoth_items_fit) at the crate-visibility law"
+    )
+)]
 pub(crate) fn eval_row_identity_hash(row: &Value) -> u64 {
     house_fold(&serde_json::to_string(row).unwrap_or_else(|_| row.to_string()))
 }
 
 /// [`wrap_rows`] at crate visibility — the val_cal_carve helper re-wraps
 /// its carved cal front into the envelope shape the builders consume.
+#[cfg_attr(
+    not(feature = "modelless"),
+    allow(
+        dead_code,
+        reason = "the no-defaults posture compiles no in-crate caller — the consumer is the seat's val_cal_carve, whose own call chain runs through the modelless-gated posture internals; the helpers stay for the external seat consumer (riir-rethink esc_mammoth_items_fit) at the crate-visibility law"
+    )
+)]
 pub(crate) fn wrap_rows_pub(rows: &[&Value], idxs: &[usize], features: Option<&Value>) -> Value {
     wrap_rows(rows, idxs, features)
 }

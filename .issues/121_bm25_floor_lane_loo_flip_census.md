@@ -1,9 +1,10 @@
 # Issue 121: Lexical floor lane + per-row flip census — the WSP paper's two memory-quality instruments (report-only)
 
-> **Status:** Open — claimed (this lane executes the full one-session scope: A1 + A-pre + B1/B2; A2 only if the floor survives A-pre)
+> **Status:** Open — A1 + A-pre/A2 wire + B1/B2 LANDED (`125a11c`+`041a8f4`+`777132e`, guard PASSED 11/11, smoke cells ran); the standing-sweep bench record remains (A3 adjudicates on it)
 > **Source:** katgpt-rs [Research 679](../katgpt-rs/.research/679_WSP_No_Transformers_Associative_Memory.md) — Ok & Lee, "Weight-Space Programming Doesn't Need Transformers" (alphaXiv `2611.weight-space-programming-associative-memory`, 2026-11-17): (a) most written Transformers score BELOW plain BM25 over the writer's own text while sparse-table models score above — the empirical signature of dense-key interference; (b) deleting one written row flips 0.5–1.8 answers (sparse) vs 4.8+ (dense) — interference as a measured, banded, per-row number.
-**Claimed:** zed-amo-i121floor@amo, 1794936000, expires 2026-11-19T17:30:00+00:00
-(scope: T1–T4 — A1 scorer + A-pre redundancy cell + B1/B2 census; A2 conditional on A-pre. Deferred behind i122's capture runtime: this lane's B1 census replay rides the same harness window; A1/A-pre are CPU-only and start immediately)
+**Lease closed:** zed-amo-i121floor@amo, 1794936000, claimed 2026-11-17T17:20Z, closed 2026-11-17 in-session — the lane landed same-session (commits above); the standing-sweep RECORD remains (claim record: zed-amo-i121floor@amo, epoch 1794936000, was expires 2026-11-19T17:30:00+00:00)
+**Claimed:** zed-amo-i121floor@amo, 1794940000, expires 2026-11-19T17:30:00+00:00
+(remaining scope: the standing-sweep bench record — the full harness families under `--bm25-floor --nb-select --ridge-select`, the `.benchmarks/NNN` record with PROVENANCE, then A3; the smoke cells are not the record)
 
 ## Why
 

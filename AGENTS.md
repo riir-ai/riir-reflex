@@ -363,10 +363,19 @@ declines perf edits under `benches/` — a bench file's numbers ARE its artifact
   fail-loud (unreadable = exit 2); Windows load is a disclosed `win-est`
   (Win32_Processor median-of-3 busy-core estimate — MSYS2's `/proc/loadavg`
   is a stub); powermode/settle/canary are macOS-only axes, disclosed n/a off
-  macOS. On a Windows box the sibling gate is
+  macOS. **ANE activity is an axis too (Issue 123, 2026-11-18):** a concurrent
+  Neural-Engine consumer skews GPU numbers 3–45% class with no GPU-side and
+  no pmset signal, so the gate probes it — the unsudo'd `aned` CPU-delta proxy
+  (refuse at ≥ one full CPU-second of daemon work across `ANE_PROBE_SECS`,
+  default 3 s; any positive delta warns), the real `powermetrics --samplers
+  ane` read when passwordless sudo exists, and a LOUD `ane=unknown` when the
+  signal cannot be read — never a silent pass. League/GOAT cells keep the
+  GPU-exclusivity check (`ps aux | grep`) AND an idle-`aned` window; numbers
+  stay interleaved-A/B (anemll's thermal datum corroborates the settle
+  discipline). On a Windows box the sibling gate is
   `scripts/bench_preflight.ps1` (Issue 065 T3(b)); `box_state::capture()`
-  stamps the same verdict in-process, so 4090-hosted harness runs are never
-  UNJUDGED.
+  stamps the same verdict in-process (Windows records `ane=na` — no Apple
+  ANE axis there), so 4090-hosted harness runs are never UNJUDGED.
 
 ## Documentation Shape
 

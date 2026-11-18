@@ -72,6 +72,16 @@ pub struct BoxState {
     /// below); `None` = the box could not be read — UNJUDGED.
     pub latency_quotable: Option<bool>,
     pub refusals: Vec<String>,
+    /// Issue 123 — ANE-activity disclosure, macOS arm only. Normalized
+    /// vocabulary: `ok` (the `aned` CPU-delta proxy read idle through the
+    /// window), `warm(+S.CCs)` (positive sub-threshold delta — disclosed),
+    /// `active(+S.CCs)` (daemon serving through the window — the .sh gate
+    /// REFUSES this class; here it is a LOUD disclosure so a record can be
+    /// excluded post-hoc), `unknown` (unreadable — never a silent pass),
+    /// `na` (no Apple ANE axis), `disabled(env)` (explicit opt-out).
+    /// Detection-only: never a refusal axis here (the .sh is the gate);
+    /// Windows/4090 records `na`.
+    pub ane_state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -186,12 +196,91 @@ pub fn capture() -> BoxState {
     }
 }
 
+/// `[DD-]HH:MM:SS.CC` → centiseconds. macOS `ps -o cputime` also prints an
+/// UNBOUNDED-minutes two-field form (`169:40.55` = 101 min 40.55 s — the
+/// minutes field never rolls over), so field count decides the units:
+/// 2 = MM:SS.CC, 3 = HH:MM:SS.CC, 4 = DD-HH:MM:SS.CC.
+pub fn parse_ps_cputime_cs(s: &str) -> Option<u64> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let (days, rest) = match s.split_once('-') {
+        Some((d, r)) => (d.parse::<u64>().ok()?, r),
+        None => (0, s),
+    };
+    let fields: Vec<f64> = rest
+        .split(':')
+        .map(|f| f.trim().parse::<f64>().ok())
+        .collect::<Option<_>>()?;
+    if fields.is_empty() || fields.len() > 3 {
+        return None;
+    }
+    let mut secs = 0.0f64;
+    for f in fields {
+        secs = secs * 60.0f64 + f;
+    }
+    // .round(): the float path (169*60+40.55 = 10180.5499…) must not
+    // truncate a centisecond away.
+    Some((days as f64 * 86_400.0 * 100.0 + secs * 100.0).round() as u64)
+}
+
+/// The ANE-activity proxy (Issue 123): sum `aned` CPU-centiseconds, wait
+/// `window_secs`, sum again — the delta is CURRENT ANE-coordination work
+/// (the daemon idle-burns ~0 CPU), never an uptime fact. `None` when `aned`
+/// is absent or unreadable — UNKNOWN, never a green.
+fn aned_cpu_delta_cs(window_secs: f64) -> Option<i64> {
+    let pids_out = cmd("pgrep", &["-x", "aned"])?;
+    let pids: Vec<&str> = pids_out.split_whitespace().collect();
+    if pids.is_empty() {
+        return None;
+    }
+    let sum = || -> Option<u64> {
+        let mut total = 0u64;
+        for p in &pids {
+            let out = cmd("ps", &["-o", "cputime=", "-p", p])?;
+            total = total.checked_add(parse_ps_cputime_cs(&out)?)?;
+        }
+        Some(total)
+    };
+    let cs1 = sum()?;
+    std::thread::sleep(std::time::Duration::from_secs_f64(window_secs.max(0.0)));
+    let cs2 = sum()?;
+    Some(cs2 as i64 - cs1 as i64)
+}
+
+/// Issue 123: classify the delta. `ANE_REFUSE_CS`'s sibling bar: a full
+/// CPU-second of daemon work in the window is ACTIVE serving (the .sh
+/// refuses; here disclosed). Sub-threshold positive = warm.
+fn classify_ane(delta_cs: i64, window_secs: f64) -> String {
+    // Mirror the .sh bar: ANE_REFUSE_CS=100 at its 3 s window → the ratio
+    // 100/3 per second, rounded, and ACTIVE at `>= bar` exactly as the shell
+    // gate fires.
+    let refuse_cs = (window_secs.max(1.0) * 100.0 / 3.0).round() as i64;
+    let fmt = |cs: i64| format!("+{}.{:02}s", cs / 100, (cs % 100).abs());
+    if delta_cs >= refuse_cs {
+        format!("active({})", fmt(delta_cs))
+    } else if delta_cs > 0 {
+        format!("warm({})", fmt(delta_cs))
+    } else {
+        "ok".to_string()
+    }
+}
+
 fn capture_macos() -> BoxState {
     let power = cmd("pmset", &["-g", "ps"]).and_then(|s| parse_power_source(&s));
     let power_mode = cmd("pmset", &["-g"]).and_then(|s| parse_power_mode(&s));
     let load_1m = cmd("sysctl", &["-n", "vm.loadavg"]).and_then(|s| parse_loadavg(&s));
     let swap_used_mb = cmd("sysctl", &["-n", "vm.swapusage"]).and_then(|s| parse_swap_used_mb(&s));
     let (latency_quotable, refusals) = judge(power.as_deref(), power_mode.as_deref(), load_1m);
+    // Issue 123: 1 s window (capture stamps fire twice per run — the .sh's
+    // 3 s gate window is the stricter human gate; this is the record stamp).
+    let ane_state = match probe_secs_from_env() {
+        Some(0.0) => Some("disabled(env)".to_string()),
+        Some(secs) => aned_cpu_delta_cs(secs).map(|d| classify_ane(d, secs)),
+        None => None,
+    }
+    .or(Some("unknown".to_string()));
     BoxState {
         power,
         power_mode,
@@ -202,7 +291,18 @@ fn capture_macos() -> BoxState {
         gpu_mem_mib: None,
         latency_quotable,
         refusals,
+        ane_state,
     }
+}
+
+fn probe_secs_from_env() -> Option<f64> {
+    // Parse errors arm the UNKNOWN class (None → unknown upstream), a junk
+    // value is never a silent pass.
+    std::env::var("RIIR_BOX_ANE_PROBE_SECS")
+        .ok()
+        .map(|v| v.parse::<f64>().ok())
+        .unwrap_or(Some(1.0))
+        .filter(|s| *s >= 0.0)
 }
 
 /// The ONE PowerShell script the Windows arm runs (a single spawn: CIM
@@ -254,6 +354,9 @@ fn capture_windows() -> BoxState {
         gpu_mem_mib,
         latency_quotable,
         refusals,
+        // No Apple ANE axis on the Windows lane box — disclosed n/a, never
+        // unknown (the axis cannot exist there).
+        ane_state: Some("na".to_string()),
     }
 }
 
@@ -353,9 +456,13 @@ pub fn render_line(span: &BoxStateSpan) -> String {
             b.swap_used_mb
                 .map_or("?".to_string(), |s| format!("{s:.0}")),
         );
-        match (b.gpu_util_pct, b.gpu_mem_mib) {
+        let base = match (b.gpu_util_pct, b.gpu_mem_mib) {
             (Some(u), Some(m)) => format!("{base} gpu={u:.0}%/{m:.0}MiB"),
             _ => base,
+        };
+        match b.ane_state.as_deref() {
+            Some(a) => format!("{base} ane={a}"),
+            None => base,
         }
     };
     let verdict = match span.latency_quotable() {
@@ -535,6 +642,7 @@ mod tests {
             gpu_mem_mib: None,
             latency_quotable: Some(true),
             refusals: vec![],
+            ane_state: Some("ok".into()),
         };
         let bad = BoxState {
             latency_quotable: Some(false),
@@ -562,5 +670,36 @@ mod tests {
         nvidia.gpu_mem_mib = Some(586.0);
         assert!(render_line(&s(&nvidia, &nvidia)).contains("gpu=19%/586MiB"));
         assert!(!render_line(&s(&ok, &ok)).contains("gpu="));
+        // Issue 123: the ane disclosure rides the line the same way.
+        let mut busy = ok.clone();
+        busy.ane_state = Some("active(+1.42s)".into());
+        assert!(render_line(&s(&busy, &busy)).contains("ane=active(+1.42s)"));
+    }
+
+    #[test]
+    fn parses_ps_cputime_all_three_field_shapes() {
+        // The live shapes: unbounded-minutes MM:SS.CC (launchd at 16 days
+        // reads `169:40.55`), HH:MM:SS.CC, and DD-HH:MM:SS.CC.
+        assert_eq!(parse_ps_cputime_cs("169:40.55"), Some(1_018_055));
+        assert_eq!(parse_ps_cputime_cs("0:25.45"), Some(2_545));
+        assert_eq!(parse_ps_cputime_cs("12:34.56"), Some(75_456));
+        assert_eq!(parse_ps_cputime_cs("2:01:02.03"), Some(726_203));
+        assert_eq!(parse_ps_cputime_cs("3-02:11:54.22"), Some(26_711_422));
+        assert_eq!(parse_ps_cputime_cs(""), None);
+        assert_eq!(parse_ps_cputime_cs("junk"), None);
+        assert_eq!(parse_ps_cputime_cs("9:99.99-9"), None);
+    }
+
+    #[test]
+    fn classifies_ane_deltas_on_the_refuse_cs_bar() {
+        // Mirror the .sh: bar = round(window × 100/3) cs, ACTIVE at >= bar.
+        // 1 s window → bar 33; 3 s window → bar 100 (the .sh's literal).
+        assert_eq!(classify_ane(0, 1.0), "ok");
+        assert_eq!(classify_ane(32, 1.0), "warm(+0.32s)");
+        assert_eq!(classify_ane(33, 1.0), "active(+0.33s)");
+        assert_eq!(classify_ane(142, 1.0), "active(+1.42s)");
+        assert_eq!(classify_ane(99, 3.0), "warm(+0.99s)");
+        assert_eq!(classify_ane(100, 3.0), "active(+1.00s)");
+        assert_eq!(classify_ane(0, 3.0), "ok");
     }
 }

@@ -52,6 +52,13 @@ CANARY_REF_US="${CANARY_REF_US-141}"
 CANARY_REF_POWERMODE=2
 CANARY_TOL_PCT="${CANARY_TOL_PCT:-15}"
 CANARY_RUNS="${CANARY_RUNS:-5}"
+# Issue 123: the ANE-activity window in seconds and the refusal threshold in
+# daemon CPU-centiseconds (ANE_REFUSE_CS=100 = one full CPU-second of aned
+# work across the window — active serving). ANE_PROBE_SECS=0 skips the probe
+# EXPLICITLY (provenance ane=disabled(env)) — a disclosed opt-out, never a
+# silent pass.
+ANE_PROBE_SECS="${ANE_PROBE_SECS:-3}"
+ANE_REFUSE_CS="${ANE_REFUSE_CS:-100}"
 
 fail=0
 note() { printf '%s\n' "$*"; }
@@ -315,6 +322,76 @@ else
     fi
 fi
 
+# ---- 7. ANE activity (macOS-only axis — Issue 123) ------------------------
+# The Neural Engine moves GPU-side numbers 3-45% class under concurrent load
+# (measured: anemll-forge, Research 421) and is invisible to every detector
+# above: the load average reads the CPU, the GPU canary races a sibling only
+# on the GPU, and ANE thermal never appears in pmset. The ONLY documented
+# per-process ANE monitor is `powermetrics --samplers ane` (root); run it
+# only when passwordless sudo exists (sudo -n — never prompts, never in a
+# pty), else fall to the unsudo'd PROXY: `aned` (the ANE system daemon) is
+# launched at boot and idle-burns ~0 CPU, so its CPU-time delta across a
+# short window is current ANE-coordination activity, not an uptime fact.
+# Every unreadable signal stays LOUD (ane=unknown in the provenance) — a
+# silent pass is the defect class this gate exists to kill. Detection
+# posture: the proxy refuses only at ANE_REFUSE_CS (a full CPU-second of
+# daemon work in the window — active serving, measured 3-45% GPU skew),
+# warns on any positive delta, and never refuses on an unreadable signal
+# (that is a DISCLOSURE, the box may simply have no ANE axis).
+ane_state="unknown"
+ane_detail=""
+if [ "$os_name" != "Darwin" ]; then
+    ane_state="na"
+    note "warn ane          n/a on $os_name (Apple ANE axis, disclosed)"
+else
+    ane_pids=$(pgrep -x aned 2>/dev/null || true)
+    if [ -z "$ane_pids" ]; then
+        ane_state="unknown"
+        note "warn ane          UNKNOWN — no aned process found (disclosed, never a pass)"
+    else
+        aned_cs() {
+            # `[DD-]HH:MM:SS.CC` → centiseconds (awk does the float math).
+            total=0
+            for p in $ane_pids; do
+                one=$(ps -o cputime= -p "$p" 2>/dev/null \
+                    | awk -F '[-:]' '
+                        { t = $NF; d = (NF == 4) ? $1 : 0 }
+                        { s = 0; for (i = (NF == 4) ? 2 : 1; i <= NF; i++) s = s * 60 + $i
+                          printf "%d", d * 8640000 + s * 100 }' 2>/dev/null || true)
+                case "$one" in ''|*[!0-9]*) one=0 ;; esac
+                total=$((total + one))
+            done
+            printf '%d' "$total"
+        }
+        cs1=$(aned_cs)
+        sleep "$ANE_PROBE_SECS"
+        cs2=$(aned_cs)
+        delta=$((cs2 - cs1))
+        if [ "$delta" -ge "$ANE_REFUSE_CS" ]; then
+            ane_state="active"
+            refuse "ANE daemon ACTIVE during the probe window (aned +$((delta / 100)).$((delta % 100))s CPU over ${ANE_PROBE_SECS}s) — concurrent ANE work skews GPU numbers 3-45% class with no GPU-side signal; let it finish and re-run"
+        elif [ "$delta" -gt 0 ]; then
+            ane_state="warm"
+            note "warn ane          aned did +$((delta / 100)).$((delta % 100))s CPU over ${ANE_PROBE_SECS}s — sub-threshold, disclosed (proxy, not a power read)"
+        else
+            ane_state="ok"
+            note "ok   ane          idle through the ${ANE_PROBE_SECS}s window (aned CPU delta 0.00s)"
+        fi
+    fi
+    if [ "$ane_state" = "unknown" ] || [ "$ane_state" = "ok" ] || [ "$ane_state" = "warm" ]; then
+        if sudo -n true 2>/dev/null && [ -x /usr/bin/powermetrics ]; then
+            pm_out=$(sudo -n powermetrics -i 100 -n 1 --samplers ane 2>/dev/null \
+                | awk '/ANE power|ANE HW active/{printf "%s ", $0}' || true)
+            if [ -n "$pm_out" ]; then
+                ane_detail="powermetrics[${pm_out% }]"
+                note "info ane          powermetrics read: $pm_out"
+            else
+                note "warn ane          powermetrics ran but printed no ANE row (disclosed)"
+            fi
+        fi
+    fi
+fi
+
 # ---- provenance -----------------------------------------------------------
 if [ "$os_name" = "Darwin" ]; then
     prov="power=$(printf '%s' "$ps_out" | grep -o "'[A-Za-z ]*Power'" | head -1 | tr -d "'")"
@@ -322,7 +399,8 @@ else
     prov="power=$power_state"
 fi
 if [ -n "$canary" ]; then canary_prov="${canary}us/best${canary_n}"; else canary_prov="skipped"; fi
-prov="$prov load=$la${load_src:+($load_src)} swap=${swap:-?}M canary=${canary_prov} powermode=${pmode:-?}(${pmode_name})"
+if [ "$ANE_PROBE_SECS" -eq 0 ]; then ane_state="disabled(env)"; fi
+prov="$prov load=$la${load_src:+($load_src)} swap=${swap:-?}M canary=${canary_prov} powermode=${pmode:-?}(${pmode_name}) ane=${ane_state}${ane_detail:+ $ane_detail}"
 note ""
 note "PROVENANCE: $prov"
 

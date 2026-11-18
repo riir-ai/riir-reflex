@@ -1,6 +1,8 @@
 # Issue 123 — bench_preflight ANE blind spot: Neural Engine activity moves GPU numbers and is invisible to every current detector
 
 **Status:** filed 2026-11-18 (from riir-refine Research 421 — the anemll-forge distill verdict round 2, Claude AGREE session c676122d; unclaimed — no lane assigned)
+**Claimed:** zed-33a4c7a2@amo, 1795011642, expires 2026-11-19T14:00:00Z
+  Lease scope: P0 both halves — the unsudo'd ANE-activity probe in `scripts/bench_preflight.sh` (aned CPU-delta two-sample proxy + the sudo -n powermetrics arm when passwordless sudo exists; every unreadable signal a LOUD ane=UNKNOWN disclosure, never a silent pass) + the same probe in `src/harness/box_state.rs::capture()` (macOS arm; Windows/4090 discloses n/a — no Apple ANE axis there). P1's reflex-side half (the AGENTS.md box-state/league note) rides the same landing; the 4090 bout-runbook row is riir-ai's file — routed, not written here.
 
 ## The finding
 

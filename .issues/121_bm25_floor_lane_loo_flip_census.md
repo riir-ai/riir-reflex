@@ -33,4 +33,4 @@ The harness compares the modelless engine against NB, ridge, GLiNER, CLM, laya a
 
 One session: A1 + A-pre + B1/B2 (A2 only if the floor survives A-pre). If A-pre shows full redundancy AND no violation, item A closes NEGATIVE with the cell recorded; item B ships independently either way. Suite set = the standing harness families; datasets per the standing fetch script.
 
-**Claimed:** zed-b7afc49e@4090, 1795097849, expires 2026-11-20T05:30:00+00:00 (scope: the standing-sweep bench record + A3; RAM-constrained box disclosed in the record provenance)
+**Lease closed:** zed-b7afc49e@4090, claimed 1795097849, closed 2026-11-19T19:1xZ in-session — the standing-sweep RECORD landed (Bench 200, two byte-identical runs, 6 suites) + A3 adjudicated: the floor ADOPTS (both NEGATIVE-close legs fail: A-pre not-redundant — ag_news 0.8875 vs comparators flat 0.7450; violations EXIST — ag_news and semantic_defects engine<bm25, corpus defects filed as issue 126). typed_decisions excluded LOUD (issue 125, gold-schema heterogeneity). The A2 floor row ships report-only as landed; remaining open: the 126 fixes + a fresh two-run record per fixed suite.

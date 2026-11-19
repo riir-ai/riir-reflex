@@ -1,6 +1,7 @@
 # Issue 127 — re-check the laya probes that read `EncodedQuestion.hidden` (its semantics changed upstream)
 
-**Status:** OPEN — filed 2026-11-20 (katgpt-rs-93@amo) from riir-infer Issue 1239; unclaimed.
+**Status:** IN PROGRESS — filed 2026-11-20 (katgpt-rs-93@amo) from riir-infer Issue 1239.
+**Claimed:** katgpt-rs-93@amo, 1795112000, expires 2026-11-22T00:00:00Z
 
 riir-infer Issue 1239 found that `RiirAgent::encode_question` returned `hidden` AFTER the head ran in place, i.e. the head's post-type-emb, post-two-layer residual, not the documented encoder output (max |Δ| 1281.6–1311.8 on english/typed). The fix (riir-infer, same day) makes `hidden` the encoder output, pinned bit-exact on CPU + Metal (`tests/encode_question_hidden_contract.rs`).
 

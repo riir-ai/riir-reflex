@@ -32,3 +32,5 @@ The harness compares the modelless engine against NB, ridge, GLiNER, CLM, laya a
 ## Effort
 
 One session: A1 + A-pre + B1/B2 (A2 only if the floor survives A-pre). If A-pre shows full redundancy AND no violation, item A closes NEGATIVE with the cell recorded; item B ships independently either way. Suite set = the standing harness families; datasets per the standing fetch script.
+
+**Claimed:** zed-b7afc49e@4090, 1795097849, expires 2026-11-20T05:30:00+00:00 (scope: the standing-sweep bench record + A3; RAM-constrained box disclosed in the record provenance)

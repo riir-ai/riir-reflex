@@ -187,7 +187,18 @@ fi
 # the first version printed the transition and left the arithmetic to a
 # reader, who is exactly the person in a hurry to bench.
 if [ "$os_name" = "Darwin" ]; then
-    last=$(pmset -g log 2>/dev/null | grep -E "Using (AC|Batt)" | tail -1 || true)
+    # A TRANSITION is a change between consecutive "Using AC|Batt" entries.
+    # The raw last match is NOT one: macOS re-prints the current source in an
+    # "Assertions Summary" on every idle/display wake, so an always-on-AC
+    # desktop (amo, seal-remake issue 227, 2026-11-19) read a "transition"
+    # minutes after each wake and refused forever. Battery → AC still refuses
+    # for SETTLE_MIN; a log with no change at all falls through to the
+    # current source (the oldest entry is the best bound available).
+    last=$(pmset -g log 2>/dev/null | grep -E "Using (AC|Batt)" | awk '
+        { k = ($0 ~ /Using AC/) ? "AC" : "Batt" }
+        NR == 1 || k != prev { line = $0 }
+        { prev = k }
+        END { if (line != "") print line }' || true)
     if [ -n "$last" ]; then
         last_ts=$(printf '%s' "$last" | cut -c1-19)
         last_kind=$(printf '%s' "$last" | grep -oE "Using (AC|Batt)" | head -1)

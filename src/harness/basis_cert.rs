@@ -564,8 +564,11 @@ fn certify_inner(
             for (j, tv) in t.iter_mut().enumerate() {
                 let s = sig_eigvals[j].sqrt();
                 let mut acc = 0.0;
+                // `build_zca_whitener` keeps the solver's layout: eigenvector
+                // j is COLUMN j (`[i*d + j]`) — reading `[j*d + i]` applied
+                // Vᵀ where V belongs (katgpt-rs Plan 640 probe, 2026-11-19).
                 for (i, uv) in u.iter().enumerate() {
-                    acc += sig_eigvecs[j * d + i] * uv;
+                    acc += sig_eigvecs[i * d + j] * uv;
                 }
                 *tv = s * acc;
             }
@@ -573,7 +576,7 @@ fn certify_inner(
             for (i, vv) in v_raw.iter_mut().enumerate() {
                 let mut acc = 0.0;
                 for (j, tv) in t.iter().enumerate() {
-                    acc += sig_eigvecs[j * d + i] * tv;
+                    acc += sig_eigvecs[i * d + j] * tv;
                 }
                 *vv = acc;
             }

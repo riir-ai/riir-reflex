@@ -1,5 +1,7 @@
 # Bench 139 — basis_split Thm-3 perturbation certificate (reflex Issue 086 T3)
 
+> **SUPERSEDED 2026-11-19 (direction provenance):** the T3 directions were derived from a transposed basis (katgpt-rs `9cae0610f` + reflex `33ddc0b`). The re-measure in [Bench 199](../199_basis_cert_remeasure_post_eigvec_fix/RECORD.md) reproduces every verdict and number at displayed precision.
+
 **Date:** 2026-10-12 · **Host:** shikuwa (4090 box, Windows) · **Reflex sha:** `1d396d1` + the T3 lane in this commit
 **Katgpt-core:** origin/develop `3de81792e` (the 931-fixed `basis_split`) — this box's `../katgpt-rs` checkout was 21 behind with a sibling lane's WIP, so the run rode a worktree cluster (`wt-t3-*`); the recorded `git_sha` (`1d396d1`) is the reflex HEAD, the katgpt pin is disclosed here.
 **Suites:** typed_decisions · banking77 · ag_news · emotion (bench 138's four, for continuity)

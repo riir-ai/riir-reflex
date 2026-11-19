@@ -1,5 +1,7 @@
 # Bench 138 — basis_split presentation-subspace certificate, per-suite numbers (reflex Issue 086 T2)
 
+> **VOID 2026-11-19 (basis-derived columns):** holdout leakage, agreement residual and rename residual were computed with a transposed eigenvector basis (katgpt-rs `9cae0610f`). Re-measured in [Bench 199](../199_basis_cert_remeasure_post_eigvec_fix/RECORD.md). `verdict`/`k` stand.
+
 **Date:** 2026-10-11T23:17Z · **Host:** m3 · **Reflex sha:** `e3b8d72` (T1 landed) + the T2 rename arm in this commit
 **Suites:** typed_decisions · banking77 · ag_news · emotion (the issue's three minimum + emotion for continuity)
 **Command:**

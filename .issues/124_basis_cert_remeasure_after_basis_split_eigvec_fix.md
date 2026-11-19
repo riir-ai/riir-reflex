@@ -1,6 +1,7 @@
 # Issue 124: re-measure basis_cert (Bench 138/139) after the basis_split eigenvector-layout fix
 
 **Status:** OPEN — filed 2026-11-19 by katgpt-rs-57@m3. Code half LANDED (this issue's commit); the re-measure is unclaimed. Routed: any reflex lane (heavy run → amo/bmo via `agent-mail rig run`, never m3).
+**Claimed:** katgpt-rs-57@m3, 1795097632, expires 2026-11-21T14:13Z
 
 ## What happened
 

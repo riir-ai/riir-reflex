@@ -1,0 +1,187 @@
+suites: banking77, emotion, ag_news (2000 rows total) | k arms [256, 64] | pinned bars: estimator_band=2%, null/2k floor=0.95, max_gain_share=0.05, perm_seed=0x106e978
+
+== banking77: 1200 questions ==
+  laya forwards: 1200 in 23.785s (common cost, once per suite)
+
+  ── k=256 arm ──
+   modelless: all 31 labels have ≥2 members
+   modelless: ρ=0.0871  (G=31, k=256, n=1200)
+        laya: all 31 labels have ≥2 members
+        laya: ρ=0.0993  (G=31, k=256, n=1200)
+  gate: floor=2k(1−min ρ)=467.4129  RMS²(R=I)=514.5998  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=196.5397 (artifact-prone); HELD-OUT post=449.1359; null: in-sample=229.1466 held-out=510.3006
+  bound statement: estimate VALID (n_fit=600 vs k=256, null/2k=0.997); floor=467.4129 > held-out post beyond the estimator band ⇒ VIOLATED — investigate
+  held-out gain: 65.4639 (12.7% of identity) ⇒ permitted and the rotation gained held-out — the floor was right to permit
+    split-seed   0: held-out post=449.1359 floor=467.4129 null/2k=0.997 ⇒ VIOLATED
+    split-seed   1: held-out post=450.4376 floor=467.4129 null/2k=0.999 ⇒ VIOLATED
+    split-seed   2: held-out post=447.8765 floor=467.4129 null/2k=1.000 ⇒ VIOLATED
+    split-seed   3: held-out post=446.7293 floor=467.4129 null/2k=0.989 ⇒ VIOLATED
+    split-seed   4: held-out post=441.1975 floor=467.4129 null/2k=0.991 ⇒ VIOLATED
+    split-seed   5: held-out post=452.0098 floor=467.4129 null/2k=1.008 ⇒ VIOLATED
+    split-seed   6: held-out post=451.8775 floor=467.4129 null/2k=1.005 ⇒ VIOLATED
+    split-seed   7: held-out post=452.0555 floor=467.4129 null/2k=1.013 ⇒ VIOLATED
+    split-seed   8: held-out post=448.5438 floor=467.4129 null/2k=1.004 ⇒ VIOLATED
+    split-seed   9: held-out post=449.3899 floor=467.4129 null/2k=0.986 ⇒ VIOLATED
+    split-seed  10: held-out post=449.3528 floor=467.4129 null/2k=0.991 ⇒ VIOLATED
+    split-seed  11: held-out post=442.8138 floor=467.4129 null/2k=1.000 ⇒ VIOLATED
+    split-seed  12: held-out post=443.3677 floor=467.4129 null/2k=1.004 ⇒ VIOLATED
+    split-seed  13: held-out post=446.8692 floor=467.4129 null/2k=0.997 ⇒ VIOLATED
+    split-seed  14: held-out post=442.4248 floor=467.4129 null/2k=0.991 ⇒ VIOLATED
+    split-seed  15: held-out post=447.7551 floor=467.4129 null/2k=1.003 ⇒ VIOLATED
+    split-seed  16: held-out post=449.4088 floor=467.4129 null/2k=0.999 ⇒ VIOLATED
+  split-seed tally (k=256): 17 VIOLATED / 17 valid of 17 seeds
+  ledger: ρ+whiten 0.253s | solves (fit+null) 0.290s | laya forwards: common cost (see suite header)
+
+  ── k=64 arm ──
+   modelless: all 31 labels have ≥2 members
+   modelless: ρ=0.2027  (G=31, k=64, n=1200)
+        laya: all 31 labels have ≥2 members
+        laya: ρ=0.2893  (G=31, k=64, n=1200)
+  gate: floor=2k(1−min ρ)=102.0516  RMS²(R=I)=128.1720  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=78.1916 (artifact-prone); HELD-OUT post=106.2249; null: in-sample=92.2911 held-out=128.4213
+  bound statement: estimate VALID (n_fit=600 vs k=64, null/2k=1.003); floor=102.0516 ≤ held-out post (within the 2% estimator band) ⇒ HELD
+  held-out gain: 21.9471 (17.1% of identity) ⇒ permitted and the rotation gained held-out — the floor was right to permit
+    split-seed   0: held-out post=106.2249 floor=102.0516 null/2k=1.003 ⇒ HELD
+    split-seed   1: held-out post=105.2388 floor=102.0516 null/2k=1.004 ⇒ HELD
+    split-seed   2: held-out post=104.2622 floor=102.0516 null/2k=0.997 ⇒ HELD
+    split-seed   3: held-out post=104.5342 floor=102.0516 null/2k=0.993 ⇒ HELD
+    split-seed   4: held-out post=104.2858 floor=102.0516 null/2k=0.994 ⇒ HELD
+    split-seed   5: held-out post=105.2200 floor=102.0516 null/2k=1.007 ⇒ HELD
+    split-seed   6: held-out post=105.5030 floor=102.0516 null/2k=1.007 ⇒ HELD
+    split-seed   7: held-out post=106.9773 floor=102.0516 null/2k=1.021 ⇒ HELD
+    split-seed   8: held-out post=105.0120 floor=102.0516 null/2k=1.004 ⇒ HELD
+    split-seed   9: held-out post=105.4046 floor=102.0516 null/2k=0.991 ⇒ HELD
+    split-seed  10: held-out post=105.8422 floor=102.0516 null/2k=1.003 ⇒ HELD
+    split-seed  11: held-out post=102.9460 floor=102.0516 null/2k=1.004 ⇒ HELD
+    split-seed  12: held-out post=103.6962 floor=102.0516 null/2k=1.007 ⇒ HELD
+    split-seed  13: held-out post=104.1623 floor=102.0516 null/2k=1.000 ⇒ HELD
+    split-seed  14: held-out post=104.7462 floor=102.0516 null/2k=0.993 ⇒ HELD
+    split-seed  15: held-out post=104.2285 floor=102.0516 null/2k=1.004 ⇒ HELD
+    split-seed  16: held-out post=105.5810 floor=102.0516 null/2k=0.993 ⇒ HELD
+  split-seed tally (k=64): 0 VIOLATED / 17 valid of 17 seeds
+  ledger: ρ+whiten 0.005s | solves (fit+null) 0.004s | laya forwards: common cost (see suite header)
+
+== emotion: 400 questions ==
+  laya forwards: 400 in 3.696s (common cost, once per suite)
+
+  ── k=256 arm ──
+   modelless: all 6 labels have ≥2 members
+   modelless: ρ=0.0159  (G=6, k=256, n=400)
+        laya: all 6 labels have ≥2 members
+        laya: ρ=0.0168  (G=6, k=256, n=400)
+  gate: floor=2k(1−min ρ)=503.8426  RMS²(R=I)=509.4941  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=50.4399 (artifact-prone); HELD-OUT post=396.9171; null: in-sample=50.3977 held-out=400.3380
+  bound statement: estimate NOT VALID — degenerate fit or null off 2k; NO bound statement (n_fit=200 vs k=256, null/2k=0.782); no comparison drawn
+  held-out gain: 112.5770 (22.1% of identity) ⇒ permitted and the rotation gained held-out — the floor was right to permit
+    split-seed   0: held-out post=396.9171 floor=503.8426 null/2k=0.782 ⇒ NOT VALID
+    split-seed   1: held-out post=395.6359 floor=503.8426 null/2k=0.782 ⇒ NOT VALID
+    split-seed   2: held-out post=395.2658 floor=503.8426 null/2k=0.780 ⇒ NOT VALID
+    split-seed   3: held-out post=392.4818 floor=503.8426 null/2k=0.775 ⇒ NOT VALID
+    split-seed   4: held-out post=401.1879 floor=503.8426 null/2k=0.781 ⇒ NOT VALID
+    split-seed   5: held-out post=395.4607 floor=503.8426 null/2k=0.787 ⇒ NOT VALID
+    split-seed   6: held-out post=393.9333 floor=503.8426 null/2k=0.784 ⇒ NOT VALID
+    split-seed   7: held-out post=397.0696 floor=503.8426 null/2k=0.782 ⇒ NOT VALID
+    split-seed   8: held-out post=394.8832 floor=503.8426 null/2k=0.779 ⇒ NOT VALID
+    split-seed   9: held-out post=390.6703 floor=503.8426 null/2k=0.777 ⇒ NOT VALID
+    split-seed  10: held-out post=394.6140 floor=503.8426 null/2k=0.777 ⇒ NOT VALID
+    split-seed  11: held-out post=390.8551 floor=503.8426 null/2k=0.781 ⇒ NOT VALID
+    split-seed  12: held-out post=395.3852 floor=503.8426 null/2k=0.780 ⇒ NOT VALID
+    split-seed  13: held-out post=391.1629 floor=503.8426 null/2k=0.779 ⇒ NOT VALID
+    split-seed  14: held-out post=393.1819 floor=503.8426 null/2k=0.785 ⇒ NOT VALID
+    split-seed  15: held-out post=391.7657 floor=503.8426 null/2k=0.775 ⇒ NOT VALID
+    split-seed  16: held-out post=387.7250 floor=503.8426 null/2k=0.773 ⇒ NOT VALID
+  split-seed tally (k=256): 0 VIOLATED / 0 valid of 17 seeds
+  ledger: ρ+whiten 0.238s | solves (fit+null) 0.196s | laya forwards: common cost (see suite header)
+
+  ── k=64 arm ──
+   modelless: all 6 labels have ≥2 members
+   modelless: ρ=0.0327  (G=6, k=64, n=400)
+        laya: all 6 labels have ≥2 members
+        laya: ρ=0.0433  (G=6, k=64, n=400)
+  gate: floor=2k(1−min ρ)=123.8193  RMS²(R=I)=128.2506  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=63.3791 (artifact-prone); HELD-OUT post=125.7285; null: in-sample=66.5746 held-out=128.9949
+  bound statement: estimate VALID (n_fit=200 vs k=64, null/2k=1.008); floor=123.8193 ≤ held-out post (within the 2% estimator band) ⇒ HELD
+  held-out gain: 2.5221 (2.0% of identity) ⇒ permitted but held-out gain ≤5% — a refusal WOULD have been correct
+    split-seed   0: held-out post=125.7285 floor=123.8193 null/2k=1.008 ⇒ HELD
+    split-seed   1: held-out post=124.0036 floor=123.8193 null/2k=1.002 ⇒ HELD
+    split-seed   2: held-out post=122.4091 floor=123.8193 null/2k=1.014 ⇒ HELD
+    split-seed   3: held-out post=121.2853 floor=123.8193 null/2k=0.997 ⇒ VIOLATED
+    split-seed   4: held-out post=125.1831 floor=123.8193 null/2k=0.997 ⇒ HELD
+    split-seed   5: held-out post=123.4056 floor=123.8193 null/2k=0.994 ⇒ HELD
+    split-seed   6: held-out post=123.3946 floor=123.8193 null/2k=1.028 ⇒ HELD
+    split-seed   7: held-out post=122.8048 floor=123.8193 null/2k=0.988 ⇒ HELD
+    split-seed   8: held-out post=123.8796 floor=123.8193 null/2k=0.995 ⇒ HELD
+    split-seed   9: held-out post=121.8900 floor=123.8193 null/2k=0.989 ⇒ HELD
+    split-seed  10: held-out post=123.5171 floor=123.8193 null/2k=1.010 ⇒ HELD
+    split-seed  11: held-out post=123.0543 floor=123.8193 null/2k=1.003 ⇒ HELD
+    split-seed  12: held-out post=122.8300 floor=123.8193 null/2k=0.990 ⇒ HELD
+    split-seed  13: held-out post=123.6740 floor=123.8193 null/2k=0.990 ⇒ HELD
+    split-seed  14: held-out post=122.8977 floor=123.8193 null/2k=1.004 ⇒ HELD
+    split-seed  15: held-out post=123.0160 floor=123.8193 null/2k=0.987 ⇒ HELD
+    split-seed  16: held-out post=120.7567 floor=123.8193 null/2k=0.993 ⇒ VIOLATED
+  split-seed tally (k=64): 2 VIOLATED / 17 valid of 17 seeds
+  ledger: ρ+whiten 0.002s | solves (fit+null) 0.002s | laya forwards: common cost (see suite header)
+
+== ag_news: 400 questions ==
+  laya forwards: 400 in 4.270s (common cost, once per suite)
+
+  ── k=256 arm ──
+   modelless: all 4 labels have ≥2 members
+   modelless: ρ=0.0099  (G=4, k=256, n=400)
+        laya: all 4 labels have ≥2 members
+        laya: ρ=0.0113  (G=4, k=256, n=400)
+  gate: floor=2k(1−min ρ)=506.9158  RMS²(R=I)=512.1666  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=48.8284 (artifact-prone); HELD-OUT post=397.6696; null: in-sample=50.5894 held-out=404.3832
+  bound statement: estimate NOT VALID — degenerate fit or null off 2k; NO bound statement (n_fit=200 vs k=256, null/2k=0.790); no comparison drawn
+  held-out gain: 114.4970 (22.4% of identity) ⇒ permitted and the rotation gained held-out — the floor was right to permit
+    split-seed   0: held-out post=397.6696 floor=506.9158 null/2k=0.790 ⇒ NOT VALID
+    split-seed   1: held-out post=389.8039 floor=506.9158 null/2k=0.778 ⇒ NOT VALID
+    split-seed   2: held-out post=393.6693 floor=506.9158 null/2k=0.781 ⇒ NOT VALID
+    split-seed   3: held-out post=391.8844 floor=506.9158 null/2k=0.776 ⇒ NOT VALID
+    split-seed   4: held-out post=394.0187 floor=506.9158 null/2k=0.776 ⇒ NOT VALID
+    split-seed   5: held-out post=392.0957 floor=506.9158 null/2k=0.777 ⇒ NOT VALID
+    split-seed   6: held-out post=390.8593 floor=506.9158 null/2k=0.780 ⇒ NOT VALID
+    split-seed   7: held-out post=389.1835 floor=506.9158 null/2k=0.777 ⇒ NOT VALID
+    split-seed   8: held-out post=393.0824 floor=506.9158 null/2k=0.779 ⇒ NOT VALID
+    split-seed   9: held-out post=391.3639 floor=506.9158 null/2k=0.782 ⇒ NOT VALID
+    split-seed  10: held-out post=392.3930 floor=506.9158 null/2k=0.773 ⇒ NOT VALID
+    split-seed  11: held-out post=388.6827 floor=506.9158 null/2k=0.777 ⇒ NOT VALID
+    split-seed  12: held-out post=389.9446 floor=506.9158 null/2k=0.779 ⇒ NOT VALID
+    split-seed  13: held-out post=392.8151 floor=506.9158 null/2k=0.775 ⇒ NOT VALID
+    split-seed  14: held-out post=393.0669 floor=506.9158 null/2k=0.781 ⇒ NOT VALID
+    split-seed  15: held-out post=392.0455 floor=506.9158 null/2k=0.781 ⇒ NOT VALID
+    split-seed  16: held-out post=391.4798 floor=506.9158 null/2k=0.783 ⇒ NOT VALID
+  split-seed tally (k=256): 0 VIOLATED / 0 valid of 17 seeds
+  ledger: ρ+whiten 0.231s | solves (fit+null) 0.195s | laya forwards: common cost (see suite header)
+
+  ── k=64 arm ──
+   modelless: all 4 labels have ≥2 members
+   modelless: ρ=0.0218  (G=4, k=64, n=400)
+        laya: all 4 labels have ≥2 members
+        laya: ρ=0.0399  (G=4, k=64, n=400)
+  gate: floor=2k(1−min ρ)=125.2070  RMS²(R=I)=127.8726  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=63.8367 (artifact-prone); HELD-OUT post=122.8026; null: in-sample=67.7846 held-out=127.3126
+  bound statement: estimate VALID (n_fit=200 vs k=64, null/2k=0.995); floor=125.2070 ≤ held-out post (within the 2% estimator band) ⇒ HELD
+  held-out gain: 5.0701 (4.0% of identity) ⇒ permitted but held-out gain ≤5% — a refusal WOULD have been correct
+    split-seed   0: held-out post=122.8026 floor=125.2070 null/2k=0.995 ⇒ HELD
+    split-seed   1: held-out post=124.5503 floor=125.2070 null/2k=1.019 ⇒ HELD
+    split-seed   2: held-out post=122.3036 floor=125.2070 null/2k=0.999 ⇒ VIOLATED
+    split-seed   3: held-out post=121.1331 floor=125.2070 null/2k=0.998 ⇒ VIOLATED
+    split-seed   4: held-out post=122.6421 floor=125.2070 null/2k=0.999 ⇒ VIOLATED
+    split-seed   5: held-out post=122.5351 floor=125.2070 null/2k=1.010 ⇒ VIOLATED
+    split-seed   6: held-out post=121.9577 floor=125.2070 null/2k=1.009 ⇒ VIOLATED
+    split-seed   7: held-out post=122.6882 floor=125.2070 null/2k=0.999 ⇒ VIOLATED
+    split-seed   8: held-out post=124.6333 floor=125.2070 null/2k=1.007 ⇒ HELD
+    split-seed   9: held-out post=122.7640 floor=125.2070 null/2k=1.012 ⇒ HELD
+    split-seed  10: held-out post=123.3170 floor=125.2070 null/2k=0.989 ⇒ HELD
+    split-seed  11: held-out post=121.5874 floor=125.2070 null/2k=1.011 ⇒ VIOLATED
+    split-seed  12: held-out post=123.6943 floor=125.2070 null/2k=1.010 ⇒ HELD
+    split-seed  13: held-out post=124.2665 floor=125.2070 null/2k=1.005 ⇒ HELD
+    split-seed  14: held-out post=122.8640 floor=125.2070 null/2k=1.012 ⇒ HELD
+    split-seed  15: held-out post=124.0024 floor=125.2070 null/2k=1.000 ⇒ HELD
+    split-seed  16: held-out post=122.1063 floor=125.2070 null/2k=1.012 ⇒ VIOLATED
+  split-seed tally (k=64): 8 VIOLATED / 17 valid of 17 seeds
+  ledger: ρ+whiten 0.002s | solves (fit+null) 0.002s | laya forwards: common cost (see suite header)
+
+lane tally: 0 correct refusals / 0 wrong refusals / 6 permitted / 0 skipped arms — FAIL (no refusal — no saving shown; the negative is recorded under katgpt-rs 978)
+REPORT-ONLY: nothing armed here; results land under issue 106 + katgpt-rs 978.

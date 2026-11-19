@@ -30,3 +30,23 @@ Laya ρ moves with the fix (banking77 k=256 0.0932 → 0.0993, k=64 0.2318 → 0
 **Consequence:** katgpt-rs Issue 978's round-2 record ("the held-out protocol shows the bound HELD in all 4 estimable arms") was measured on the head's residual. On the true encoder output, **3 of 4 hold and banking77 k=256 is VIOLATED** beyond the estimator band. Routed as katgpt-rs Issue 1236 (`fca33de8c`, unclaimed) for re-adjudication.
 
 Logs: `201_issue127_laya_hidden_fix_probe_rerun_logs/{pre,post}_{pair_*,rho}.log`.
+
+## Addendum — katgpt-rs Issue 1236: the split-seed robustness read (2026-11-20, job `f3f38a25`)
+
+Pre-registered in katgpt-rs `.issues/1236` (`f4c8d34b3`). New opt-in `RHO_SPLIT_SEEDS` in `rho_suite_probe`: unset, the record is byte-identical. Seed 0 re-scores the even/odd split through the same path; s ≥ 1 is a blake3(PERM_SEED ⊕ s) random half split. Same bars. Run at riir-infer `595ce32b` (true encoder output).
+
+**Instrument check:** seed 0 reproduces the recorded held-out 449.1359 exactly. Verdict (c), instrument defect, is ruled out.
+
+| suite, arm | VIOLATED / valid (seeds 0–16) | held-out range | floor |
+|---|---:|---|---:|
+| **banking77 k=256** | **17 / 17** | 441.2–452.1 | 467.41 |
+| banking77 k=64 | 0 / 17 | 102.9–107.0 | 102.05 |
+| emotion k=64 | 2 / 17 | 120.8–125.7 | 123.82 |
+| ag_news k=64 | **8 / 17** | 121.1–124.6 | 125.21 |
+| emotion / ag_news k=256 | 0 / 0 (NOT VALID on every seed, null/2k ≈ 0.78) | | |
+
+**Verdict (pre-registered rule):** banking77 k=256 is **(a) STRUCTURAL**: violated on 100% of valid seeds, against the ≥ 75% bar.
+- Unscored side observation: ag_news k=64's recorded HELD is split-sensitive (47% of seeds violate; the rule would read it as undecided).
+- banking77 k=64 holds on every split, emotion k=64 mostly.
+
+Log: `201_issue127_laya_hidden_fix_probe_rerun_logs/post_rho_split_seeds.log`.

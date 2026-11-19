@@ -313,8 +313,14 @@ fn procrustes_fit(
 
 /// blake3-seeded Fisher-Yates: the deterministic permutation the null uses.
 fn seeded_permutation(n: usize) -> Vec<usize> {
+    seeded_permutation_with(n, PERM_SEED)
+}
+
+/// [`seeded_permutation`] under an explicit seed word (katgpt-rs Issue 1236:
+/// the split-seed robustness read draws its random halves from here).
+fn seeded_permutation_with(n: usize, seed_word: u64) -> Vec<usize> {
     let mut h = blake3::Hasher::new();
-    h.update(&PERM_SEED.to_le_bytes());
+    h.update(&seed_word.to_le_bytes());
     let digest = h.finalize();
     let mut seed = [0u8; 32];
     seed.copy_from_slice(digest.as_bytes());
@@ -517,6 +523,7 @@ fn run_arm(
             Verdict::Skipped => unreachable!(),
         }
     );
+    split_seed_robustness(&a_w, &b_w, k, n, eig, floor);
     println!(
         "  ledger: ρ+whiten {rho_secs:.3}s | solves (fit+null) {solve_secs:.3}s | \
          laya forwards: common cost (see suite header)"
@@ -592,6 +599,71 @@ fn run_suite(suite: &Suite, agent: &mut laya_face::Agent, embedder: &Embedder) -
         ));
     }
     verdicts
+}
+
+/// katgpt-rs Issue 1236 — the split-seed robustness read (opt-in; unset =
+/// byte-identical record). `RHO_SPLIT_SEEDS=0,1,..`: seed 0 re-scores the
+/// recorded even/odd split through this same path (the instrument check);
+/// seed s ≥ 1 draws a blake3(PERM_SEED ⊕ s) random half split. Same bars.
+fn split_seed_robustness(
+    a_w: &[f32],
+    b_w: &[f32],
+    k: usize,
+    n: usize,
+    eig: &mut SymmetricEigScratch,
+    floor: f64,
+) {
+    let Ok(list) = std::env::var("RHO_SPLIT_SEEDS") else {
+        return;
+    };
+    let seeds: Vec<u64> = list
+        .split(',')
+        .map(|t| {
+            t.trim()
+                .parse()
+                .expect("RHO_SPLIT_SEEDS: comma-separated u64")
+        })
+        .collect();
+    let (mut valid, mut violated) = (0usize, 0usize);
+    for &seed in &seeds {
+        let (fit_idx, held_idx): (Vec<usize>, Vec<usize>) = match seed {
+            0 => (
+                (0..n).step_by(2).collect(),
+                (0..n).skip(1).step_by(2).collect(),
+            ),
+            _ => {
+                let perm = seeded_permutation_with(n, PERM_SEED ^ seed);
+                let (f, h) = perm.split_at(n / 2);
+                (f.to_vec(), h.to_vec())
+            }
+        };
+        let r_fit = procrustes_fit(a_w, b_w, k, &fit_idx, eig);
+        let post_held = rms2_at(a_w, b_w, &r_fit, k, &held_idx);
+        let perm = seeded_permutation(n);
+        let mut b_shuf = vec![0.0f32; b_w.len()];
+        for (i, &j) in perm.iter().enumerate() {
+            b_shuf[i * k..(i + 1) * k].copy_from_slice(&b_w[j * k..(j + 1) * k]);
+        }
+        let r_null = procrustes_fit(a_w, &b_shuf, k, &fit_idx, eig);
+        let null_held = rms2_at(a_w, &b_shuf, &r_null, k, &held_idx);
+        let est_valid = fit_idx.len() >= k && null_held >= NULL_AT_2K_SHARE * 2.0 * k as f64;
+        let held = post_held >= floor * (1.0 - ESTIMATOR_BAND);
+        valid += usize::from(est_valid);
+        violated += usize::from(est_valid && !held);
+        println!(
+            "    split-seed {seed:3}: held-out post={post_held:.4} floor={floor:.4} null/2k={:.3} ⇒ {}",
+            null_held / (2.0 * k as f64),
+            match (est_valid, held) {
+                (false, _) => "NOT VALID",
+                (true, true) => "HELD",
+                (true, false) => "VIOLATED",
+            }
+        );
+    }
+    println!(
+        "  split-seed tally (k={k}): {violated} VIOLATED / {valid} valid of {} seeds",
+        seeds.len()
+    );
 }
 
 fn main() {

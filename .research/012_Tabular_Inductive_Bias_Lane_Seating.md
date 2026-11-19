@@ -74,3 +74,5 @@ Did I ask what this does for riir-refine? The healer's drafter is the same corpu
 - Not Super-GOAT: Q1 fails — the bias axes are published; our contribution is application + diagnostics.
 - Not GOAT: no new primitive ships in this session.
 - **GAIN:** theory note (this file) + issue 100 (report-only probes behind harness flags, byte-identity when off). If the probes separate cleanly, the lane-seating screen graduates to a plan of its own.
+
+> **PASS-Redirects (synthesis):** Qu et al. [arXiv:2611.23001 "NVIDIA Kumo Tabular: Pushing the Accuracy-Efficiency Frontier for Tabular Prediction"] — the TFM family's current SOTA (TabICLv2-descended; open weights OpenMDW-1.1, commercial use); dispositioned **Pass** at `katgpt-rs/.research/364_tabfm_zero_shot_tabular_foundation.md` §7 (2026-11-19): the lane-seating question it would raise on our board stays parked — this note's screen probes (issue 100, Bench 165) returned no winner separation and the board has no tabular suite; it is the runnable-weights member of R364 §6.4's parked F1 lane lead.

@@ -3,6 +3,14 @@
 **Status:** RECORD — measured 2026-10-09 (bench `132_pplx_lane/mlx4bit`); the teacher decision it
 feeds is recorded in riir-train Issue 623. This note is the distillation record of the READ, not a
 mining candidate (no Rust corpus material; the lane-intel axis is the deliverable and it landed).
+**Local bf16 reference copy (`E:\pplx\pplx-decider-v1.1-27b\`) deleted 2026-11-19** (delegated-owner
+verdict session `cfdf4b86`, #OwnerGate D3-pplx — disk reclamation; the repo is Apache-2.0, ungated,
+52 GB). Reproducible re-download PINNED: revision `3b45dead91dfa6d95aad6b95764a606fab2bf7a6`
+(HF API `sha`, verified 2026-11-19 = the local snapshot's trees-cache revision — HF tip unmodified
+since 2026-10-05). Restore: `snapshot_download(repo_id="perplexity-ai/pplx-decider-v1.1-27b",
+revision="3b45dead91dfa6d95aad6b95764a606fab2bf7a6", local_dir=<E:\pplx\...>)` — the scripts and
+logs in `E:\pplx\` (dl.py, patch_*.py, serve*.cmd, setup.log, download.log) stay in place as the
+workspace provenance (Issue 623 cites them).
 
 ## TL;DR
 

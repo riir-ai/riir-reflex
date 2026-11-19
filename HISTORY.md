@@ -2,6 +2,10 @@
 
 Compacted 2026-10-30: every `##` heading kept verbatim, one compact entry per record (≤2 short lines); the full pre-compaction text is in git history (pre-compaction HEAD f7032899cf74). Operational rules live in `AGENTS.md`.
 
+## 2026-11-20 — Issue 127 CLOSED: laya probes re-run after riir-infer 1239 (`EncodedQuestion.hidden` = true encoder output) — Bench 201
+
+Same-box PRE (riir-infer `14654abe`) vs POST (`595ce32b`), job `6cdf8e7c`. **pair_free_probe** (Issue 105): PRE reproduces riir-train Bench 691 exactly. POST keeps the verdict `low` on massive_intent_en + ag_news (lift 0.60→0.48 / 0.865→0.783, nb-hit 0.784→0.879 / 0.821→0.939). banking77 data is absent on amo. **rho_suite_probe** (Issue 106): the tally and every gate decision are unchanged, but banking77 k=256's Thm-3 bound flips HELD → VIOLATED (held-out 449.14 vs floor 467.41, 3.9% beyond the 2% band). That contradicts katgpt-rs Issue 978's round-2 "HELD in all 4 estimable arms", which was read on the head residual. Routed as katgpt-rs Issue 1236 (`fca33de8c`). Lease katgpt-rs-93@amo, 1795112000, expires 2026-11-22T00:00:00Z — folded at close.
+
 ## 2026-11-19 — Issue 124 CLOSED — basis_cert re-measured after the basis_split eigenvector fix (Bench 199)
 
 katgpt-rs `9cae0610f` (split returned rows of V) + this repo's `sig_eigvecs` transpose (`33ddc0b`). Re-run on amo (`3c0ab5fa`): Bench 138 basis-derived columns VOID — held-out leakage falls to ≤0.0016 on ag_news/emotion/banking77 (was 0.54 on ag_news/emotion), typed_decisions 0.085; Bench 139 T3 verdicts reproduce exactly. Lease folded with the file.

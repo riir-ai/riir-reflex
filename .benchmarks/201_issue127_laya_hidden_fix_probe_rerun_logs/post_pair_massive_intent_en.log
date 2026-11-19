@@ -1,0 +1,8 @@
+suite massive_intent_en: 1000 rows, 58 classes, device env LAYA_DEVICE=metal
+laya hidden width d = 1024
+  laya 200/1000
+  laya 400/1000
+  laya 600/1000
+  laya 800/1000
+  laya 1000/1000
+{"suite":"massive_intent_en","rows":1000,"classes":58,"laya_d":1024,"modelless_d":256,"pca_k":64,"anchors":64,"pair_free":{"verdict":"low","attribute_transfer_top1":0.035999998450279236,"chance_baseline":0.07500000298023224,"lift":0.47999995946884155,"alignment_mean_cos":0.8438683152198792,"neighborhood_hit_rate":0.8790000081062317,"neighborhood_hit_chance":0.004999999888241291},"paired":{"post_procrustes_mean_cos_eval":-0.0010165047559652328,"foscttm_pca_raw":0.4861248228895283,"foscttm_pca_paired":0.4995452260158138,"note":"original-space FOSCTTM undefined across dims (d_laya != 256); the PCA plane is the comparable one"},"device":"metal","checkpoint":"english"}

@@ -1,0 +1,79 @@
+suites: banking77, emotion, ag_news (2000 rows total) | k arms [256, 64] | pinned bars: estimator_band=2%, null/2k floor=0.95, max_gain_share=0.05, perm_seed=0x106e978
+
+== banking77: 1200 questions ==
+  laya forwards: 1200 in 23.523s (common cost, once per suite)
+
+  ── k=256 arm ──
+   modelless: all 31 labels have ≥2 members
+   modelless: ρ=0.0871  (G=31, k=256, n=1200)
+        laya: all 31 labels have ≥2 members
+        laya: ρ=0.0932  (G=31, k=256, n=1200)
+  gate: floor=2k(1−min ρ)=467.4129  RMS²(R=I)=513.3851  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=207.7286 (artifact-prone); HELD-OUT post=468.3994; null: in-sample=230.2831 held-out=509.4097
+  bound statement: estimate VALID (n_fit=600 vs k=256, null/2k=0.995); floor=467.4129 ≤ held-out post (within the 2% estimator band) ⇒ HELD
+  held-out gain: 44.9857 (8.8% of identity) ⇒ permitted and the rotation gained held-out — the floor was right to permit
+  ledger: ρ+whiten 0.255s | solves (fit+null) 0.294s | laya forwards: common cost (see suite header)
+
+  ── k=64 arm ──
+   modelless: all 31 labels have ≥2 members
+   modelless: ρ=0.2027  (G=31, k=64, n=1200)
+        laya: all 31 labels have ≥2 members
+        laya: ρ=0.2318  (G=31, k=64, n=1200)
+  gate: floor=2k(1−min ρ)=102.0516  RMS²(R=I)=126.8191  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=83.5838 (artifact-prone); HELD-OUT post=114.7330; null: in-sample=92.1449 held-out=129.5148
+  bound statement: estimate VALID (n_fit=600 vs k=64, null/2k=1.012); floor=102.0516 ≤ held-out post (within the 2% estimator band) ⇒ HELD
+  held-out gain: 12.0862 (9.5% of identity) ⇒ permitted and the rotation gained held-out — the floor was right to permit
+  ledger: ρ+whiten 0.005s | solves (fit+null) 0.005s | laya forwards: common cost (see suite header)
+
+== emotion: 400 questions ==
+  laya forwards: 400 in 3.564s (common cost, once per suite)
+
+  ── k=256 arm ──
+   modelless: all 6 labels have ≥2 members
+   modelless: ρ=0.0159  (G=6, k=256, n=400)
+        laya: all 6 labels have ≥2 members
+        laya: ρ=0.0169  (G=6, k=256, n=400)
+  gate: floor=2k(1−min ρ)=503.8426  RMS²(R=I)=510.2139  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=51.0415 (artifact-prone); HELD-OUT post=396.1891; null: in-sample=51.7483 held-out=397.4708
+  bound statement: estimate NOT VALID — degenerate fit or null off 2k; NO bound statement (n_fit=200 vs k=256, null/2k=0.776); no comparison drawn
+  held-out gain: 114.0248 (22.3% of identity) ⇒ permitted and the rotation gained held-out — the floor was right to permit
+  ledger: ρ+whiten 0.233s | solves (fit+null) 0.198s | laya forwards: common cost (see suite header)
+
+  ── k=64 arm ──
+   modelless: all 6 labels have ≥2 members
+   modelless: ρ=0.0327  (G=6, k=64, n=400)
+        laya: all 6 labels have ≥2 members
+        laya: ρ=0.0410  (G=6, k=64, n=400)
+  gate: floor=2k(1−min ρ)=123.8193  RMS²(R=I)=128.7210  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=64.9982 (artifact-prone); HELD-OUT post=126.5684; null: in-sample=66.3486 held-out=128.1450
+  bound statement: estimate VALID (n_fit=200 vs k=64, null/2k=1.001); floor=123.8193 ≤ held-out post (within the 2% estimator band) ⇒ HELD
+  held-out gain: 2.1526 (1.7% of identity) ⇒ permitted but held-out gain ≤5% — a refusal WOULD have been correct
+  ledger: ρ+whiten 0.002s | solves (fit+null) 0.002s | laya forwards: common cost (see suite header)
+
+== ag_news: 400 questions ==
+  laya forwards: 400 in 4.171s (common cost, once per suite)
+
+  ── k=256 arm ──
+   modelless: all 4 labels have ≥2 members
+   modelless: ρ=0.0099  (G=4, k=256, n=400)
+        laya: all 4 labels have ≥2 members
+        laya: ρ=0.0113  (G=4, k=256, n=400)
+  gate: floor=2k(1−min ρ)=506.9158  RMS²(R=I)=512.1974  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=49.4446 (artifact-prone); HELD-OUT post=398.2768; null: in-sample=51.0426 held-out=403.4417
+  bound statement: estimate NOT VALID — degenerate fit or null off 2k; NO bound statement (n_fit=200 vs k=256, null/2k=0.788); no comparison drawn
+  held-out gain: 113.9206 (22.2% of identity) ⇒ permitted and the rotation gained held-out — the floor was right to permit
+  ledger: ρ+whiten 0.232s | solves (fit+null) 0.198s | laya forwards: common cost (see suite header)
+
+  ── k=64 arm ──
+   modelless: all 4 labels have ≥2 members
+   modelless: ρ=0.0218  (G=4, k=64, n=400)
+        laya: all 4 labels have ≥2 members
+        laya: ρ=0.0404  (G=4, k=64, n=400)
+  gate: floor=2k(1−min ρ)=125.2070  RMS²(R=I)=127.8242  ⇒ permit (floor < identity — solve runs anyway)
+  adjudication (held-out): fit-half in-sample post=64.8165 (artifact-prone); HELD-OUT post=123.3677; null: in-sample=66.7562 held-out=127.9074
+  bound statement: estimate VALID (n_fit=200 vs k=64, null/2k=0.999); floor=125.2070 ≤ held-out post (within the 2% estimator band) ⇒ HELD
+  held-out gain: 4.4565 (3.5% of identity) ⇒ permitted but held-out gain ≤5% — a refusal WOULD have been correct
+  ledger: ρ+whiten 0.002s | solves (fit+null) 0.002s | laya forwards: common cost (see suite header)
+
+lane tally: 0 correct refusals / 0 wrong refusals / 6 permitted / 0 skipped arms — FAIL (no refusal — no saving shown; the negative is recorded under katgpt-rs 978)
+REPORT-ONLY: nothing armed here; results land under issue 106 + katgpt-rs 978.

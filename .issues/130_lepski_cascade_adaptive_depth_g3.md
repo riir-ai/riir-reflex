@@ -1,6 +1,7 @@
 # Issue 130: Lepski cascade adaptive retrieval depth + abstain-on-cascade-failure — the G3 promotion cell
 
 **Status:** open — routed from katgpt-rs Issue 1229 (primitives + G1/G4 + dash_attn arm landed upstream, katgpt-rs `e866932a1`); unclaimed, needs a quiet rig for the harness cell
+**Claimed:** zed-m3-i130lepski@m3, 1795201690, expires 2026-11-22T19:08Z
 
 Consumer of `katgpt_core::lepski_cascade` (`estimators` umbrella): `lepski_cascade`,
 `prefix_means_into`, `tau_hat_into`, `sigma_hat_*`, `A_DEFAULT = 1` (serving constant — katgpt-rs

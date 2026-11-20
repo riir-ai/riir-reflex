@@ -1,6 +1,7 @@
 # Issue 129: Epiplexity mix arm + suite saturation check on the synth-corpus lane
 
 **Status:** OPEN — filed from katgpt-rs Research 685 (arXiv:2608.11746, EpiGen/§H.3). Eval-only; no GPU; lands on the existing `--corpus-ab` paired-LB95 gates. Claimed by: nobody yet.
+**Claimed:** zed-m3-i129mix@m3, 1795202907, expires 2026-11-22T19:15:00Z — scope: T1 three-arm mix mode + T2 saturation pre-check + T3 prequential growth curve (report-only) + T4 collapse canaries (planted fixture arms), the default two-arm lane byte-identical; the Plan-641 G2 FAIL (Bench 991) context carried into T3's follow-up wording
 
 ## Finding
 

@@ -1,6 +1,7 @@
 # Issue 125 — typed_decisions gold schema is heterogeneous per workflow: the standing sweep panics at hard_metrics
 
 **Status:** Open — filed 2026-11-19 (zed-b7afc49e@4090, the 121 standing-sweep lane; sweep log `.benchmarks/200_standing_sweep_bm25_floor_run1.log`)
+**Claimed:** zed-m3-i125floor@m3, 1795146954, expires 2026-11-22T04:00:00+00:00
 
 ## The panic
 

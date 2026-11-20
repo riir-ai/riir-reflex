@@ -156,6 +156,14 @@ density_gate = ["modelless", "katgpt-core/factorized_action"]
 # the V5 paired-LB95 gate law is unchanged — the record is additive
 # disclosure. Opt-in; never in default.
 probe_delta_ab = ["modelless"]
+# Issue 130 — the Lepski cascade adaptive-depth premise check + G3 cell
+# (`--lepski-depth`, report-only, harness-only; G-ISO — the serve path is
+# untouched). Forwards katgpt-core `lepski_cascade` (Research 681,
+# arXiv:2611.22198 — the Issue-1229 primitives, `estimators` umbrella):
+# one retrieval at the grid max, prefix means per depth, the agreement
+# cascade, the bulk-MAD σ̂ over the ranked window. The pre-registered
+# gates + bars live in the issue. Opt-in; never in default.
+lepski_depth = ["modelless", "katgpt-core/estimators"]
 # Issue 086 T1: the perm-pair presentation-subspace certificate (the
 # `--perm-probe --basis-split` report mode) — katgpt-core `basis_split`
 # (Plan 625 / Research 618, SplitJEPA arXiv:2610.12349) consumed over the

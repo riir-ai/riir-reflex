@@ -1,0 +1,344 @@
+{
+  "meta": {
+    "date_utc": "2026-11-20T19:34:56Z",
+    "git_sha": "26fcfba9",
+    "datasets_dir": "/Users/kat/git/riir-reflex/.raw/datasets",
+    "eta": 0.05,
+    "a": 1.0,
+    "k_max_cap": 512,
+    "headroom_pp": 1.0,
+    "selector_slack_pp": 1.0,
+    "abstain_max": 0.5,
+    "read_rule": "one invocation = one frozen read: cal premise gates (P-A headroom >= +1.0pp over the routed-whole reference; P-B cascade >= best-fixed -1.0pp and abstain <= 50%) decide whether the test slice is read at all; G3 = paired LB95 of (cascade - fixed-grid-max) per-case correctness > 0; forced-pick everywhere; case-correct = ALL its scorable questions correct"
+  },
+  "suites": [
+    {
+      "suite": "ag_news",
+      "n_pool": 256,
+      "domains": 4,
+      "fallback_labels": 0,
+      "k0": 69,
+      "grid": [
+        69,
+        138
+      ],
+      "p1_inert_domains": 4,
+      "premise": {
+        "acc_ref": 0.25,
+        "acc_grid": [
+          0.25,
+          0.25
+        ],
+        "best_fixed": 0,
+        "acc_best_fixed": 0.25,
+        "acc_cascade": 0.25,
+        "abstain_rate": 0.895,
+        "sigma_zero_rate": 0.995,
+        "pa_pass": false,
+        "pb_pass": false,
+        "gated_in": false,
+        "skipped_questions": 0
+      },
+      "g3": null,
+      "latency": {
+        "p50_pass_us": 859,
+        "p99_pass_us": 1125,
+        "pass_support": 3,
+        "p50_ref_us": 151,
+        "p99_ref_us": 268,
+        "p50_sigma_us": 1.125,
+        "p99_sigma_us": 1.458,
+        "p50_cascade_us": 0.042,
+        "p99_cascade_us": 0.042
+      }
+    },
+    {
+      "suite": "emotion",
+      "n_pool": 384,
+      "domains": 6,
+      "fallback_labels": 0,
+      "k0": 72,
+      "grid": [
+        72,
+        144,
+        288
+      ],
+      "p1_inert_domains": 6,
+      "premise": {
+        "acc_ref": 0.165,
+        "acc_grid": [
+          0.165,
+          0.165,
+          0.165
+        ],
+        "best_fixed": 0,
+        "acc_best_fixed": 0.165,
+        "acc_cascade": 0.165,
+        "abstain_rate": 0.925,
+        "sigma_zero_rate": 1.0,
+        "pa_pass": false,
+        "pb_pass": false,
+        "gated_in": false,
+        "skipped_questions": 0
+      },
+      "g3": null,
+      "latency": {
+        "p50_pass_us": 1426,
+        "p99_pass_us": 2103,
+        "pass_support": 3,
+        "p50_ref_us": 110,
+        "p99_ref_us": 123,
+        "p50_sigma_us": 2.125,
+        "p99_sigma_us": 2.834,
+        "p50_cascade_us": 0.042,
+        "p99_cascade_us": 0.084
+      }
+    },
+    {
+      "suite": "sst5",
+      "n_pool": 320,
+      "domains": 5,
+      "fallback_labels": 0,
+      "k0": 71,
+      "grid": [
+        71,
+        142,
+        284
+      ],
+      "p1_inert_domains": 5,
+      "premise": {
+        "acc_ref": 0.2,
+        "acc_grid": [
+          0.2,
+          0.2,
+          0.2
+        ],
+        "best_fixed": 0,
+        "acc_best_fixed": 0.2,
+        "acc_cascade": 0.2,
+        "abstain_rate": 0.095,
+        "sigma_zero_rate": 0.1,
+        "pa_pass": false,
+        "pb_pass": true,
+        "gated_in": false,
+        "skipped_questions": 0
+      },
+      "g3": null,
+      "latency": {
+        "p50_pass_us": 1108,
+        "p99_pass_us": 1503,
+        "pass_support": 3,
+        "p50_ref_us": 91,
+        "p99_ref_us": 108,
+        "p50_sigma_us": 2.042,
+        "p99_sigma_us": 2.833,
+        "p50_cascade_us": 0.042,
+        "p99_cascade_us": 0.125
+      }
+    },
+    {
+      "suite": "prompt_injections",
+      "n_pool": 128,
+      "domains": 2,
+      "fallback_labels": 0,
+      "k0": 63,
+      "grid": [
+        63,
+        126
+      ],
+      "p1_inert_domains": 2,
+      "premise": {
+        "acc_ref": 0.51,
+        "acc_grid": [
+          0.51,
+          0.5
+        ],
+        "best_fixed": 0,
+        "acc_best_fixed": 0.51,
+        "acc_cascade": 0.51,
+        "abstain_rate": 0.94,
+        "sigma_zero_rate": 0.99,
+        "pa_pass": false,
+        "pb_pass": false,
+        "gated_in": false,
+        "skipped_questions": 0
+      },
+      "g3": null,
+      "latency": {
+        "p50_pass_us": 243,
+        "p99_pass_us": 515,
+        "pass_support": 2,
+        "p50_ref_us": 69,
+        "p99_ref_us": 87,
+        "p50_sigma_us": 1.0,
+        "p99_sigma_us": 1.375,
+        "p50_cascade_us": 0.042,
+        "p99_cascade_us": 0.084
+      }
+    },
+    {
+      "suite": "xnli_en",
+      "n_pool": 192,
+      "domains": 3,
+      "fallback_labels": 0,
+      "k0": 67,
+      "grid": [
+        67,
+        134
+      ],
+      "p1_inert_domains": 3,
+      "premise": {
+        "acc_ref": 0.335,
+        "acc_grid": [
+          0.335,
+          0.335
+        ],
+        "best_fixed": 0,
+        "acc_best_fixed": 0.335,
+        "acc_cascade": 0.335,
+        "abstain_rate": 0.725,
+        "sigma_zero_rate": 0.975,
+        "pa_pass": false,
+        "pb_pass": false,
+        "gated_in": false,
+        "skipped_questions": 0
+      },
+      "g3": null,
+      "latency": {
+        "p50_pass_us": 512,
+        "p99_pass_us": 850,
+        "pass_support": 3,
+        "p50_ref_us": 85,
+        "p99_ref_us": 106,
+        "p50_sigma_us": 1.042,
+        "p99_sigma_us": 1.5,
+        "p50_cascade_us": 0.042,
+        "p99_cascade_us": 0.042
+      }
+    },
+    {
+      "suite": "massive_intent_en",
+      "n_pool": 2703,
+      "domains": 59,
+      "fallback_labels": 0,
+      "k0": 88,
+      "grid": [
+        88,
+        176,
+        352
+      ],
+      "p1_inert_domains": 59,
+      "premise": {
+        "acc_ref": 0.075,
+        "acc_grid": [
+          0.065,
+          0.065,
+          0.065
+        ],
+        "best_fixed": 0,
+        "acc_best_fixed": 0.065,
+        "acc_cascade": 0.065,
+        "abstain_rate": 0.895,
+        "sigma_zero_rate": 0.99,
+        "pa_pass": false,
+        "pb_pass": false,
+        "gated_in": false,
+        "skipped_questions": 0
+      },
+      "g3": null,
+      "latency": {
+        "p50_pass_us": 4075,
+        "p99_pass_us": 4767,
+        "pass_support": 3,
+        "p50_ref_us": 89,
+        "p99_ref_us": 109,
+        "p50_sigma_us": 2.5,
+        "p99_sigma_us": 3.125,
+        "p50_cascade_us": 0.042,
+        "p99_cascade_us": 0.167
+      }
+    },
+    {
+      "suite": "banking77",
+      "n_pool": 3071,
+      "domains": 77,
+      "fallback_labels": 0,
+      "k0": 89,
+      "grid": [
+        89,
+        178,
+        356
+      ],
+      "p1_inert_domains": 77,
+      "premise": {
+        "acc_ref": 0.055,
+        "acc_grid": [
+          0.045,
+          0.045,
+          0.045
+        ],
+        "best_fixed": 0,
+        "acc_best_fixed": 0.045,
+        "acc_cascade": 0.045,
+        "abstain_rate": 0.965,
+        "sigma_zero_rate": 0.995,
+        "pa_pass": false,
+        "pb_pass": false,
+        "gated_in": false,
+        "skipped_questions": 0
+      },
+      "g3": null,
+      "latency": {
+        "p50_pass_us": 16895,
+        "p99_pass_us": 24811,
+        "pass_support": 3,
+        "p50_ref_us": 339,
+        "p99_ref_us": 643,
+        "p50_sigma_us": 2.542,
+        "p99_sigma_us": 3.5,
+        "p50_cascade_us": 0.042,
+        "p99_cascade_us": 0.208
+      }
+    },
+    {
+      "suite": "typed_decisions",
+      "n_pool": 192,
+      "domains": 4,
+      "fallback_labels": 0,
+      "k0": 67,
+      "grid": [
+        67,
+        134
+      ],
+      "p1_inert_domains": 4,
+      "premise": {
+        "acc_ref": 0.31,
+        "acc_grid": [
+          0.288,
+          0.288
+        ],
+        "best_fixed": 0,
+        "acc_best_fixed": 0.288,
+        "acc_cascade": 0.288,
+        "abstain_rate": 0.68,
+        "sigma_zero_rate": 0.75,
+        "pa_pass": false,
+        "pb_pass": false,
+        "gated_in": false,
+        "skipped_questions": 0
+      },
+      "g3": null,
+      "latency": {
+        "p50_pass_us": 1514,
+        "p99_pass_us": 3307,
+        "pass_support": 6,
+        "p50_ref_us": 124,
+        "p99_ref_us": 478,
+        "p50_sigma_us": 1.083,
+        "p99_sigma_us": 1.542,
+        "p50_cascade_us": 0.042,
+        "p99_cascade_us": 0.166
+      }
+    }
+  ]
+}

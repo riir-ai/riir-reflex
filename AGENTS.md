@@ -257,6 +257,15 @@ JEVA_SERVE_URL=http://127.0.0.1:8095 \
 # replace the veto) and --probe-delta-ab (katgpt-rs Plan 621 T5.1, feature `probe_delta_ab`). Exclusive early-exit modes:
 cargo run --release --bin harness -- --synth-plan --help
 cargo run --release --bin harness -- --corpus-ab --help
+
+# Lepski cascade adaptive-depth lane (issue 130, `lepski_depth` feature; exclusive early-exit): the i130
+# frozen read — cal premise gates (P1 in-domain grid formability census + P-A depth headroom over the
+# routed-whole reference + P-B selector sanity) decide whether the pre-registered test read happens at all.
+# VERDICT LANDED NEGATIVE (bench 203): premise refuted on every suite — no depth headroom (P-A 8/8 FAIL,
+# flat-to-worse curves), σ̂ = 0 on 75–100% of questions (the per-doc response windows are step functions,
+# not noisy measurements), in-domain grids structurally inert at the ≤64-doc served corpora (160/160
+# domains). The consumer stays at attention/belief surfaces (Research 681 §2.3's fallback); no promotion.
+cargo run --release --features lepski_depth --bin harness -- --lepski-depth --out .benchmarks/203_lepski_depth_g3
 ```
 
 - Default features = `["modelless"]`; `--no-default-features` is the tested flag-OFF posture.

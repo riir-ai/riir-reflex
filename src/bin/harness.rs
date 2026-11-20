@@ -439,6 +439,11 @@ fn harness_main() {
     let mut synth_density_pilot = false;
     let mut corpus_ab: Option<std::path::PathBuf> = None;
     let mut corpus_ab_mix = false;
+    // Issue 130 — the Lepski cascade adaptive-depth frozen read (an
+    // exclusive early-exit mode; the feature refusal below names the
+    // rebuild). The pre-registered slice ignores --suites (the lane
+    // discloses it).
+    let mut lepski_depth = false;
     let mut synth_out = std::path::PathBuf::from(".raw/corpus_synth");
     let mut synth_teacher = "openthai".to_string();
     let mut synth_max = 2048usize;
@@ -1053,6 +1058,9 @@ fn harness_main() {
             // Issue 129 — the three-arm mix mode (a modifier on
             // --corpus-ab; refused loud without it).
             "--corpus-ab-mix" => corpus_ab_mix = true,
+            // Issue 130 — the Lepski cascade adaptive-depth frozen read
+            // (exclusive; pre-registered slice).
+            "--lepski-depth" => lepski_depth = true,
             "--limit" => {
                 i += 1;
                 distill_limit = args
@@ -2010,7 +2018,7 @@ fn harness_main() {
     {
         // The exclusive early-exit modes (one per run — the e0/distill law
         // generalized as the family grew).
-        let modes: [(&str, bool); 17] = [
+        let modes: [(&str, bool); 18] = [
             ("--e0", e0),
             ("--perm-probe", perm_probe),
             ("--label-perm", label_perm),
@@ -2027,6 +2035,7 @@ fn harness_main() {
             ("--synth-plan", synth_plan),
             ("--synth-density-pilot", synth_density_pilot),
             ("--corpus-ab", corpus_ab.is_some()),
+            ("--lepski-depth", lepski_depth),
             ("--teacher-router", teacher_router.is_some()),
         ];
         let active: Vec<&str> = modes
@@ -2383,6 +2392,39 @@ fn harness_main() {
             md_path.display()
         );
         return;
+    }
+
+    // Issue 130 — the Lepski cascade adaptive-depth frozen read (an
+    // exclusive early-exit mode; G-ISO: no eval lane, no modelless row).
+    // A compile-time-missing feature is a loud refusal naming the rebuild
+    // (the build-stamp law, the --clm shape).
+    if lepski_depth {
+        if !cfg!(feature = "lepski_depth") {
+            die(
+                "--lepski-depth needs the `lepski_depth` feature — rebuild: cargo build \
+                 --release --features lepski_depth --bin harness",
+            );
+        }
+        #[cfg(feature = "lepski_depth")]
+        {
+            println!(
+                "harness --lepski-depth: the i130 frozen read (cal premise gates → gated test \
+                 read; the pre-registered slice ignores --suites) · datasets {}",
+                opts.datasets_dir.display()
+            );
+            let md = match runner::run_lepski_depth(&opts, &out_dir) {
+                Ok(m) => m,
+                Err(e) => die(&e),
+            };
+            let dir = out_dir.join("lepski_depth");
+            println!(
+                "harness --lepski-depth: DONE — wrote {} + {}",
+                dir.join("lepski_depth.json").display(),
+                dir.join("LEPSKI_DEPTH.md").display()
+            );
+            print!("{md}");
+            return;
+        }
     }
 
     // The clm flag is an EXPLICIT lane request — a compile-time-missing

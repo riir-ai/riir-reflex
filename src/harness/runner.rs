@@ -132,6 +132,15 @@ pub(crate) mod canaries;
 mod corpus_ab;
 pub use corpus_ab::{CorpusAbOutput, render_corpus_ab_markdown, run_corpus_ab};
 
+// Issue 130 — the Lepski cascade adaptive-depth premise check + G3 cell
+// (`--lepski-depth`, report-only, harness-only; G-ISO). Gated: the lane
+// rides the opt-in `lepski_depth` feature (implies `modelless` +
+// `katgpt-core/estimators`); the serve path is untouched.
+#[cfg(feature = "lepski_depth")]
+mod lepski_depth;
+#[cfg(feature = "lepski_depth")]
+pub use lepski_depth::run_lepski_depth;
+
 // Issue 104 — the learnability-gate class: trivial-solver margins over a
 // sealed synth artifact (T1 report) + gated-artifact derivation (T2),
 // feeding the corpus-ab lane for the frozen paired read (T3).

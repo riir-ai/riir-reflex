@@ -2,7 +2,7 @@
 
 **Status:** OPEN — filed 2026-11-20 (zed-dfbadc62@m3, routing the laya 0.4.35 re-distill's recommendation — riir-refine Research 425, commits 599593de/faa96f7d; advisory mail from zed-m3-laya@m3, session 1795172210). **Assessment-only engagement: read the pin, re-verify HF, read the upstream deltas, produce a verdict — no port changes, no gate edits in this issue.**
 
-**Claimed:** — (unclaimed; the assessment is the work — claim it before reading HF)
+**Claimed:** zed-6ef0ba37@m3, 1795173442, expires 2026-11-22T11:17:22Z
 
 ## Why now
 

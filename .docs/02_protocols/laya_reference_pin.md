@@ -18,9 +18,11 @@ keeps its version as a measured fact; the unification RATIONALE (one build
 with candle) died with the lane, and the v1 bump attempt + negative is
 recorded in `.issues/006` T3.
 
-This is the canonical record for the native-Rust laya lane. The upstream research note is
-`katgpt-rs/.research/576_Laya_Open_Jev_Generalist_RLCD_Comparison_Arena.md`; this file
-carries the load-bearing facts the port compiles against.
+This is the canonical record for the native-Rust laya lane. Upstream research notes:
+`katgpt-rs/.research/576_Laya_Open_Jev_Generalist_RLCD_Comparison_Arena.md` (the September
+comparison note) and `../riir-refine/.research/425_laya_upstream_redistill.md` (the 0.4.35
+re-distill @ `416dd9ed` — the full post-pin delta list; the pin-refresh assessment below
+adjudicates it). This file carries the load-bearing facts the port compiles against.
 
 ## Source pins
 
@@ -234,3 +236,49 @@ that pin byte formats the port must reproduce:
    transport shape); the reference API parses `type`/`instructions`/`criteria`. The parity
    test translates — the capture harness's shape is part of the contract the test must
    replay.
+
+## Pin-refresh assessment 2026-11-20 (reflex 128; upstream 0.4.35 @ `416dd9ed`)
+
+The 0.3.5 pin was re-verified against the live hub 2 months after the port; upstream had
+moved 2,942 commits past it (riir-refine Research 425's delta list). Verdict: **PIN HELD** —
+no refresh, no re-baseline; the adjudication rows below are the record.
+
+**T1 — checkpoint re-verify (HF tree API `api/models/convaiinnovations/laya/tree/main?recursive=true`,
+read 2026-11-20, m3): UNCHANGED.** All three LFS oids byte-match the pins (sizes exact);
+all 12 small files downloaded + BLAKE3-rehashed, byte-match:
+
+| Artifact | Pinned sha | HF LFS oid 2026-11-20 | Verdict |
+|---|---|---|---|
+| `model.safetensors` (EN) | `891102d3…cbc8d86c` | identical, 842,609,210 B | UNCHANGED |
+| `multilingual/model.safetensors` | `9d628fd9…95aa8f204` | identical, 643,835,514 B | UNCHANGED |
+| `typed-decisions/model.safetensors` | `4fa56de7…8107a24e` | identical, 842,609,220 B | UNCHANGED |
+
+Small files: tokenizer/configs ×3 checkpoints, all 12 BLAKE3s identical to the table above
+(incl. `typed-decisions/tokenizer/tokenizer.json` still byte-identical to english — same git
+oid `2f4d8583`). The G5 frozen captures replay the same bytes they were captured against.
+
+**T2 — contract-delta adjudication (Research 425's serving-shape deltas; default
+PIN-SIDE-IRRELEVANT held, checkpoint unchanged):**
+
+| Post-pin delta | Verdict | Why |
+|---|---|---|
+| ONNXAgent `predict_long` windowing/tournament/shortlist | PIN-SIDE-IRRELEVANT | aggregation layer ABOVE the forward; G5 captures are single-window rows — the port mirrors the pin's truncation budgets (contract item 1), not window aggregation |
+| heterogeneous `Router.predict_batch` | PIN-SIDE-IRRELEVANT | Python serving-tier batch machinery; the port's router is pure decision logic (LRU loading deliberately not ported — recorded deviation above) |
+| per-bucket temperature calibration (qtype × option-band) | PIN-SIDE-IRRELEVANT | mechanism present AT the pin and mirrored (contract item 4 + the [0.5, 5.0] clamp); the calibration tables ship inside `rl_agent_config.json` files T1 verified byte-unchanged — post-pin refinements are serving-tier only |
+| `option_order` rotation | PIN-SIDE-IRRELEVANT | serve-time augmentation above the forward; captures are single-order |
+| `option_layout: "parallel"` (weight-side) | PIN-SIDE-IRRELEVANT — WATCH | contract-relevant ONLY with a re-packed checkpoint; T1 reads the pinned checkpoints byte-unchanged. **Trigger: a future checkpoint re-pack adopting parallel layout = a loud refresh trigger** |
+| vegaml / TileLang fast path | PIN-SIDE-IRRELEVANT | capability class + kernel-side; no port-contract surface |
+
+**T3 — `laya-onnx` (Rust/ort runtime) as a second G5 oracle: DECLINED for now**, reasons:
+no ONNX artifacts of the pinned checkpoints exist in the hub tree (read 2026-11-20 — the
+export step is unpriced); the dep's home is substrate-side (riir-infer-laya — reflex keeps
+the consumer-side gate with frozen fixtures), making it an ort+tokenizers dev-dep tree for a
+lane with no forward-refactor pressure (G5 green, captures cheap to replay); and a crates.io
+dep needs a riir-infer BOUNDARY.md allowlist row before any adoption (assessment-only here —
+none filed). **Re-open trigger: the next riir-infer-laya forward-semantics refactor, or any
+G5 failure needing an independent bisect witness** — file the second-oracle issue then, with
+the BOUNDARY check as its T0.
+
+**T4 — outcome:** pin refreshed? NO. Pin held with this re-verified date + the adjudication
+above. Next natural re-verify: on any upstream release touching checkpoint/config files, or
+at the next G5-affecting lane change.

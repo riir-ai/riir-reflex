@@ -795,6 +795,7 @@ fn routing_probe_suite<const N: usize>(
         // Issue 112 T4: the report lever never arms on a probe path (its own
         // ModellessInput literal would need its own arming decision first).
         gate_risk_target: None,
+        esc_delta_fit: None,
         kn_route: false,
         drafter_fix: crate::engine::DrafterFix::Off,
         // Issue 116: the measurement probes ride the BARE argmax — the

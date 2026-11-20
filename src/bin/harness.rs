@@ -522,6 +522,17 @@ fn harness_main() {
                 }
                 opts.gate_risk_target = Some(alpha);
             }
+            "--esc-delta-fit" => {
+                // Issue 122 T2: the δ-target fit — relabel the gate-fit's
+                // per-case observations with the capture's outcome-delta
+                // labels (δ > 0). The path points at the Bench-195-class
+                // capture's triples.jsonl.
+                i += 1;
+                let path = args
+                    .get(i)
+                    .unwrap_or_else(|| die("--esc-delta-fit needs a triples.jsonl path"));
+                opts.esc_delta_fit = Some(std::path::PathBuf::from(path));
+            }
             "--no-kn-route" => opts.kn_route = false,
             "--pick-latch" => {
                 // Issue 116: arm the route hysteresis latch at the

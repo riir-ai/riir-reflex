@@ -506,6 +506,7 @@ fn ctx_suite<const N: usize>(
         gate_fit_calibrated: true,
         gate_rho: None,
         gate_risk_target: None,
+        esc_delta_fit: None,
         kn_route,
         drafter_fix: crate::engine::DrafterFix::Off,
         pick_latch: None,

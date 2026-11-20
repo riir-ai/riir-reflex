@@ -33,6 +33,7 @@
 //!   None) — matching the modelless lane's serving path.
 
 use std::collections::{BTreeMap, HashSet};
+use std::io::BufRead as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -3391,6 +3392,15 @@ struct ModellessInput<'a> {
     /// `None` = off, byte-identical: no fit runs, no record is emitted.
     /// delta is pinned at [`risk_target::RISK_TARGET_DELTA`] (0.05).
     pub gate_risk_target: Option<f64>,
+    /// Issue 122 T2 (`--esc-delta-fit <triples.jsonl>`): the δ-target fit —
+    /// the gate-fit's per-case observations relabel `correct` with the
+    /// outcome-delta label `δ > 0` (δ = think_correct − cheap_correct from
+    /// the Bench-195 ESC capture; the tie class folds into the negative
+    /// side). `None` = off, byte-identical incumbent. The path points at the
+    /// capture's `triples.jsonl`; the join is by case id + question index,
+    /// and a case that misses the join refuses LOUD (a fit on partial
+    /// labels would train on a biased slice).
+    pub esc_delta_fit: Option<std::path::PathBuf>,
     /// Issue 079: the legacy `k == N` index-alignment route binding.
     /// `true` (the default) = the incumbent shipped behavior,
     /// byte-identical; `false` (`--no-kn-route`) = the content-bound
@@ -4312,6 +4322,10 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
         // the T2 migration stays byte-identical.
         let mut score_obs: Vec<GateObservation> = Vec::new();
         let mut distance_obs: Vec<GateObservation> = Vec::new();
+        // Issue 122 T2: the per-case (id, last-question-index) join keys for
+        // the δ-target fit — filled alongside `score_obs` (one entry per
+        // case), consumed only when `esc_delta_fit` arms.
+        let mut fit_case_keys: Vec<(String, usize)> = Vec::new();
         // Issue 056 direction 0: per-question (readout conf, correct) pairs
         // over the SAME fit slice the probe solves — in the default posture
         // these are byte-identical to the deployed calibrator's `cal_pairs`
@@ -4337,6 +4351,7 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
             // sample the last slot per case (n = #cal cases, enough for a
             // quantile at every suite's cal_cap).
             if let (Some(slot), Some(dom)) = (sc.slots.last(), sc.domains.last()) {
+                fit_case_keys.push((case.id.clone(), case.questions.len().saturating_sub(1)));
                 let pick = match case.questions.last().map(|q| q.kind) {
                     // Engine internal noul order is [yes, no]; gold uses
                     // the wire [no, yes] convention (eval_engine's flip).
@@ -4378,6 +4393,103 @@ fn fit_posture_inner<const N: usize>(inp: &ModellessInput<'_>) -> Result<FittedP
             for obs in &mut score_obs {
                 obs.score = cal.apply(obs.score);
             }
+        }
+        // Issue 122 T2 (`--esc-delta-fit`): the δ-target fit. The join is by
+        // case id + question index against the capture's triples; the label
+        // is `δ > 0` (δ = think_correct − cheap_correct; the tie folds into
+        // the negative side). The join covers EVERY case of the fit slice —
+        // a miss refuses loud (partial labels would train a biased gate).
+        if let Some(path) = &inp.esc_delta_fit {
+            let mut labels: std::collections::HashMap<String, bool> =
+                std::collections::HashMap::new();
+            let file = std::fs::File::open(path)
+                .map_err(|e| format!("esc-delta-fit: cannot open {}: {e}", path.display()))?;
+            for (li, line) in std::io::BufReader::new(file).lines().enumerate() {
+                let line = line.map_err(|e| format!("esc-delta-fit: read {li}: {e}"))?;
+                let v: serde_json::Value = serde_json::from_str(&line)
+                    .map_err(|e| format!("esc-delta-fit: parse line {li}: {e}"))?;
+                let id = v
+                    .get("id")
+                    .and_then(|x| x.as_str())
+                    .ok_or_else(|| format!("esc-delta-fit: line {li} lacks id"))?
+                    .to_string();
+                let cheap = v
+                    .get("cheap_pick")
+                    .and_then(|x| x.as_u64())
+                    .ok_or_else(|| format!("esc-delta-fit: line {li} lacks cheap_pick"))?
+                    as usize;
+                let gold = v
+                    .get("gold")
+                    .and_then(|x| x.as_u64())
+                    .ok_or_else(|| format!("esc-delta-fit: line {li} lacks gold"))?
+                    as usize;
+                let think = v
+                    .get("think_pick")
+                    .ok_or_else(|| format!("esc-delta-fit: line {li} lacks think_pick"))?;
+                let t = if think.is_null() {
+                    return Err(format!(
+                        "esc-delta-fit: line {li} ({id}) carries no think pick — \
+                         the δ label is undefined; refuse"
+                    ));
+                } else {
+                    think.as_u64().ok_or_else(|| {
+                        format!("esc-delta-fit: line {li} think_pick not an integer")
+                    })? as usize
+                };
+                // One δ row per capture id (the Bench-195 file holds 200
+                // rows over 200 unique cal ids — single-question cases). The
+                // capture ids are cal-namespaced (`<suite>:cal:<pos>`); the
+                // fit slice's case ids are the dataset's positional ids
+                // (`<suite>:<pos>`), so the JOIN KEY strips the `:cal:`
+                // segment — never a lossy prefix cut, the exact namespaced
+                // spelling is consumed. A duplicated JOIN KEY means a
+                // multi-question capture this join does not understand —
+                // refuse, never guess.
+                let cal_seg = ":cal:";
+                let join_key = match id.rfind(cal_seg) {
+                    // `<suite>:cal:<pos>` -> key `<suite>:<pos>`; rfind takes
+                    // the LAST `:cal:` so a suite name carrying the segment
+                    // cannot fool the cut.
+                    Some(pos) => {
+                        // the colon at `pos` is the positional id's own — the
+                        // key keeps it (`massive_intent_en:0`).
+                        format!("{}:{}", &id[..pos], &id[pos + cal_seg.len()..])
+                    }
+                    _ => {
+                        return Err(format!(
+                            "esc-delta-fit: capture id {id} is not cal-namespaced                              (`<suite>:cal:<pos>`) - the join law requires the                              capture's own spelling; refuse"
+                        ));
+                    }
+                };
+                if labels
+                    .insert(join_key, (t == gold) as i8 - (cheap == gold) as i8 > 0)
+                    .is_some()
+                {
+                    return Err(format!(
+                        "esc-delta-fit: duplicate capture id {id} — the per-id \
+                         join only understands single-question captures; refuse"
+                    ));
+                }
+            }
+            let mut matched = 0usize;
+            for (obs, (id, _qi)) in score_obs.iter_mut().zip(fit_case_keys.iter()) {
+                match labels.get(id) {
+                    Some(lab) => {
+                        obs.correct = *lab;
+                        matched += 1;
+                    }
+                    None => {
+                        return Err(format!(
+                            "esc-delta-fit: fit-slice case {id} has no δ label in \
+                             the capture — partial labels refuse"
+                        ));
+                    }
+                }
+            }
+            eprintln!(
+                "    esc-delta-fit: relabeled {matched} observation(s) from {}",
+                path.display()
+            );
         }
         // The T1.6 arena posture through the engine surface (Issue 009
         // T2): both axes at ρ = 30%. Thin support falls back to the birth
@@ -6263,6 +6375,9 @@ pub mod seat {
             // seat (the arena's gate posture is the manifest's, not a CLI
             // report); None keeps the seat byte-identical.
             gate_risk_target: None,
+            // Issue 122 T2: the δ-target fit is a CLI measurement lever —
+            // the seat never arms it; None keeps the seat byte-identical.
+            esc_delta_fit: None,
             // Issue 079: the seat keeps the engine's INCUMBENT route law
             // (`kn_route: true` — the index-anchored arm, `4ad25df`; the
             // arena's selection surface is the instinct manifest, not a
@@ -6698,6 +6813,9 @@ pub struct RunOptions {
     /// untouched, and `None` (the default) is byte-identical. delta is
     /// pinned at [`risk_target::RISK_TARGET_DELTA`] (0.05).
     pub gate_risk_target: Option<f64>,
+    /// Issue 122 T2 (`--esc-delta-fit <triples.jsonl>`): the δ-target fit —
+    /// see the doc on the input's own field. `None` = off, byte-identical.
+    pub esc_delta_fit: Option<std::path::PathBuf>,
     /// Issue 079: the legacy `k == N` index-alignment route binding.
     /// Default on = the incumbent shipped behavior, byte-identical;
     /// `--no-kn-route` runs the content-bound posture (route terms arm
@@ -7098,6 +7216,9 @@ impl RunOptions {
             // by default (byte-identical; `--gate-risk-target <alpha>` arms
             // it; delta pinned at risk_target::RISK_TARGET_DELTA).
             gate_risk_target: None,
+            // Issue 122 T2 — the δ-target fit is OFF by default
+            // (byte-identical; `--esc-delta-fit <triples.jsonl>` arms it).
+            esc_delta_fit: None,
             // Issue 079 — the legacy `k == N` index-alignment route binding is
             // the incumbent default; `--no-kn-route` runs the content-bound
             // posture (route terms arm only via by-name resolution) so both

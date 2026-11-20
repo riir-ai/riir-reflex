@@ -223,6 +223,7 @@ fn e0_suite(spec: &SuiteSpec, dir: &Path, kn_route: bool) -> Result<E0Suite, Str
         // Issue 112 T4: the report lever never arms on a probe path (its own
         // ModellessInput literal would need its own arming decision first).
         gate_risk_target: None,
+        esc_delta_fit: None,
         // Issue 079: the route-binding posture rides the invocation, like
         // every modelless engine build.
         kn_route,

@@ -773,6 +773,7 @@ fn run_modelless_suite(
         gate_fit_calibrated: opts.gate_fit_calibrated,
         gate_rho: opts.gate_rho,
         gate_risk_target: opts.gate_risk_target,
+        esc_delta_fit: opts.esc_delta_fit.clone(),
         kn_route: opts.kn_route,
         drafter_fix: opts.drafter_fix,
         pick_latch: opts.pick_latch,

@@ -17,6 +17,7 @@ second signal, never a replacement).
 needs the bulk-MAD form (`sigma_hat_bulk_mad_f32`), not the NN-MAD — differencing ranked values
 measures spacing and collapses τ̂. Pick per surface and write the derivation at the site.
 
+- [ ] **Latency note (katgpt-rs `35c98d9dd`):** the dash_attn arm's G2 FAILED at n = 1024 (e2e 1.027 vs fixed-K_max; the bulk-MAD σ̂ is two O(n) selections, and nothing is saved when k̂ saturates). Price the σ̂ against the reflex p99 ≤ 1 ms budget; prefer a σ̂ over the top-k_max window when the corpus slice is large.
 - [ ] Wire the cascade behind its own feature/flag (opt-in), report-only first.
 - [ ] **Premise check BEFORE the G3 read (the named weak point, Research 681 §2.3):** does
       prefix-truncated corpus scoring degrade monotonically in k (bias grows, τ decays) the

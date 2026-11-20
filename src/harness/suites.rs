@@ -4663,6 +4663,17 @@ fn gold_answer(kind: QKind, qdef: &Value, g: &Value) -> Option<GoldAnswer> {
             let n = qdef.get("criteria")?.as_array()?.len();
             let label = value_as_i64(g.get("label")?)?;
             let idx = usize::try_from(label).ok()?;
+            // Issue 125 (the zed-08a67a53@m3 corpus-forensics fold): a
+            // level outside the question's own criteria space refuses the
+            // QUESTION (the builder's documented per-question skip) — the
+            // engine lanes' per-question probs can never be asked to hold
+            // it. Unguarded, a stale/hostile dataset mints an out-of-space
+            // gold idx and every engine lane panics in `hard_metrics`.
+            // Byte-identical on conforming corpora (any suite carrying one
+            // would panic those lanes today).
+            if idx >= n {
+                return None;
+            }
             let soft: Vec<f64> = (0..n).map(|i| prob_of(&i.to_string())).collect();
             // gold_score = float(gold.score) else float(label)
             let gold_score = g
@@ -4675,6 +4686,38 @@ fn gold_answer(kind: QKind, qdef: &Value, g: &Value) -> Option<GoldAnswer> {
                 gold_score,
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod gold_answer_tests {
+    use super::*;
+
+    fn score_qdef(levels: usize) -> Value {
+        serde_json::json!({ "type": "score", "instructions": "rate", "criteria": (
+            (0..levels).map(|i| serde_json::json!(format!("l{i}"))).collect::<Vec<_>>()
+        ) })
+    }
+
+    #[test]
+    fn score_gold_outside_its_own_criteria_space_refuses_the_question() {
+        // Issue 125 fold (zed-08a67a53@m3's forensics): a stale/hostile
+        // row carrying a level at/above the question's own criteria length
+        // skips the question — never an out-of-space gold idx the engine
+        // lanes' per-question probs cannot hold.
+        let qdef = score_qdef(4);
+        let in_range = serde_json::json!({ "label": 3 });
+        let out_of_range = serde_json::json!({ "label": 4 });
+        let negative = serde_json::json!({ "label": -1 });
+        assert!(gold_answer(QKind::Score, &qdef, &in_range).is_some());
+        assert!(gold_answer(QKind::Score, &qdef, &out_of_range).is_none());
+        assert!(gold_answer(QKind::Score, &qdef, &negative).is_none());
+        // The same row resolves against a 5-level head — the skip is
+        // per-question-space, not a global score rule (the
+        // security_incidents.severity 4×100 + 5×100 heterogeneity is
+        // legal by construction).
+        let qdef5 = score_qdef(5);
+        assert!(gold_answer(QKind::Score, &qdef5, &out_of_range).is_some());
     }
 }
 

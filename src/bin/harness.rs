@@ -438,6 +438,7 @@ fn harness_main() {
     let mut synth_plan = false;
     let mut synth_density_pilot = false;
     let mut corpus_ab: Option<std::path::PathBuf> = None;
+    let mut corpus_ab_mix = false;
     let mut synth_out = std::path::PathBuf::from(".raw/corpus_synth");
     let mut synth_teacher = "openthai".to_string();
     let mut synth_max = 2048usize;
@@ -1049,6 +1050,9 @@ fn harness_main() {
                         .unwrap_or_else(|| die("--corpus-ab needs the synth artifact path")),
                 );
             }
+            // Issue 129 — the three-arm mix mode (a modifier on
+            // --corpus-ab; refused loud without it).
+            "--corpus-ab-mix" => corpus_ab_mix = true,
             "--limit" => {
                 i += 1;
                 distill_limit = args
@@ -2046,6 +2050,11 @@ fn harness_main() {
         die("--probe-delta-ab certifies the --corpus-ab paired A/B; pass --corpus-ab <artifact>");
     }
 
+    // Issue 129: --corpus-ab-mix is likewise a MODIFIER on --corpus-ab.
+    if corpus_ab_mix && corpus_ab.is_none() {
+        die("--corpus-ab-mix arms the --corpus-ab mix mode; pass --corpus-ab <artifact>");
+    }
+
     // riir-train Issue 576 T3: the Arm-B TEACHER pass — laya probabilities
     // over the train rows of the six Arm-A suites, dumped as frozen data
     // (magic `RIDT` + a `.blake3` sidecar per suite) for the distillation
@@ -2338,13 +2347,18 @@ fn harness_main() {
         #[cfg(not(feature = "probe_delta_ab"))]
         let probe_banner = "";
         println!(
-            "harness --corpus-ab: artifact {} · datasets {} · extra-cap {}{}",
+            "harness --corpus-ab: artifact {} · datasets {} · extra-cap {}{}{}",
             ab_path.display(),
             opts.datasets_dir.display(),
             synth_extra_cap,
-            probe_banner
+            probe_banner,
+            if corpus_ab_mix {
+                " · mix mode ON (i129)"
+            } else {
+                ""
+            }
         );
-        let out = match runner::run_corpus_ab(&opts, &ab_path, synth_extra_cap) {
+        let out = match runner::run_corpus_ab(&opts, &ab_path, synth_extra_cap, corpus_ab_mix) {
             Ok(r) => r,
             Err(e) => die(&e),
         };

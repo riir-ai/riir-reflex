@@ -128,6 +128,7 @@ pub use synth::{
     run_synth_corpus, run_synth_plan,
 };
 
+pub(crate) mod canaries;
 mod corpus_ab;
 pub use corpus_ab::{CorpusAbOutput, render_corpus_ab_markdown, run_corpus_ab};
 

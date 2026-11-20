@@ -2,6 +2,10 @@
 
 Compacted 2026-11-20: every heading kept verbatim, bodies <=2 lines of durable facts; full pre-compaction text in git history (pre-compaction HEAD 17463a3d). Operational rules live in `AGENTS.md`.
 
+## 2026-11-20 — Issue 129 CLOSED + REMOVED: the epiplexity mix arm + saturation check LANDED — `--corpus-ab-mix`, the paper's mix law REPRODUCES on massive
+
+T1–T4 landed (`--corpus-ab-mix` modifier on the corpus-ab lane; default two-arm lane byte-identical — V5 gate + aliveness anchor unchanged, mix block absent from the default JSON): arms {gold 0.7800, synth 0.4333, mix25 **0.8300**, mix50 0.8200} → **MIX-LAW PASS** (a mix arm beats both singles, paired LB95 > 0 — arXiv:2608.11746 §H.3 reproduces on the real artifact). T2 saturation: massive NOT saturated (majority 0.0200 vs engine 0.7800). T3 prequential curve: acc plateaus 0.8133 from f=0.25, marginal LB95 +0.0000 after — the artifact's first 25% carries the whole gain; the Plan-641-consumer follow-up DEFERRED (Bench 991 G2 FAIL context in the issue record — the curve is the intake evidence when upstream revives). T4 canaries: `src/harness/runner/canaries.rs` (rep ceiling + frozen-scorer admission band with df-based LEAVE-ONE-OUT gold banding + the similarity×novelty conjunction load-bearing) + 5 fixture tests; the artifact reads CLEAN (rep 0.291 < 0.47, dup 0.000, outliers 0.1%, admissible 0.999). Gates: lib 718/0, harness units/families/seat 54/0, clippy −D lib+bins+tests + the probe_delta_ab posture, rustfmt clean; the scorer's founding bug (bigram bonus inverted below the noise floor) caught by the fixture battery pre-landing. Full file life: `git log --follow -- .issues/129_epiplexity_mix_arm_saturation_check.md`. Lease zed-m3-i129mix@m3, 1795202907 — folded at close. Session: zed-m3-i129mix@m3, epoch 1795202907
+
 ## 2026-11-20 — Issue 128 CLOSED + REMOVED: laya pin-refresh assessment — PIN HELD, no drift (upstream 0.4.35, 2,942 commits past the 0.3.5 pin)
 
 Verdict PIN HELD: checkpoint LFS oids + 12 small-file BLAKE3s byte-match the pins, so the G5 frozen captures stay valid; six Research-425 serving deltas pin-side-irrelevant.

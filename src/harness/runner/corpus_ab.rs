@@ -82,6 +82,12 @@ pub struct CorpusAbSuite {
     #[cfg(feature = "probe_delta_ab")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub probe: Option<crate::harness::probe_delta::ProbeDeltaCert>,
+    /// Issue 129 (`--corpus-ab-mix`): the three-arm mix mode + saturation
+    /// pre-check + prequential growth curve + collapse canaries —
+    /// additive report blocks beside the V5 verdict, never a gate
+    /// replacement. None when the flag is off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mix: Option<CorpusAbMixBlock>,
     pub seconds: f64,
 }
 
@@ -106,6 +112,67 @@ pub struct CorpusAbMeta {
 pub struct CorpusAbOutput {
     pub meta: CorpusAbMeta,
     pub suites: Vec<CorpusAbSuite>,
+}
+
+/// Issue 129 T1 — one mix-mode arm row: the arm's composition, its
+/// accuracy, and its paired LB95s against BOTH singles (the paper's law
+/// reads mix vs each arm alone).
+#[derive(Debug, serde::Serialize)]
+pub struct CorpusAbArmRow {
+    /// gold | synth | mix:0.25 | mix:0.50
+    pub arm: String,
+    pub corpus_docs: usize,
+    /// synth share of the arm's corpus (0.0 gold, 1.0 synth-only).
+    pub synth_share: f64,
+    pub acc: f64,
+    pub lb95_vs_gold: f64,
+    pub lb95_vs_synth: f64,
+}
+
+/// Issue 129 T2 — the suite-saturation pre-check row (report-only, no
+/// exit-code change).
+#[derive(Debug, serde::Serialize)]
+pub struct SaturationRow {
+    /// The frozen read's dominant gold label + its share.
+    pub dominant_label: String,
+    pub dominant_share: f64,
+    /// Always-pick-dominant baseline accuracy on the frozen read.
+    pub majority_acc: f64,
+    /// Arm A (gold) accuracy — the "full-suite accuracy" comparator.
+    pub engine_acc: f64,
+    /// true = the majority baseline MATCHES the engine — the suite is
+    /// uninformative for selection/allocation methods; report says so.
+    pub saturated: bool,
+}
+
+/// Issue 129 T3 — one prequential growth stage: accuracy on the frozen
+/// probe (never-grown: dataset-fixed membership) with the corpus
+/// appended to fraction f of the artifact (gold-first preserved — arm
+/// B's composition rule).
+#[derive(Debug, serde::Serialize)]
+pub struct PrequentialStageRow {
+    pub append_frac: f64,
+    pub appended_docs: usize,
+    pub acc: f64,
+    /// Paired LB95 vs the gold arm (stage − gold).
+    pub lb95_vs_gold: f64,
+    /// Marginal paired LB95 vs the PREVIOUS stage (stage − stage-1; the
+    /// first stage compares vs gold).
+    pub marginal_lb95: f64,
+}
+
+/// Issue 129 — the whole mix-mode block (T1 arms + the paper-law read,
+/// T2 saturation, T3 prequential curve, T4 canaries).
+#[derive(Debug, serde::Serialize)]
+pub struct CorpusAbMixBlock {
+    pub arms: Vec<CorpusAbArmRow>,
+    /// The paper-law verdict: does at least one mix arm beat BOTH
+    /// singles with paired LB95 > 0? Report-only — the V5 gate above is
+    /// unchanged.
+    pub mix_law: String,
+    pub saturation: SaturationRow,
+    pub prequential: Vec<PrequentialStageRow>,
+    pub canaries: crate::harness::runner::canaries::CanaryRow,
 }
 
 /// Flip tallies per gold label (gained = synth-only correct, lost =
@@ -159,11 +226,13 @@ fn arm_specs(
 
 /// Run the corpus A/B for the synth artifact's suite. `opts.suites` (when
 /// non-empty) must agree with the artifact's suite — a mismatch is a loud
-/// refusal, never a silent suite swap.
+/// refusal, never a silent suite swap. `mix` arms the Issue-129 mode
+/// (gold / synth / mix arms + saturation + prequential + canaries).
 pub fn run_corpus_ab(
     opts: &RunOptions,
     synth_path: &Path,
     extra_cap: usize,
+    mix: bool,
 ) -> Result<CorpusAbOutput, String> {
     let (header, docs, _digest) = load_synth_corpus(synth_path)?;
     let Some(spec) = SUITES.iter().find(|s| s.name == header.suite) else {
@@ -205,6 +274,7 @@ pub fn run_corpus_ab(
                 synth_path,
                 extra_cap,
                 opts,
+                mix,
             )
         };
     }
@@ -240,6 +310,7 @@ pub fn run_corpus_ab(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn corpus_ab_suite<const N: usize>(
     spec: &SuiteSpec,
     prepared: &super::Prepared,
@@ -248,6 +319,7 @@ fn corpus_ab_suite<const N: usize>(
     synth_path: &Path,
     extra_cap: usize,
     opts: &RunOptions,
+    mix: bool,
 ) -> Result<CorpusAbSuite, String> {
     let t_start = std::time::Instant::now();
     let labels = &prepared.labels;
@@ -333,7 +405,7 @@ fn corpus_ab_suite<const N: usize>(
         extra_cap,
         nb_sets_b.as_deref(),
     );
-    let mut eng_b = DecisionEngine::<N, EMBED_DIM>::build_specs(specs_b, cfg)
+    let mut eng_b = DecisionEngine::<N, EMBED_DIM>::build_specs(specs_b, cfg.clone())
         .map_err(|e| format!("engine build ({} +synth): {e}", spec.name))?;
     if !fb_b.is_empty() {
         eprintln!(
@@ -445,6 +517,26 @@ fn corpus_ab_suite<const N: usize>(
         });
     }
     let ood = echo_gates::ood_block(ood_rungs, acc_b - acc_a, lb95);
+
+    // ── Issue 129 (`--corpus-ab-mix`): the three-arm mix mode + the
+    // saturation pre-check + the prequential growth curve + the collapse
+    // canaries. Report-only — the V5 verdict above is computed BEFORE
+    // this block and is byte-identical with the flag off.
+    let mix_block = mix
+        .then(|| {
+            mix_block_computed::<N>(
+                spec,
+                prepared,
+                synth_docs,
+                &cfg,
+                effective_cap,
+                extra_cap,
+                &ok_a,
+                &ok_b,
+                acc_a,
+            )
+        })
+        .transpose()?;
 
     // Instrument aliveness: arm A must reproduce the published massive
     // row — same 300 frozen rows, same build path. (Other suites: the
@@ -573,6 +665,7 @@ fn corpus_ab_suite<const N: usize>(
         ood,
         #[cfg(feature = "probe_delta_ab")]
         probe: probe_cert,
+        mix: mix_block,
         seconds: t_start.elapsed().as_secs_f64(),
     })
 }
@@ -696,6 +789,48 @@ pub fn render_corpus_ab_markdown(out: &CorpusAbOutput) -> String {
                 v.b_only_cases.join(", ")
             ));
         }
+        if let Some(m) = &v.mix {
+            s.push_str("## Issue-129 mix mode — arms, saturation, prequential curve, canaries\n\n");
+            s.push_str("| arm | docs | synth share | acc | LB95 vs gold | LB95 vs synth |\n|---|---|---|---|---|---|\n");
+            for a in &m.arms {
+                s.push_str(&format!(
+                    "| {} | {} | {:.2} | {:.4} | {:+.4} | {:+.4} |\n",
+                    a.arm, a.corpus_docs, a.synth_share, a.acc, a.lb95_vs_gold, a.lb95_vs_synth
+                ));
+            }
+            s.push_str(&format!("\n- **{}**\n", m.mix_law));
+            s.push_str(&format!(
+                "- saturation (T2): dominant label '{}' share {:.3} · majority baseline {:.4} vs engine {:.4} → {}\n",
+                m.saturation.dominant_label,
+                m.saturation.dominant_share,
+                m.saturation.majority_acc,
+                m.saturation.engine_acc,
+                if m.saturation.saturated {
+                    "**SATURATED** — the suite is uninformative for selection/allocation methods; no teacher budget on it"
+                } else {
+                    "not saturated"
+                }
+            ));
+            s.push_str("- prequential growth (T3, report-only; probe = the frozen read, never-grown by construction — dataset-fixed membership):\n\n| f | +synth docs | acc | LB95 vs gold | marginal LB95 |\n|---|---|---|---|---|\n");
+            for st in &m.prequential {
+                s.push_str(&format!(
+                    "| {:.2} | {} | {:.4} | {:+.4} | {:+.4} |\n",
+                    st.append_frac, st.appended_docs, st.acc, st.lb95_vs_gold, st.marginal_lb95
+                ));
+            }
+            s.push_str("\n- marginal LB95 = paired LB95 vs the previous stage (the corpus-append-as-update signal for gain-weighted budget allocation; stationary-surface ban: allocation surfaces only, never the decide path).\n");
+            s.push_str(&format!("- canaries (T4): {}\n", m.canaries.verdict));
+            s.push_str(&format!(
+                "  - rep 4-gram {:.3} (ceiling {}) · dup share {:.3} (ceiling {}) · band outliers {:.3} (p5 floor) · novelty {:.3} · admissible (in-band ∧ novel) {:.3}\n\n",
+                m.canaries.rep_rate_4gram,
+                crate::harness::runner::canaries::REP_CEILING,
+                m.canaries.dup_share,
+                crate::harness::runner::canaries::DUP_SHARE_CEILING,
+                m.canaries.band_outlier_share,
+                m.canaries.novelty_share,
+                m.canaries.admissible_share
+            ));
+        }
         if !v.a_only_cases.is_empty() {
             s.push_str(&format!(
                 "gold-only wins: {}\n\n",
@@ -704,6 +839,299 @@ pub fn render_corpus_ab_markdown(out: &CorpusAbOutput) -> String {
         }
     }
     s
+}
+
+// ── Issue 129 — the mix-mode engine (`--corpus-ab-mix`) ─────────────────
+
+/// The mix composition law (deterministic, no RNG): per label, the cap
+/// is split `synth_n = (f·cap).round()` synth + the rest gold — gold
+/// docs first (pool order), synth after (artifact order); a short side
+/// fills from the other (the cap still saturates where docs exist — the
+/// Issue-039 fallback law is untouched, `specs_from_pool` owns it).
+/// The count tables read the arm's OWN pool uncapped (the same
+/// single-variable rule every arm carries: its drafter corpus AND its
+/// tables are the one composition being measured).
+fn mix_pool(
+    gold_pool: &[TrainDoc],
+    synth: &[TrainDoc],
+    labels: &[String],
+    cap: usize,
+    f: f64,
+) -> Vec<TrainDoc> {
+    let synth_n = ((cap as f64) * f).round() as usize;
+    let gold_n = cap.saturating_sub(synth_n);
+    let mut pool = Vec::new();
+    for label in labels {
+        let mut n_gold = 0usize;
+        for d in gold_pool.iter().filter(|d| d.label == *label) {
+            if n_gold == gold_n {
+                break;
+            }
+            pool.push(d.clone());
+            n_gold += 1;
+        }
+        // The label's synth share: synth_n, PLUS whatever gold could not
+        // fill (the short-gold fill law).
+        let synth_want = synth_n + (gold_n - n_gold);
+        pool.extend(
+            synth
+                .iter()
+                .filter(|d| d.label == *label)
+                .take(synth_want)
+                .cloned(),
+        );
+    }
+    pool
+}
+
+/// Per-label eval helper: build from an arbitrary pool + eval the frozen
+/// read, returning per-case forced-pick correctness.
+fn arm_eval<const N: usize>(
+    pool: &[TrainDoc],
+    labels: &[String],
+    cap: usize,
+    cfg: &crate::engine::EngineConfig,
+    cases: &[SuiteCase],
+    states: &[String],
+) -> Result<(Vec<bool>, f64, usize), String> {
+    #[cfg(feature = "nb_scope")]
+    let nb_sets = (cfg.nb_scale > 0.0).then(|| super::nb_doc_sets(pool, labels, &[]));
+    #[cfg(not(feature = "nb_scope"))]
+    let nb_sets: Option<Vec<Vec<String>>> = None;
+    let (specs, _fb) = super::specs_from_pool(pool, labels, cap, nb_sets);
+    let mut eng = crate::engine::DecisionEngine::<N, EMBED_DIM>::build_specs(specs, cfg.clone())
+        .map_err(|e| format!("engine build (mix arm): {e}"))?;
+    let (eval, _lat) = eval_engine(&mut eng, cases, states, true)?;
+    let ok: Vec<bool> = cases
+        .iter()
+        .enumerate()
+        .map(|(ci, case)| eval.picks[ci][0] == case.gold[0].idx)
+        .collect();
+    let acc = ok.iter().filter(|&&b| b).count() as f64 / ok.len() as f64;
+    Ok((ok, acc, pool.len()))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn mix_block_computed<const N: usize>(
+    spec: &SuiteSpec,
+    prepared: &super::Prepared,
+    synth_docs: &[TrainDoc],
+    cfg: &crate::engine::EngineConfig,
+    cap: usize,
+    extra_cap: usize,
+    ok_a: &[bool],
+    ok_b: &[bool],
+    acc_a: f64,
+) -> Result<CorpusAbMixBlock, String> {
+    let labels = &prepared.labels;
+    let cases = &prepared.suite.cases;
+    let states = &prepared.state_strs;
+
+    // T1 — the synth-alone arm (the paper's second single).
+    let synth_pool: Vec<TrainDoc> = synth_docs.to_vec();
+    let (ok_s, acc_s, s_docs) = arm_eval::<N>(&synth_pool, labels, cap, cfg, cases, states)?;
+
+    // T1 — the mix arms.
+    let gold_pool = &prepared.train;
+    let mut arms = Vec::new();
+    let mut mix_accs: Vec<(f64, Vec<bool>, f64)> = Vec::new(); // (f, ok, acc)
+    for f in [0.25f64, 0.50] {
+        let pool = mix_pool(gold_pool, synth_docs, labels, cap, f);
+        let (ok_m, acc_m, m_docs) = arm_eval::<N>(&pool, labels, cap, cfg, cases, states)?;
+        arms.push(CorpusAbArmRow {
+            arm: format!("mix:{f}"),
+            corpus_docs: m_docs,
+            synth_share: f,
+            acc: acc_m,
+            lb95_vs_gold: paired_lb95(&ok_m, ok_a),
+            lb95_vs_synth: paired_lb95(&ok_m, &ok_s),
+        });
+        mix_accs.push((f, ok_m, acc_m));
+    }
+
+    // The singles' rows close the arm table (gold's LB95 vs synth).
+    arms.insert(
+        0,
+        CorpusAbArmRow {
+            arm: "gold".into(),
+            corpus_docs: gold_pool.len(),
+            synth_share: 0.0,
+            acc: acc_a,
+            lb95_vs_gold: 0.0,
+            lb95_vs_synth: paired_lb95(ok_a, &ok_s),
+        },
+    );
+    arms.push(CorpusAbArmRow {
+        arm: "synth".into(),
+        corpus_docs: s_docs,
+        synth_share: 1.0,
+        acc: acc_s,
+        lb95_vs_gold: paired_lb95(&ok_s, ok_a),
+        lb95_vs_synth: 0.0,
+    });
+
+    // The paper-law read: at least one mix arm beats BOTH singles with
+    // paired LB95 > 0. Report-only.
+    let mix_law = if mix_accs
+        .iter()
+        .any(|(_, ok_m, _)| paired_lb95(ok_m, ok_a) > 0.0 && paired_lb95(ok_m, &ok_s) > 0.0)
+    {
+        "MIX-LAW PASS — a mix arm beats both singles (paired LB95 > 0; arXiv:2608.11746 §H.3)"
+            .into()
+    } else if mix_accs
+        .iter()
+        .any(|(_, ok_m, _)| paired_lb95(ok_m, ok_a) > 0.0)
+    {
+        "MIX-LAW TAILS — a mix arm beats gold but not synth-alone".into()
+    } else {
+        "MIX-LAW FAIL — no mix arm beats the gold single".into()
+    };
+
+    // T2 — the saturation pre-check on the frozen read (report-only; no
+    // exit-code change).
+    let mut label_counts: BTreeMap<String, usize> = BTreeMap::new();
+    for case in cases {
+        *label_counts.entry(gold_label_of_case(case)).or_default() += 1;
+    }
+    let (dominant_label, dominant_n) = label_counts
+        .iter()
+        .max_by_key(|(_, n)| *n)
+        .map(|(l, n)| (l.clone(), *n))
+        .unwrap_or_default();
+    let majority_acc = if cases.is_empty() {
+        0.0
+    } else {
+        dominant_n as f64 / cases.len() as f64
+    };
+    let saturated = majority_acc >= acc_a;
+    let saturation = SaturationRow {
+        dominant_label,
+        dominant_share: majority_acc,
+        majority_acc,
+        engine_acc: acc_a,
+        saturated,
+    };
+    if saturated {
+        eprintln!(
+            "  [corpus-ab {}] SATURATED — the dominant-label baseline ({majority_acc:.4}) \
+             matches the engine ({acc_a:.4}); the suite is uninformative for selection/\
+             allocation methods — no teacher budget on it",
+            spec.name
+        );
+    }
+
+    // T3 — the prequential growth curve: corpus append IS the update;
+    // the probe is the frozen read (never-grown: dataset-fixed
+    // membership, disclosed in the report). Stages scale the PER-LABEL
+    // extra cap (arm B's `take(extra_cap)` per-label rule) so f = 1.0
+    // IS arm B byte-equal (its eval is reused, one build saved). The
+    // stage's doc list is the full in-scope artifact; the cap picks the
+    // same per-label prefix arm B reads at f = 1.0.
+    let mut prequential = Vec::new();
+    let mut prev_ok: Vec<bool> = ok_a.to_vec();
+    let mut prev_label = "gold".to_string();
+    for &f in [0.25f64, 0.5, 0.75, 1.0].iter() {
+        let extra_cap_stage = (((extra_cap as f64) * f).ceil()) as usize;
+        let ok_stage: Vec<bool>;
+        let acc_stage: f64;
+        let appended: usize = synth_docs
+            .iter()
+            .filter(|d| labels.iter().any(|l| l == &d.label))
+            .fold(BTreeMap::<&str, usize>::new(), |mut m, d| {
+                let e = m.entry(d.label.as_str()).or_default();
+                if *e < extra_cap_stage {
+                    *e += 1;
+                }
+                m
+            })
+            .into_values()
+            .sum();
+        if f >= 1.0 {
+            // Byte-equal reuse: the full-cap stage IS arm B.
+            ok_stage = ok_b.to_vec();
+            acc_stage = ok_b.iter().filter(|&&b| b).count() as f64 / ok_b.len() as f64;
+        } else {
+            let (mut specs, _fb, _used) = super::specs_corpus_extended(
+                gold_pool,
+                synth_docs,
+                labels,
+                cap,
+                extra_cap_stage,
+                None,
+            );
+            // Arm B's count-table rule, at the stage's own fraction: the
+            // tables read train ∪ the full artifact (the capped take
+            // happens in the spec builder; the tables stay the uncapped
+            // union — the same rule arm B's tables read, so the stage's
+            // ONLY variable is the drafter-corpus cap).
+            #[cfg(feature = "nb_scope")]
+            if cfg.nb_scale > 0.0 {
+                let sets = super::nb_doc_sets(gold_pool, labels, synth_docs);
+                for (idx, sp) in specs.iter_mut().enumerate() {
+                    *sp = sp.clone().with_nb_docs(sets[idx].clone());
+                }
+            }
+            #[cfg(not(feature = "nb_scope"))]
+            let _ = &specs;
+            let mut eng =
+                crate::engine::DecisionEngine::<N, EMBED_DIM>::build_specs(specs, cfg.clone())
+                    .map_err(|e| format!("engine build (prequential {f}): {e}"))?;
+            let (eval, _) = eval_engine(&mut eng, cases, states, true)?;
+            ok_stage = cases
+                .iter()
+                .enumerate()
+                .map(|(ci, case)| eval.picks[ci][0] == case.gold[0].idx)
+                .collect();
+            acc_stage = ok_stage.iter().filter(|&&b| b).count() as f64 / ok_stage.len() as f64;
+        }
+        let lb_vs_gold = paired_lb95(&ok_stage, ok_a);
+        let marginal = paired_lb95(&ok_stage, &prev_ok);
+        eprintln!(
+            "  [corpus-ab {}] prequential f={f} (extra-cap {extra_cap_stage}, +{appended} synth): \
+             acc {acc_stage:.4} · LB95 vs {prev_label} {marginal:+.4}",
+            spec.name
+        );
+        prequential.push(PrequentialStageRow {
+            append_frac: f,
+            appended_docs: appended,
+            acc: acc_stage,
+            lb95_vs_gold: lb_vs_gold,
+            marginal_lb95: marginal,
+        });
+        prev_ok = ok_stage;
+        prev_label = format!("stage f={f}");
+    }
+
+    // T4 — the collapse canaries over the loaded artifact (report rows;
+    // the refusal arms are the flags a future generator lane reads).
+    let gold_texts: Vec<String> = gold_pool.iter().map(|d| d.text.clone()).collect();
+    let synth_texts: Vec<String> = synth_docs.iter().map(|d| d.text.clone()).collect();
+    let canary_row = crate::harness::runner::canaries::canaries(&gold_texts, &synth_texts);
+    eprintln!(
+        "  [corpus-ab {}] canaries: {}",
+        spec.name, canary_row.verdict
+    );
+
+    eprintln!(
+        "  [corpus-ab {}] mix law: {mix_law} · gold {acc_a:.4} · synth {acc_s:.4} · \
+         mix25 {:.4} · mix50 {:.4} · saturation: dominant '{}' {:.3} (majority {:.4} vs engine {:.4}){}",
+        spec.name,
+        mix_accs[0].2,
+        mix_accs[1].2,
+        saturation.dominant_label,
+        saturation.dominant_share,
+        majority_acc,
+        acc_a,
+        if saturated { " — SATURATED" } else { "" },
+    );
+
+    Ok(CorpusAbMixBlock {
+        arms,
+        mix_law,
+        saturation,
+        prequential,
+        canaries: canary_row,
+    })
 }
 
 #[cfg(test)]
@@ -780,5 +1208,72 @@ mod tests {
         // veto path is order-agnostic (key-string accept), and gold_pos is
         // computed from the same map the lane builds (sorted insertion).
         assert_eq!(gold_label_of_case(&case), "beta");
+    }
+
+    #[test]
+    fn mix_pool_splits_the_cap_gold_first_deterministically() {
+        let train = vec![
+            td("L1", "gold a1"),
+            td("L1", "gold a2"),
+            td("L1", "gold a3"),
+            td("L1", "gold a4"),
+            td("L2", "gold b1"),
+            td("L2", "gold b2"),
+        ];
+        let synth = vec![
+            td("L1", "synth a5"),
+            td("L1", "synth a6"),
+            td("L2", "synth b3"),
+        ];
+        let labels = vec!["L1".to_string(), "L2".to_string()];
+        // cap 4, f = 0.5 → 2 synth + 2 gold per label.
+        let pool = mix_pool(&train, &synth, &labels, 4, 0.5);
+        let l1: Vec<&str> = pool
+            .iter()
+            .filter(|d| d.label == "L1")
+            .map(|d| d.text.as_str())
+            .collect();
+        assert_eq!(l1, vec!["gold a1", "gold a2", "synth a5", "synth a6"]);
+        let l2: Vec<&str> = pool
+            .iter()
+            .filter(|d| d.label == "L2")
+            .map(|d| d.text.as_str())
+            .collect();
+        // L2 has 2 synth docs and asks for 2: gold 2 first then synth 2 →
+        // 4 docs (gold_n = cap − synth_n = 2, synth_n = 2 — both sides
+        // fill exactly).
+        assert_eq!(l2, vec!["gold b1", "gold b2", "synth b3"]);
+        assert_eq!(
+            l2.len(),
+            3,
+            "synth is short for L2 — the pool takes what exists"
+        );
+    }
+
+    #[test]
+    fn mix_pool_short_gold_fills_from_synth() {
+        let train = vec![td("L1", "gold a1")];
+        let synth = vec![
+            td("L1", "synth a2"),
+            td("L1", "synth a3"),
+            td("L1", "synth a4"),
+        ];
+        let labels = vec!["L1".to_string()];
+        // cap 4, f = 0.25 → synth 1 + gold 3; gold has 1, so synth fills
+        // 1 + 2 = 3 (the short-gold fill law) → 4 docs, 3 of them synth.
+        let pool = mix_pool(&train, &synth, &labels, 4, 0.25);
+        assert_eq!(pool.len(), 4);
+        let synth_n = pool.iter().filter(|d| d.text.starts_with("synth")).count();
+        assert_eq!(synth_n, 3);
+    }
+
+    #[test]
+    fn mix_pool_zero_fraction_is_the_gold_pool() {
+        let train = vec![td("L1", "gold a1"), td("L1", "gold a2")];
+        let synth = vec![td("L1", "synth a3")];
+        let labels = vec!["L1".to_string()];
+        let pool = mix_pool(&train, &synth, &labels, 2, 0.0);
+        let texts: Vec<&str> = pool.iter().map(|d| d.text.as_str()).collect();
+        assert_eq!(texts, vec!["gold a1", "gold a2"]);
     }
 }

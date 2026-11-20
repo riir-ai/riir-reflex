@@ -32,7 +32,8 @@ use super::ModellessInput;
 #[cfg(feature = "nb_ridge")]
 use super::ridge_lane::RidgeSelection;
 use crate::bm25_floor::{
-    BM25_B, BM25_K1, BM25_TOP_K, Bm25Index, floor_rows, question_options, question_query,
+    BM25_B, BM25_K1, BM25_TOP_K, Bm25Index, floor_contract_violation, floor_rows, question_options,
+    question_query,
 };
 
 /// One suite's floor row + (when the selection levers ran) the A-pre
@@ -54,6 +55,15 @@ pub struct Bm25FloorReport {
     pub top_k: usize,
     /// Docs indexed (the registry pool size the floor saw).
     pub n_docs: usize,
+    /// Typed non-applicability (issue 125): `Some(reason)` = the suite is
+    /// outside the floor's label-vote contract (per-question option spaces
+    /// that are not the doc-label universe — the typed_decisions shape),
+    /// so NO rows were computed and `accuracy` is a meaningless 0.0
+    /// placeholder. Renderers print n/a; the engine-vs-floor corpus-defect
+    /// comparison (issue 121 A2) must skip this row. Absent = a real
+    /// floor row. Additive wire (skip-when-None).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub not_applicable: Option<String>,
     /// The A-pre redundancy read (None = the selection levers didn't run —
     /// UNMEASURED, never folded into a pass).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -105,6 +115,26 @@ fn bm25_floor_pass_inner(
     nb_selection: Option<&super::NbSelection>,
     ridge_selection: Option<&RidgeSelection>,
 ) -> Result<Bm25FloorReport, String> {
+    // Issue 125 — the floor-contract gate BEFORE any row is computed: a
+    // suite whose questions carry per-question option spaces outside the
+    // doc-label universe gets a typed n/a row, never the pick-0
+    // degenerate number and never the gold-vs-arity panic. The 6 standing
+    // classification suites pass byte-identically (their choice keys ARE
+    // the label universe).
+    if let Some(reason) = floor_contract_violation(&inp.suite.cases, inp.labels) {
+        eprintln!("    bm25-floor: n/a — {reason}");
+        return Ok(Bm25FloorReport {
+            accuracy: 0.0,
+            n_questions: 0,
+            empty_votes: 0,
+            k1: BM25_K1,
+            b: BM25_B,
+            top_k: BM25_TOP_K,
+            n_docs: 0,
+            redundancy: redundancy_read(nb_selection, ridge_selection),
+            not_applicable: Some(reason),
+        });
+    }
     let index = Bm25Index::build(inp.train, inp.labels);
     let rows = floor_rows(&index, &inp.suite.cases, inp.labels);
     let hard = crate::harness::metrics::hard_metrics(&rows);
@@ -132,6 +162,7 @@ fn bm25_floor_pass_inner(
         top_k: BM25_TOP_K,
         n_docs: index.n_docs(),
         redundancy,
+        not_applicable: None,
     })
 }
 

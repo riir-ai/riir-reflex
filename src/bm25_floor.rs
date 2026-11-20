@@ -32,6 +32,15 @@
 //! the row as `empty_votes`; a floor that abstains by construction would
 //! hide exactly the violations the lane exists to find).
 //!
+//! The decision rule presumes every question's option space IS the
+//! suite's label universe (choice keys == labels; score levels and noul
+//! pairs at the label universe's arity). [`floor_contract_violation`]
+//! enforces exactly that before any row is computed (issue 125): a suite
+//! outside it — typed_decisions, whose doc labels are workflow names
+//! while its questions carry per-workflow schema keys, level counts and
+//! noul pairs — is a typed n/a floor row, never a degenerate number and
+//! never the gold-vs-arity panic the sweep first died on.
+//!
 //! REPORT-ONLY: no exit-code change, no promotion path (A3's kill bar
 //! lives in the issue, not here). Zero new dependencies — reflex keeps
 //! one foreign code-level dep (katgpt-core).
@@ -253,7 +262,12 @@ pub fn question_query(case: &SuiteCase, q: &SuiteQuestion) -> String {
 /// option/level index, which for the classification suites IS the label
 /// index — the runner's own pick↔domain law). `None` = malformed criteria
 /// (the caller skips the question, counted upstream).
-#[must_use]
+///
+/// The Score|Noul substitution is NOT unconditional: it is honest only
+/// under [`floor_contract_violation`] — the question's true option space
+/// must have the label universe's arity (a score question's criteria
+/// levels ARE the label universe; a noul pair fits a 2-label universe),
+/// or the substitution silently answers a question in the wrong space.
 pub fn question_options<'a>(q: &'a SuiteQuestion, labels: &'a [String]) -> Option<Vec<&'a str>> {
     match q.kind {
         QKind::Choice => q
@@ -262,6 +276,85 @@ pub fn question_options<'a>(q: &'a SuiteQuestion, labels: &'a [String]) -> Optio
             .map(|m| m.keys().map(String::as_str).collect()),
         QKind::Score | QKind::Noul => Some(labels.iter().map(String::as_str).collect()),
     }
+}
+
+/// The floor's contract over one suite, checked BEFORE any row is
+/// computed: every question's option space must BE the suite's label
+/// universe — the same arity, every choice key spelled as a doc label,
+/// and every gold index inside. This is the only shape the label-vote
+/// decision rule can answer ([`Bm25Index::pick`] maps option spellings
+/// to doc-label votes), so a suite whose questions carry per-workflow
+/// option spaces outside the doc-label universe — typed_decisions: 4
+/// workflow labels vs per-schema choice keys, level counts and noul
+/// pairs — would silently degenerate to pick-0 rows and, on a score gold
+/// at/above the label count, panic inside `hard_metrics` (the Issue-125
+/// sweep kill). Returns `Some(reason)` naming the first violation;
+/// `None` = the floor may run, the Score|Noul substitution in
+/// [`question_options`] is then the level/noul universe by arity, and
+/// the classification-suite identity case is byte-identical to before.
+#[must_use]
+pub fn floor_contract_violation(cases: &[SuiteCase], labels: &[String]) -> Option<String> {
+    let n = labels.len();
+    if n == 0 {
+        return Some("empty label universe".to_string());
+    }
+    for case in cases {
+        for (qi, q) in case.questions.iter().enumerate() {
+            let Some(gold) = case.gold.get(qi) else {
+                return Some(format!(
+                    "case '{}' question {qi} ({:?}): questions/gold desynced — no gold row",
+                    case.id, q.kind
+                ));
+            };
+            // The question's TRUE option-space arity — the engine's own
+            // wire derivation (choice = criteria keys, score = criteria
+            // levels, noul = the fixed [p_no, p_yes] pair).
+            let arity = match q.kind {
+                QKind::Choice => q.criteria.as_object().map(|m| m.len()),
+                QKind::Score => q.criteria.as_array().map(|a| a.len()),
+                QKind::Noul => Some(2),
+            };
+            let Some(arity) = arity else {
+                return Some(format!(
+                    "case '{}' question '{}' ({:?}): malformed criteria — no option space to \
+                     contract against",
+                    case.id, q.qid, q.kind
+                ));
+            };
+            if arity != n {
+                return Some(format!(
+                    "case '{}' question '{}' ({:?}): option space of {arity} vs the doc-label \
+                     universe of {n} — per-question option spaces outside the label universe \
+                     are outside the label-vote contract",
+                    case.id, q.qid, q.kind
+                ));
+            }
+            if q.kind == QKind::Choice {
+                let keys = q
+                    .criteria
+                    .as_object()
+                    .expect("arity check proved the object")
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if let Some(k) = keys.iter().find(|k| !labels.iter().any(|l| l == *k)) {
+                    return Some(format!(
+                        "case '{}' question '{}' (choice): option key {k:?} is not a doc label \
+                         — votes cannot decide it (picks would degenerate to 0)",
+                        case.id, q.qid
+                    ));
+                }
+            }
+            if gold.idx >= n {
+                return Some(format!(
+                    "case '{}' question '{}' ({:?}): gold index {} outside the {n}-entry \
+                     option space",
+                    case.id, q.qid, q.kind, gold.idx
+                ));
+            }
+        }
+    }
+    None
 }
 
 impl Bm25Index {
@@ -369,5 +462,178 @@ mod tests {
         let a = Bm25Index::build(&docs(), &labels);
         let b = Bm25Index::build(&docs(), &labels);
         assert_eq!(a.vote("card refund", 10), b.vote("card refund", 10));
+    }
+
+    // ── issue 125: the floor-contract check ────────────────────────────
+
+    use crate::harness::suites::{GoldAnswer, SuiteCase, SuiteQuestion};
+    use serde_json::json;
+
+    fn q(qid: &str, kind: QKind, criteria: serde_json::Value) -> SuiteQuestion {
+        SuiteQuestion {
+            qid: qid.to_string(),
+            kind,
+            instructions: "answer".to_string(),
+            criteria,
+        }
+    }
+
+    fn g(idx: usize) -> GoldAnswer {
+        GoldAnswer {
+            idx,
+            soft: Vec::new(),
+            gold_score: None,
+        }
+    }
+
+    fn one_case(qs: Vec<SuiteQuestion>, golds: Vec<GoldAnswer>) -> Vec<SuiteCase> {
+        vec![SuiteCase {
+            id: "c0".to_string(),
+            state: json!({"text": "state"}),
+            questions: qs,
+            gold: golds,
+        }]
+    }
+
+    #[test]
+    fn contract_accepts_the_classification_shape() {
+        // The standing classification suites: choice keys == the label
+        // universe, gold inside — the floor's byte-identical case.
+        let labels: Vec<String> = ["billing", "login"].iter().map(|s| s.to_string()).collect();
+        let cases = one_case(
+            vec![q(
+                "topic",
+                QKind::Choice,
+                json!({"billing": serde_json::Value::Null, "login": serde_json::Value::Null}),
+            )],
+            vec![g(1)],
+        );
+        assert_eq!(floor_contract_violation(&cases, &labels), None);
+    }
+
+    #[test]
+    fn contract_keeps_score_and_noul_at_the_universe_arity() {
+        // sst5's shape: score levels ARE the (stringified) label universe;
+        // s1mb_noul's shape: the noul pair fits the 2-label universe.
+        let sst5_labels: Vec<String> = (0..5).map(|i| i.to_string()).collect();
+        let cases = one_case(
+            vec![q("s", QKind::Score, json!(["l0", "l1", "l2", "l3", "l4"]))],
+            vec![g(3)],
+        );
+        assert_eq!(floor_contract_violation(&cases, &sst5_labels), None);
+
+        let noul_labels: Vec<String> = ["0", "1"].iter().map(|s| s.to_string()).collect();
+        let cases = one_case(
+            vec![q("n", QKind::Noul, serde_json::Value::Null)],
+            vec![g(1)],
+        );
+        assert_eq!(floor_contract_violation(&cases, &noul_labels), None);
+    }
+
+    #[test]
+    fn contract_rejects_the_typed_decisions_choice_shape() {
+        // Issue 125's actual kill: workflow doc labels vs per-workflow
+        // schema choice keys — votes cannot decide them.
+        let labels: Vec<String> = ["wf_a", "wf_b", "wf_c", "wf_d"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let cases = one_case(
+            vec![q(
+                "action",
+                QKind::Choice,
+                json!({"escalate": serde_json::Value::Null, "resolve": serde_json::Value::Null}),
+            )],
+            vec![g(0)],
+        );
+        let reason = floor_contract_violation(&cases, &labels)
+            .expect("typed_decisions-shaped choice must violate");
+        // The arity arm fires first here (2 keys vs 4 workflow labels);
+        // the spelling arm is the same violation class at equal arity.
+        assert!(
+            reason.contains("option space of 2") || reason.contains("not a doc label"),
+            "reason: {reason}"
+        );
+    }
+
+    #[test]
+    fn contract_rejects_choice_keys_outside_the_universe_at_equal_arity() {
+        // The spelling arm alone: same key count as the universe, but a
+        // key the doc labels never carry — votes cannot decide it.
+        let labels: Vec<String> = ["wf_a", "wf_b", "wf_c", "wf_d"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let cases = one_case(
+            vec![q(
+                "action",
+                QKind::Choice,
+                json!({
+                    "wf_a": serde_json::Value::Null,
+                    "wf_b": serde_json::Value::Null,
+                    "wf_c": serde_json::Value::Null,
+                    "escalate": serde_json::Value::Null,
+                }),
+            )],
+            vec![g(0)],
+        );
+        let reason =
+            floor_contract_violation(&cases, &labels).expect("a non-label choice key must violate");
+        assert!(reason.contains("not a doc label"), "reason: {reason}");
+    }
+
+    #[test]
+    fn contract_rejects_an_option_space_outside_the_universe() {
+        // The panic class: a 5-level score question over a 4-workflow
+        // universe — gold 4 against 4 workflow probs.
+        let labels: Vec<String> = ["wf_a", "wf_b", "wf_c", "wf_d"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let cases = one_case(
+            vec![q(
+                "severity",
+                QKind::Score,
+                json!(["none", "low", "medium", "high", "critical"]),
+            )],
+            vec![g(4)],
+        );
+        let reason = floor_contract_violation(&cases, &labels)
+            .expect("5-level score over a 4-label universe must violate");
+        assert!(reason.contains("option space of 5"), "reason: {reason}");
+    }
+
+    #[test]
+    fn contract_rejects_a_gold_outside_the_space() {
+        let labels: Vec<String> = (0..5).map(|i| i.to_string()).collect();
+        let cases = one_case(
+            vec![q("s", QKind::Score, json!(["l0", "l1", "l2", "l3", "l4"]))],
+            vec![g(7)],
+        );
+        let reason = floor_contract_violation(&cases, &labels)
+            .expect("gold 7 over a 5-entry space must violate");
+        assert!(reason.contains("gold index 7"), "reason: {reason}");
+    }
+
+    #[test]
+    fn contract_rejects_a_questions_gold_desync() {
+        let labels: Vec<String> = ["billing", "login"].iter().map(|s| s.to_string()).collect();
+        // Two questions, one gold row — the parallel-vector contract is
+        // broken; the walk refuses loud instead of indexing blind.
+        let cases = vec![SuiteCase {
+            id: "c0".to_string(),
+            state: json!({"text": "state"}),
+            questions: vec![
+                q(
+                    "a",
+                    QKind::Choice,
+                    json!({"billing": serde_json::Value::Null, "login": serde_json::Value::Null}),
+                ),
+                q("b", QKind::Noul, serde_json::Value::Null),
+            ],
+            gold: vec![g(0)],
+        }];
+        let reason = floor_contract_violation(&cases, &labels).expect("desynced gold must violate");
+        assert!(reason.contains("desynced"), "reason: {reason}");
     }
 }

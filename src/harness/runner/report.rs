@@ -352,34 +352,44 @@ pub fn render_markdown(out: &RunOutput, errors: &[String]) -> String {
         }
         // Issue 121 — the BM25 lexical floor row (report-only; a suite
         // where the engine < floor is a CORPUS-DEFECT finding to file).
+        // Issue 125 — a suite outside the floor's label-vote contract is
+        // a typed n/a row: no number, no corpus-defect comparison.
         if let Some(m) = &suite.modelless
             && let Some(f) = &m.bm25_floor
         {
-            s.push_str(&format!(
-                "**floor: bm25** acc {} (k1 {} b {} top-k {} · {} docs · empty votes {}/{})",
-                fmt4(f.accuracy),
-                f.k1,
-                f.b,
-                f.top_k,
-                f.n_docs,
-                f.empty_votes,
-                f.n_questions,
-            ));
-            if let Some(r) = &f.redundancy {
-                s.push_str(" — A-pre comparators:");
-                if let Some(a) = r.nb_tables_alone_sel_acc {
-                    s.push_str(&format!(" nb-tables-alone(sel) {}", fmt4(a)));
-                }
-                if let Some(a) = r.nb_selected_sel_acc {
-                    s.push_str(&format!(" nb-selected(sel) {}", fmt4(a)));
-                }
-                if let Some(a) = r.ridge_sel_acc {
-                    s.push_str(&format!(" ridge(sel) {}", fmt4(a)));
-                }
+            if let Some(reason) = &f.not_applicable {
+                s.push_str(&format!(
+                    "**floor: bm25 n/a** — the label-vote contract does not hold for this \
+                     suite; no floor row was computed (the accuracy field is a 0.0 placeholder, \
+                     never a measurement): {reason}\n\n"
+                ));
             } else {
-                s.push_str(" — A-pre UNMEASURED (arm --nb-select/--ridge-select on the sweep)");
+                s.push_str(&format!(
+                    "**floor: bm25** acc {} (k1 {} b {} top-k {} · {} docs · empty votes {}/{})",
+                    fmt4(f.accuracy),
+                    f.k1,
+                    f.b,
+                    f.top_k,
+                    f.n_docs,
+                    f.empty_votes,
+                    f.n_questions,
+                ));
+                if let Some(r) = &f.redundancy {
+                    s.push_str(" — A-pre comparators:");
+                    if let Some(a) = r.nb_tables_alone_sel_acc {
+                        s.push_str(&format!(" nb-tables-alone(sel) {}", fmt4(a)));
+                    }
+                    if let Some(a) = r.nb_selected_sel_acc {
+                        s.push_str(&format!(" nb-selected(sel) {}", fmt4(a)));
+                    }
+                    if let Some(a) = r.ridge_sel_acc {
+                        s.push_str(&format!(" ridge(sel) {}", fmt4(a)));
+                    }
+                } else {
+                    s.push_str(" — A-pre UNMEASURED (arm --nb-select/--ridge-select on the sweep)");
+                }
+                s.push_str("\n\n");
             }
-            s.push_str("\n\n");
         }
         // Issue 039 T4/T3 disclosures: the readout candidate report (the
         // arming lever is demoted — recorded when a candidate would have

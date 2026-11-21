@@ -56,7 +56,7 @@ Pre-change binary (`target/release/harness`, built Nov 8 09:11 — predating BOT
 - T6 expectations: **RECORDED — no negative branch fired.**
 - G4: n/a (fit-time only; the record path allocates behind the opt-in lever).
 
-## Disposition (2026-11-21 — the issue CLOSED report-only, delegated verdict AGREE)
+## Disposition (2026-11-21 — the issue CLOSED report-only, delegated verdict AGREE; closure commit `1e127b8b`)
 
 The residue "serving wiring is owner-gated" is settled: under the 2026-11-11 gating decree the only owner gate is a credential/secret touch, so the disposition was decided by a delegated Claude verdict (round 1, **AGREE**, session `0cfbc462`): serving wiring REFUSED — at our cal sizes the posture's expected serving answer is none-certified, so a serving knob adds config surface with zero behavioral gain (NotCertified falls back to the declared geometry = today's behavior byte-identically); advisory-terminal per the riir-dao precedent. The T3b retirement already landed (katgpt-rs Issue 989). Re-open triggers, numeric:
 

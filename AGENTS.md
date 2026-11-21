@@ -134,6 +134,7 @@ cargo run --release --bin harness -- --null-probe --out .benchmarks/<N>_null_pro
 cargo run --release --bin harness -- --rubric-probe --out .benchmarks/<N>_rubric_probe    # Issue 090 C1, Bench 149
 cargo run --release --bin harness -- --gate-drift-probe --out .benchmarks/<N>_gate_drift  # Issue 093, Bench 154
 cargo run --release --bin harness -- --gate-stability --out .benchmarks/<N>_gate_stability # Issue 109, Bench 174 (bootstrap t* + held-out flatness; first cell all-STABLE)
+cargo run --release --bin harness -- --transfer-probe --suites banking77 --out <rethink>/.benchmarks/106_i065_transfer_probe # rethink Issue 065, Bench 106 (frozen per-class cal→test transfer + transport ratio + directionality; control reds exit 1; records land in riir-rethink — the Bench-089 pre-arming read)
 cargo run --release --bin harness -- --ceiling-probe --suite sst5 --out .benchmarks/<N>_ceiling  # Issue 108 (gold-support ceiling; CEILING_JUDGE_URL arms the judge seat; contract CEILING_CONTRACT_V2; issue CLOSED negative — κ bar unmet by the local seats, ĝ is seat-conditioned only, `.benchmarks/108_ceiling_v2_rejudge/`)
 # Set-refine A/B (Issue 090 C2 / katgpt-rs Plan 627, opt-in `set_refine`, Bench 150 — MEASURED NEGATIVE, stays opt-in;
 # re-open = a different key family, never a γ/τ retune):

@@ -360,6 +360,10 @@ fn harness_main() {
     // (exclusive early-exit mode; the comparison lanes reuse
     // --drex/--d1/--agentjev).
     let mut null_probe = false;
+    // riir-rethink Issue 065 — the frozen-transfer probe (exclusive
+    // early-exit mode; report-only instrument over the harness's own
+    // cal/test envelopes).
+    let mut transfer_probe = false;
     // Issue 121 B1/B2 — the per-row flip census (exclusive early-exit
     // mode; named suites via --suites; the deletion cap via
     // --row-flip-max-rows, default 512).
@@ -770,6 +774,7 @@ fn harness_main() {
             }
             "--label-perm-keep-corpus" => label_perm_keep_corpus = true,
             "--null-probe" => null_probe = true,
+            "--transfer-probe" => transfer_probe = true,
             "--row-flip-census" => row_flip_census = true,
             "--row-flip-max-rows" => {
                 i += 1;
@@ -1961,6 +1966,66 @@ fn harness_main() {
         );
         return;
     }
+    // riir-rethink Issue 065 — the frozen-transfer probe: exclusive
+    // early-exit mode. REPORT-ONLY instrument over the harness's own
+    // cal/test envelopes; a control red exits 1 AFTER the records land
+    // (the null-probe discipline).
+    if transfer_probe {
+        let suite_names: Vec<&str> = if opts.suites.is_empty() {
+            runner::TRANSFER_PROBE_SUITES.to_vec()
+        } else {
+            opts.suites.iter().map(String::as_str).collect()
+        };
+        println!(
+            "harness --transfer-probe: datasets {} · suites {:?} · lane: modelless (report-only)",
+            opts.datasets_dir.display(),
+            suite_names,
+        );
+        let out = match runner::run_transfer_probe(&opts) {
+            Ok(r) => r,
+            Err(e) => die(&e),
+        };
+        if let Err(e) = std::fs::create_dir_all(&out_dir) {
+            die(&format!("create {}: {e}", out_dir.display()));
+        }
+        let json_path = out_dir.join("transfer_probe.json");
+        let md_path = out_dir.join("TRANSFER_PROBE.md");
+        let json = serde_json::to_string_pretty(&out).expect("transfer probe serialize");
+        let md = runner::render_transfer_probe_markdown(&out);
+        if let Err(e) = std::fs::write(&json_path, json) {
+            die(&format!("write {}: {e}", json_path.display()));
+        }
+        if let Err(e) = std::fs::write(&md_path, &md) {
+            die(&format!("write {}: {e}", md_path.display()));
+        }
+        print!("{md}");
+        let undecided: usize = out
+            .suites
+            .iter()
+            .map(|s| {
+                s.directions
+                    .iter()
+                    .filter(|d| d.verdict != "MEASURED")
+                    .count()
+            })
+            .sum();
+        println!(
+            "harness --transfer-probe: DONE — {} suite(s) measured, {} direction(s) UNDECIDED \
+             (support); wrote {} + {}",
+            out.suites.len(),
+            undecided,
+            json_path.display(),
+            md_path.display()
+        );
+        if !out.controls_ok {
+            die(
+                "--transfer-probe: a CONTROL red — the target-rotated null did not lose to \
+                 the real gold, or the in-sample oracle lost to the frozen fit. An \
+                 instrument finding, never a quiet pass; the records are on disk.",
+            );
+        }
+        return;
+    }
     // Issue 108 — the gold-support ceiling probe: exclusive early-exit
     // mode. REPORT-ONLY under the written adjudication contract
     // (CEILING_CONTRACT_V1): the judge-validity gate runs FIRST and a
@@ -2018,11 +2083,12 @@ fn harness_main() {
     {
         // The exclusive early-exit modes (one per run — the e0/distill law
         // generalized as the family grew).
-        let modes: [(&str, bool); 18] = [
+        let modes: [(&str, bool); 19] = [
             ("--e0", e0),
             ("--perm-probe", perm_probe),
             ("--label-perm", label_perm),
             ("--null-probe", null_probe),
+            ("--transfer-probe", transfer_probe),
             ("--depth-probe", depth_probe),
             ("--clef-conf-probe", clef_conf_probe),
             ("--rubric-probe", rubric_probe),

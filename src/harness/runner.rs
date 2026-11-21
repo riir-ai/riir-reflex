@@ -262,6 +262,15 @@ pub use gate_stability::{
     GateStabilityOptions, GateStabilityOutput, render_gate_stability_markdown, run_gate_stability,
 };
 
+// riir-rethink Issue 065 — the frozen-transfer probe (report-only; the
+// instrument lives in this module tree, the records land rethink-side).
+mod transfer_probe;
+pub use transfer_probe::{
+    IDENTITY_EPS, INSTRUMENT_NOTE, MATCH_CAP, MAX_LABELS, MIN_ORACLE_R, MIN_RATIO_CLASSES,
+    MIN_SUPPORT_PER_CLASS, NULL_ROTATE, TRANSFER_PROBE_SUITES, TransferProbeOutput,
+    render_transfer_probe_markdown, run_transfer_probe,
+};
+
 // Issue 112 T4 — the `--gate-risk-target` certified-abstention lever
 // (report-only; the engine posture lives in `engine::threshold`).
 mod risk_target;

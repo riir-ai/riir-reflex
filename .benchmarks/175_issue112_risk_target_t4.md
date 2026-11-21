@@ -55,4 +55,10 @@ Pre-change binary (`target/release/harness`, built Nov 8 09:11 — predating BOT
 - T5 wire law: **PASS** (lever-off serializes no `risk_target` key — pinned by `lever_off_emits_no_rows_and_the_wire_stays_clean`; the byte-identity A/B confirms no default-run emission).
 - T6 expectations: **RECORDED — no negative branch fired.**
 - G4: n/a (fit-time only; the record path allocates behind the opt-in lever).
-- Remaining: serving wiring is owner-gated (the issue's own law); the T3b retirement rides the katgpt-rs Issue 989 export.
+
+## Disposition (2026-11-21 — the issue CLOSED report-only, delegated verdict AGREE)
+
+The residue "serving wiring is owner-gated" is settled: under the 2026-11-11 gating decree the only owner gate is a credential/secret touch, so the disposition was decided by a delegated Claude verdict (round 1, **AGREE**, session `0cfbc462`): serving wiring REFUSED — at our cal sizes the posture's expected serving answer is none-certified, so a serving knob adds config surface with zero behavioral gain (NotCertified falls back to the declared geometry = today's behavior byte-identically); advisory-terminal per the riir-dao precedent. The T3b retirement already landed (katgpt-rs Issue 989). Re-open triggers, numeric:
+
+- **(a)** any board suite certifies at **α ≤ 0.10** on the standing sweep — concretely, a cal front of **n ≥ 29 accepted groups** (the α=0.10 / δ=0.05 zero-error floor) carrying **ZERO accepted errors**: cp_upper(1, 29, 0.05) ≈ 0.169 > 0.10 refuses (one error kills it), cp_upper(0, 29, 0.05) ≈ 0.0981 ≤ 0.10 passes; at larger accepted n the zero-error bound falls further below α. The route back is calibration-slice growth/re-fit (cleaner high-confidence fronts), read on the same `--gate-risk-target` run.
+- **(b)** a serving surface that needs a caller-quotable certified-abstention guarantee (unchanged from the issue).

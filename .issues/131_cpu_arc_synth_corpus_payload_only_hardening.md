@@ -18,3 +18,5 @@ No retry-with-reduced-counts loop (the paper's); no change to the V5 paired gate
 ## Proof path
 
 Existing: `scripts/fetch_datasets.sh` corpora + the echo-gate battery + `--corpus-ab` V5 paired read. T4's planted-violation arms are the falsification proof; a green corpus-ab with hardening on is the no-regression proof.
+
+**Claimed:** zed-amo-071num@amo, 1795364600, expires 2026-11-25T12:00:00Z

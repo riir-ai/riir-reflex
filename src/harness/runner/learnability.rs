@@ -471,6 +471,10 @@ fn write_gated_artifact(
         density_rule: source_meta.density_rule.clone(),
         rescue_rule: source_meta.rescue_rule.clone(),
         learnability_rule: Some(rule),
+        // The derived artifact keeps the source's hardening disclosure — the
+        // rows are the source's rows (filtered), so the scaffold contract
+        // rides along unchanged.
+        payload_hardening_rule: source_meta.payload_hardening_rule.clone(),
     };
     let mut header = serde_json::to_value(&meta).map_err(|e| e.to_string())?;
     let per_label: serde_json::Map<String, serde_json::Value> = per_label_kept

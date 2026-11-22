@@ -65,6 +65,31 @@
 //! law). The canonical predicate home is riir-refine `src/rescue_mine.rs`
 //! (private repo, paper-derived); this public port is pinned to the same
 //! FlyBy truth table by tests — the copies cannot drift.
+//!
+//! The payload-only hardening (Issue 131 — CPU-ARC §D STAGE 2, arXiv:2611.09891,
+//! the grammar-not-answers doctrine's harvest face) — ALWAYS-ON, because it is
+//! contamination machinery and the echo gates it extends are unconditional:
+//! - **T1 scaffold hash:** every artifact row carries `scaffold_hash` (BLAKE3
+//!   16-hex over the normalized frame tokens — the CONSTANT prefix+suffix the
+//!   payload sits inside). The writer recomputes the hash from the written
+//!   `(text, span)` and refuses a divergent row (a generator bug made visible);
+//!   the loader verifies every row that carries the field and skips the check
+//!   only on legacy rows without it (seated artifacts keep loading).
+//!   The field is what makes a downstream leak scan able to hash the scaffold
+//!   and scan PAYLOADS only — the paper's high-precision posture.
+//! - **T2 degeneracy filters:** refuse-and-count candidates whose transplanted
+//!   payload is under [`MIN_PAYLOAD_CHARS`] or carries a chain-of-thought
+//!   marker ([`COT_MARKERS`] — the instruction-scaffold phrases only, never
+//!   task vocabulary; the counts are the disclosure).
+//! - **T3 the contamination closure:** every row carries the id tuple
+//!   (`suite`, `kind`, `variant` — beside the existing `src` seed index), and
+//!   plan time refuses a candidate whose payload window appears verbatim in
+//!   any TEST row (payload-only variants of eval rows are
+//!   contamination-by-synthesis, the Bench-089 class) or whose whole text
+//!   equals a test row. The slice-integrity audit already refuses exact
+//!   train∩test ROW overlap; this closes the FINER vector the audit cannot
+//!   see — a pool row sharing only a span with a test row. Excluded AT
+//!   HARVEST, not filtered later.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path;
@@ -129,13 +154,17 @@ pub struct SynthOptions {
 /// One generated candidate (pre-veto). `src` is the LABEL-LOCAL pool
 /// row index whose pair first attested the FRAME (the provenance anchor —
 /// label-local because mining iterates the label's own rows); `span` is
-/// `(prefix_len, span_len)` in tokens.
+/// `(prefix_len, span_len)` in tokens. `scaffold` is the frame's BLAKE3
+/// 16-hex (Issue 131 T1 — verified at write and at load); `variant` is the
+/// per-frame ordinal in the id tuple (T3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SynthCand {
     pub text: String,
     pub label: String,
     pub src: usize,
     pub span: (usize, usize),
+    pub scaffold: String,
+    pub variant: usize,
 }
 
 /// Per-label synthesis outcome (the report + the artifact header's
@@ -193,6 +222,17 @@ pub struct SynthSuite {
     /// The rescue pre-filter disclosure (mirrors the artifact meta;
     /// `None` = veto-only).
     pub rescue_rule: Option<String>,
+    /// Issue 131 — the payload-hardening disclosure (always-on since the
+    /// hardening landed; `None` on artifacts written before it). Mirrors
+    /// the artifact meta's field.
+    pub payload_hardening_rule: Option<String>,
+    /// Issue 131 T3 — candidates refused for echoing a test row (whole
+    /// text or payload window). 0 on clean data; the count is the
+    /// disclosure.
+    pub test_echo_rejected: usize,
+    /// Issue 131 T2 — candidates refused as degenerate (short payload or
+    /// chain-of-thought marker).
+    pub degenerate_rejected: usize,
     pub per_label: BTreeMap<String, SynthPerLabel>,
 }
 
@@ -252,6 +292,12 @@ pub struct SynthArtifactMeta {
     /// filtered, the way `density_rule` already does).
     #[serde(default)]
     pub learnability_rule: Option<String>,
+    /// Issue 131 — the payload-hardening disclosure: the rule string when
+    /// the artifact was written by the hardened writer. Additive +
+    /// `serde(default)` — version stays 2 for the same reason as
+    /// [`Self::density_rule`].
+    #[serde(default)]
+    pub payload_hardening_rule: Option<String>,
 }
 
 // ── the veto shape ───────────────────────────────────────────────────────
@@ -591,6 +637,81 @@ fn mine_slots(rows: &[Vec<String>], max_span: usize) -> SlotMap {
     slots
 }
 
+// ── the payload-only hardening (Issue 131, CPU-ARC §D STAGE 2) ──────────
+
+/// A generated row under this many chars is degenerate (the paper's
+/// <10-char completion floor, applied to the WHOLE transplanted text — the
+/// completion analog; payloads are legitimately short — "nine am" is a
+/// real slot — so the floor never reads the payload alone). Refused and
+/// counted, never written.
+pub(crate) const MIN_PAYLOAD_CHARS: usize = 10;
+
+/// Chain-of-thought leakage markers (T2). Conservative by design — the
+/// instruction-scaffold phrases a reasoning teacher leaks, never task
+/// vocabulary a legitimate utterance might carry (`step by step` stays OUT:
+/// "transfer money step by step" is a real intent text). Lowercase
+/// substring match over the candidate text.
+pub(crate) const COT_MARKERS: &[&str] = &[
+    "let's think",
+    "lets think",
+    "chain of thought",
+    "<think>",
+    "thought:",
+    "reasoning:",
+    "i should reason",
+];
+
+/// The row-kind token the transplant lane writes into every id tuple (T3).
+/// The future teacher-variant lane writes its own kind against the same
+/// tuple shape.
+pub(crate) const ROW_KIND_TRANSPLANT: &str = "transplant";
+
+/// The hardening rule string the artifact header carries when the payload
+/// hardening wrote the artifact (Issue 131 disclosure — mirrors
+/// `density_rule`/`rescue_rule`).
+pub(crate) const PAYLOAD_HARDENING_RULE: &str = "cpu-arc-stage2-payload-only-v1 \
+     (scaffold-hash verify + payload degeneracy + payload-window test-echo)";
+
+/// The scaffold identity: BLAKE3 16-hex over the NORMALIZED frame tokens
+/// (prefix + suffix, the constant part of the transplant). Normalized with
+/// the same [`norm_key`] the dedup uses, so the hash is stable across the
+/// writer's reconstruction and the loader's re-split.
+fn scaffold_hash(prefix: &[&str], suffix: &[&str]) -> String {
+    let mut toks: Vec<&str> = Vec::with_capacity(prefix.len() + suffix.len());
+    toks.extend_from_slice(prefix);
+    toks.extend_from_slice(suffix);
+    let joined = toks.join(" ");
+    blake3::hash(norm_key(&joined).as_bytes()).to_hex()[..16].to_string()
+}
+
+/// Recompute the scaffold hash from a written row's `(text, span)` — the
+/// loader's T1 verification and the writer's self-check share this one
+/// derivation (split by whitespace, cut by the recorded token counts,
+/// hash the frame). `None` when the span does not tile the text (a row
+/// whose counts do not sum — refused by the caller).
+fn scaffold_hash_of_row(text: &str, span: [usize; 2]) -> Option<String> {
+    let toks: Vec<&str> = text.split_whitespace().collect();
+    let (p, s) = (span[0], span[1]);
+    if p + s > toks.len() {
+        return None;
+    }
+    Some(scaffold_hash(&toks[..p], &toks[p + s..]))
+}
+
+/// The T2 degeneracy verdict on one generated row: `Some(reason)` = the
+/// candidate is refused and counted under that reason. The length floor
+/// reads the WHOLE text (the completion analog — payloads are legitimately
+/// short); the marker scan reads the normalized text.
+fn payload_degeneracy(text: &str, text_lower: &str) -> Option<&'static str> {
+    if text.chars().count() < MIN_PAYLOAD_CHARS {
+        return Some("degenerate_short_payload");
+    }
+    if COT_MARKERS.iter().any(|m| text_lower.contains(m)) {
+        return Some("cot_marker");
+    }
+    None
+}
+
 /// The dedup counters (named — the report discloses each).
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct DedupCounts {
@@ -598,6 +719,20 @@ pub(crate) struct DedupCounts {
     cal: usize,
     dup: usize,
     outside: usize,
+    /// T3: candidates whose payload window appears verbatim in a TEST row
+    /// (contamination-by-synthesis, the Bench-089 class) — refused at
+    /// harvest. 0 on clean data; the count is the disclosure.
+    pub test_payload_echo: usize,
+    /// T3: candidates whose whole text equals a test row.
+    pub test_text_echo: usize,
+    /// T2: payload under [`MIN_PAYLOAD_CHARS`].
+    pub degenerate: usize,
+    /// T2: a chain-of-thought marker in the text.
+    pub cot: usize,
+    // NOTE: the T1 scaffold-mismatch count lives in the WRITER (it owns the
+    // accepted rows and recomputes each row's hash at write time) and is
+    // disclosed in the artifact header — not here, so the two counters
+    // cannot diverge.
 }
 
 /// The per-suite plan: candidate buckets, evidence weights, allocation.
@@ -641,6 +776,49 @@ pub(crate) fn plan_suite(
     }
     let pool_keys: HashSet<String> = pool.iter().map(|d| norm_key(&d.text)).collect();
 
+    // ── Issue 131 T3: the test-echo exclusion index (the contamination
+    // closure, always-on — the echo gates it extends upstream are
+    // unconditional). Two granularities, both refused AT HARVEST:
+    // (a) exact — a candidate whose whole text equals a test row;
+    // (b) payload-window — a candidate whose transplanted PAYLOAD appears
+    //     verbatim as a token window in ANY test row. The slice-integrity
+    //     audit already refuses exact train∩test ROW overlap at prepare
+    //     time; (b) closes the finer vector it cannot see: a pool row
+    //     sharing only a span with a test row seeds transplants that copy
+    //     the eval payload into the corpus (the Bench-089 class).
+    let test_keys: HashSet<String> = prepared
+        .suite
+        .cases
+        .iter()
+        .filter_map(|c| {
+            single_text_field(&c.state).and_then(|f| {
+                c.state
+                    .get(&f)
+                    .and_then(serde_json::Value::as_str)
+                    .map(norm_key)
+            })
+        })
+        .collect();
+    let max_span = sopts.max_span_len;
+    let mut test_payload_windows: HashSet<String> = HashSet::new();
+    for case in &prepared.suite.cases {
+        let Some(text) = single_text_field(&case.state)
+            .and_then(|f| case.state.get(&f))
+            .and_then(serde_json::Value::as_str)
+        else {
+            continue;
+        };
+        let toks: Vec<String> = text.split_whitespace().map(str::to_string).collect();
+        for w in 1..=max_span {
+            if w > toks.len() {
+                break;
+            }
+            for start in 0..=(toks.len() - w) {
+                test_payload_windows.insert(toks[start..start + w].join(" "));
+            }
+        }
+    }
+
     // Per-label pool row indices (sorted label iteration = determinism).
     let mut by_label: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (idx, d) in pool.iter().enumerate() {
@@ -672,7 +850,12 @@ pub(crate) fn plan_suite(
             // only regenerate the attested rows (they dedup out anyway) —
             // the NEW text comes from every OTHER span of the label,
             // sorted, bounded per frame.
+            let frame_hash = scaffold_hash(
+                &prefix.iter().map(String::as_str).collect::<Vec<_>>(),
+                &suffix.iter().map(String::as_str).collect::<Vec<_>>(),
+            );
             let mut taken = 0usize;
+            let mut variant = 0usize;
             for span in &all_spans {
                 if taken >= MAX_SPANS_PER_FRAME {
                     break;
@@ -686,6 +869,28 @@ pub(crate) fn plan_suite(
                 toks.extend(suffix.iter().cloned());
                 let text = toks.join(" ");
                 let key = norm_key(&text);
+                // Issue 131 T3 — the contamination closure, before ANY
+                // other filter: a payload-only variant of an eval row is
+                // contamination-by-synthesis (the Bench-089 class).
+                if test_keys.contains(&key) {
+                    counts.test_text_echo += 1;
+                    continue;
+                }
+                let payload = span.join(" ");
+                if test_payload_windows.contains(&payload) {
+                    counts.test_payload_echo += 1;
+                    continue;
+                }
+                // Issue 131 T2 — degeneracy, before the pool/cal dedup:
+                // a row that reads as scaffold-noise or carries a
+                // reasoning-teacher marker never earns a veto call.
+                if let Some(reason) = payload_degeneracy(&text, &key) {
+                    match reason {
+                        "degenerate_short_payload" => counts.degenerate += 1,
+                        _ => counts.cot += 1,
+                    }
+                    continue;
+                }
                 if pool_keys.contains(&key) {
                     counts.pool += 1;
                     continue;
@@ -702,11 +907,14 @@ pub(crate) fn plan_suite(
                     counts.outside += 1;
                     continue;
                 }
+                variant += 1;
                 buckets.entry(label.clone()).or_default().push(SynthCand {
                     text,
                     label: label.clone(),
                     src: *src,
                     span: (prefix.len(), span.len()),
+                    scaffold: frame_hash.clone(),
+                    variant,
                 });
             }
         }
@@ -897,7 +1105,11 @@ fn per_intent_rumor(prepared: &super::Prepared) -> Result<BTreeMap<String, f64>,
 
 // ── the artifact ────────────────────────────────────────────────────────
 
-/// One artifact row (C3: provenance on every row).
+/// One artifact row (C3: provenance on every row; Issue 131: the scaffold
+/// hash (T1) + the id tuple (T3 — `suite`/`kind`/`variant` beside the
+/// existing `src` seed index)). `suite`/`kind` are flat so a leak scan can
+/// group by scaffold and filter by kind without descending into a nested
+/// object.
 #[derive(Debug, serde::Serialize)]
 struct SynthRow<'a> {
     text: &'a str,
@@ -905,6 +1117,10 @@ struct SynthRow<'a> {
     provenance: &'static str,
     src: usize,
     span: [usize; 2],
+    scaffold_hash: &'a str,
+    suite: &'a str,
+    kind: &'static str,
+    variant: usize,
 }
 
 fn write_artifact(
@@ -913,9 +1129,50 @@ fn write_artifact(
     meta: &SynthArtifactMeta,
     per_label: &BTreeMap<String, SynthPerLabel>,
     accepted: &[SynthCand],
+    counts: &DedupCounts,
 ) -> Result<(std::path::PathBuf, String), String> {
+    // Issue 131 T1 — the writer's self-check: every accepted row's
+    // scaffold must recompute from its own (text, span). A divergence is
+    // a generator bug made visible; refuse the ROW and disclose the count
+    // (the run continues only when the remaining rows are sane).
+    let mut scaffold_mismatch = 0usize;
+    let mut hardened_rows: Vec<&SynthCand> = Vec::with_capacity(accepted.len());
+    for c in accepted {
+        let recomputed = scaffold_hash_of_row(&c.text, [c.span.0, c.span.1]).ok_or_else(|| {
+            format!(
+                "synth artifact {}: row span {:?} does not tile its text — refusing the write",
+                suite, c.span
+            )
+        })?;
+        if recomputed == c.scaffold {
+            hardened_rows.push(c);
+        } else {
+            scaffold_mismatch += 1;
+        }
+    }
+    let scaffold_mismatch = scaffold_mismatch;
+    if scaffold_mismatch > 0 {
+        eprintln!(
+            "  [synth {suite}] ⚠ scaffold self-check refused {scaffold_mismatch} row(s) — a \
+             generator bug made visible (Issue 131 T1); investigate before trusting the artifact"
+        );
+    }
+    if hardened_rows.is_empty() {
+        return Err(format!(
+            "synth artifact {suite}: every accepted row failed the scaffold self-check — \
+             refusing to write a header-only artifact"
+        ));
+    }
     let mut header = serde_json::to_value(meta).map_err(|e| e.to_string())?;
     header["per_label"] = serde_json::to_value(per_label).map_err(|e| e.to_string())?;
+    header["hardening"] = serde_json::json!({
+        "rule": meta.payload_hardening_rule,
+        "scaffold_mismatch_refused": scaffold_mismatch,
+        "test_text_echo_rejected": counts.test_text_echo,
+        "test_payload_echo_rejected": counts.test_payload_echo,
+        "degenerate_rejected": counts.degenerate,
+        "cot_rejected": counts.cot,
+    });
     let mut bytes: Vec<u8> = Vec::with_capacity(1 << 16);
     bytes.extend_from_slice(
         serde_json::to_string(&header)
@@ -923,13 +1180,17 @@ fn write_artifact(
             .as_bytes(),
     );
     bytes.push(b'\n');
-    for c in accepted {
+    for c in &hardened_rows {
         let row = SynthRow {
             text: &c.text,
             label: &c.label,
             provenance: SYNTH_PROVENANCE,
             src: c.src,
             span: [c.span.0, c.span.1],
+            scaffold_hash: &c.scaffold,
+            suite,
+            kind: ROW_KIND_TRANSPLANT,
+            variant: c.variant,
         };
         bytes.extend_from_slice(
             serde_json::to_string(&row)
@@ -1029,6 +1290,40 @@ pub fn load_synth_corpus(
             .ok_or_else(|| format!("{}: row {} missing text", path.display(), ln + 2))?;
         if t.trim().is_empty() {
             return Err(format!("{}: row {} empty text", path.display(), ln + 2));
+        }
+        // Issue 131 T1 — the loader's scaffold verification: a row that
+        // CARRIES the hash must have it recompute from its own (text,
+        // span). Legacy rows without the field skip the check (seated
+        // artifacts keep loading — the write side always emits it now, so
+        // the field's presence is the hardening's marker).
+        let span = [
+            v.get("span")
+                .and_then(|s| s.get(0))
+                .and_then(serde_json::Value::as_u64),
+            v.get("span")
+                .and_then(|s| s.get(1))
+                .and_then(serde_json::Value::as_u64),
+        ];
+        if let (Some(p), Some(s)) = (span[0], span[1])
+            && let Some(recorded) = v.get("scaffold_hash").and_then(serde_json::Value::as_str)
+        {
+            let recomputed =
+                scaffold_hash_of_row(t, [p as usize, s as usize]).ok_or_else(|| {
+                    format!(
+                        "{}: row {} span [{p}, {s}] does not tile its text",
+                        path.display(),
+                        ln + 2
+                    )
+                })?;
+            if recomputed != recorded {
+                return Err(format!(
+                    "{}: row {} scaffold hash mismatch (recorded {recorded}, recomputed \
+                     {recomputed}) — the payload boundary moved after the seal; refusing \
+                     the artifact",
+                    path.display(),
+                    ln + 2
+                ));
+            }
         }
         docs.push(TrainDoc {
             label: label.to_string(),
@@ -1330,6 +1625,7 @@ fn synth_one(spec: &SuiteSpec, dir: &Path, sopts: &SynthOptions) -> Result<Synth
         density_rule: density_rule.clone(),
         rescue_rule: rescue_rule.clone(),
         learnability_rule: None,
+        payload_hardening_rule: Some(PAYLOAD_HARDENING_RULE.to_string()),
     };
     let (path, seal_hex) = write_artifact(
         sopts.out_dir.as_path(),
@@ -1337,14 +1633,20 @@ fn synth_one(spec: &SuiteSpec, dir: &Path, sopts: &SynthOptions) -> Result<Synth
         &meta,
         &per_label,
         &accepted,
+        &plan.counts,
     )?;
+    let test_echo = plan.counts.test_text_echo + plan.counts.test_payload_echo;
+    let degenerate = plan.counts.degenerate + plan.counts.cot;
     eprintln!(
-        "  [synth {}] done: {} accepted / {} forwarded · {} rescue-rejected · p50 {p50} ms · \
+        "  [synth {}] done: {} accepted / {} forwarded · {} rescue-rejected · {} test-echo \
+         refused · {} degenerate refused · p50 {p50} ms · \
          {:.1}s → {}",
         spec.name,
         accepted.len(),
         durs_ms.len(),
         rescue_rejected,
+        test_echo,
+        degenerate,
         t_start.elapsed().as_secs_f64(),
         path.display()
     );
@@ -1370,6 +1672,9 @@ fn synth_one(spec: &SuiteSpec, dir: &Path, sopts: &SynthOptions) -> Result<Synth
         density_rule,
         rescue_rejected,
         rescue_rule,
+        payload_hardening_rule: meta.payload_hardening_rule.clone(),
+        test_echo_rejected: test_echo,
+        degenerate_rejected: degenerate,
         per_label,
     })
 }
@@ -1440,12 +1745,17 @@ pub fn run_synth_plan(opts: &RunOptions, sopts: &SynthOptions) -> Result<String,
             ));
         }
         md.push_str(&format!(
-            "\ndedup: pool {} · cal {} · dup {} · outside-universe {}\n\ntotal allocated: \
+            "\ndedup: pool {} · cal {} · dup {} · outside-universe {} · test-echo {} · degenerate {}\
+             \n\n(Issue 131 hardening: test-echo = whole-text + payload-window refusals, \
+             degenerate = short-text + CoT-marker refusals — all AT HARVEST, always-on.)\
+             \n\ntotal allocated: \
              {}\n\n",
             plan.counts.pool,
             plan.counts.cal,
             plan.counts.dup,
             plan.counts.outside,
+            plan.counts.test_text_echo + plan.counts.test_payload_echo,
+            plan.counts.degenerate + plan.counts.cot,
             plan.alloc.values().sum::<usize>(),
         ));
     }
@@ -1516,6 +1826,28 @@ pub fn render_synth_markdown(out: &SynthOutput) -> String {
             s.push_str(&format!("| {} | {} |\n", v.name, v.rescue_rejected));
         }
     }
+    // The payload-hardening disclosure (Issue 131) — the contamination
+    // closure is always-on, so the block prints whenever a hardened suite
+    // ran (the counts are the disclosure; 0 on clean data).
+    if let Some(v) = out
+        .suites
+        .iter()
+        .find(|s| s.payload_hardening_rule.is_some())
+    {
+        s.push_str(&format!(
+            "\npayload hardening: {} — test-echo and degeneracy refusals fire AT \
+             HARVEST (Issue 131, CPU-ARC §D STAGE 2; the echo gates stay the \
+             downstream authority).\n\n| suite | test-echo refused | degenerate refused |\
+             \n|---|---|---|\n",
+            v.payload_hardening_rule.clone().unwrap_or_default()
+        ));
+        for v in &out.suites {
+            s.push_str(&format!(
+                "| {} | {} | {} |\n",
+                v.name, v.test_echo_rejected, v.degenerate_rejected
+            ));
+        }
+    }
     s.push_str(
         "\nPer-label allocation (top 20 by accepted):\n\n| label | weight | cands | \
                 alloc | accepted | vetoed |\n|---|---|---|---|---|---|\n",
@@ -1544,6 +1876,14 @@ mod tests {
 
     fn tks(s: &str) -> Vec<String> {
         s.split_whitespace().map(str::to_string).collect()
+    }
+
+    /// The frame hash over a fixture frame, `&str`-sliced (the helper the
+    /// planted fixtures share).
+    fn frame_hash(prefix: &str, suffix: &str) -> String {
+        let p: Vec<&str> = prefix.split_whitespace().collect();
+        let sfx: Vec<&str> = suffix.split_whitespace().collect();
+        scaffold_hash(&p, &sfx)
     }
 
     fn doc(label: &str, text: &str) -> TrainDoc {
@@ -1730,11 +2070,17 @@ mod tests {
 
     fn make_cands(label: &str, n: usize) -> Vec<SynthCand> {
         (0..n)
-            .map(|i| SynthCand {
-                text: format!("{label} candidate number {i}"),
-                label: label.to_string(),
-                src: i,
-                span: (0, 1),
+            .map(|i| {
+                let text = format!("{label} candidate number {i}");
+                SynthCand {
+                    scaffold: scaffold_hash_of_row(&text, [0, 1])
+                        .expect("the fixture span tiles its text"),
+                    text,
+                    label: label.to_string(),
+                    src: i,
+                    span: (0, 1),
+                    variant: i + 1,
+                }
             })
             .collect()
     }
@@ -1764,12 +2110,16 @@ mod tests {
                 label: "alarm_set".into(),
                 src: 3,
                 span: (4, 2),
+                scaffold: frame_hash("wake me up at", "on friday"),
+                variant: 1,
             },
             SynthCand {
                 text: "set an alarm for one hour from now".into(),
                 label: "alarm_set".into(),
                 src: 1,
                 span: (4, 2),
+                scaffold: frame_hash("set an alarm for", "from now"),
+                variant: 2,
             },
         ];
         let mut per_label = BTreeMap::new();
@@ -1800,9 +2150,11 @@ mod tests {
             density_rule: None,
             rescue_rule: None,
             learnability_rule: None,
+            payload_hardening_rule: Some(PAYLOAD_HARDENING_RULE.to_string()),
         };
+        let counts = DedupCounts::default();
         let (path, _hex) =
-            write_artifact(&dir, "fixture", &meta, &per_label, &accepted).expect("write");
+            write_artifact(&dir, "fixture", &meta, &per_label, &accepted, &counts).expect("write");
         let (loaded_meta, docs, _digest) = load_synth_corpus(&path).expect("load");
         assert_eq!(loaded_meta.suite, "fixture");
         assert_eq!(
@@ -1976,10 +2328,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("rfx_synth_resc_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let accepted = vec![SynthCand {
+            scaffold: frame_hash("wake me up at", "on friday"),
             text: "wake me up at seven am on friday".into(),
             label: "alarm_set".into(),
             src: 0,
             span: (4, 2),
+            variant: 1,
         }];
         let mut per_label = BTreeMap::new();
         per_label.insert(
@@ -2009,9 +2363,11 @@ mod tests {
             density_rule: None,
             rescue_rule: Some("flyby-b0-local-veto-augment-v1".into()),
             learnability_rule: None,
+            payload_hardening_rule: Some(PAYLOAD_HARDENING_RULE.to_string()),
         };
-        let (path, _hex) =
-            write_artifact(&dir, "fixture_r", &meta, &per_label, &accepted).expect("write");
+        let counts = DedupCounts::default();
+        let (path, _hex) = write_artifact(&dir, "fixture_r", &meta, &per_label, &accepted, &counts)
+            .expect("write");
         let (loaded, docs, _digest) = load_synth_corpus(&path).expect("load");
         assert_eq!(loaded.version, CORPUS_VERSION);
         assert_eq!(
@@ -2039,6 +2395,310 @@ mod tests {
         std::fs::write(format!("{}.blake3", path.display()), format!("{seal}\n")).unwrap();
         let (old_meta, _docs, _d) = load_synth_corpus(&path).expect("old artifact loads");
         assert_eq!(old_meta.rescue_rule, None, "absent field decodes None");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Issue 131 T4 — the planted-violation arms ───────────────────────
+
+    /// A Prepared whose TEST suite carries real cases (the closure arms
+    /// need a populated test index; the base fixture's is empty).
+    fn fixture_prepared_with_test(test_utterances: &[&str]) -> super::super::Prepared {
+        let mut p = fixture_prepared();
+        p.suite.cases = test_utterances
+            .iter()
+            .enumerate()
+            .map(|(i, u)| SuiteCase {
+                id: format!("fixture:{i}"),
+                state: serde_json::json!({ "utterance": u }),
+                questions: vec![],
+                gold: vec![],
+            })
+            .collect();
+        p
+    }
+
+    #[test]
+    fn t3_a_test_row_is_refused_whole_and_by_payload_window() {
+        // The dataset-overlap class: a pool row that IS a test row (the
+        // slice audit refuses exact ROW overlap at prepare time, but the
+        // plan lane must hold the line on its own too — a hand-built
+        // Prepared bypasses nothing). "eight pm" becomes an attested pool
+        // span; every transplant carrying it must be refused BY PAYLOAD
+        // WINDOW, counted, while the clean spans keep flowing.
+        let mut prepared = fixture_prepared_with_test(&["wake me up at eight pm on friday"]);
+        prepared
+            .train
+            .push(doc("alarm_set", "wake me up at eight pm on friday"));
+        let plan = plan_suite(&prepared, &sopts(64, 64)).expect("plan");
+        let texts: Vec<&str> = plan
+            .buckets
+            .values()
+            .flat_map(|v| v.iter().map(|c| c.text.as_str()))
+            .collect();
+        assert!(
+            !texts.iter().any(|t| t.contains("eight pm")),
+            "payload-window echo refused — no transplant carries the eval payload"
+        );
+        assert!(
+            plan.counts.test_payload_echo > 0,
+            "the payload-window refusal is COUNTED, not silent"
+        );
+        assert_eq!(
+            plan.counts.test_text_echo, 0,
+            "the granularity split: this plant exercises the payload window only"
+        );
+        // The clean spans still flow — the closure narrows only what echoes.
+        assert!(
+            texts.contains(&"set an alarm for nine am from now"),
+            "clean spans survive"
+        );
+    }
+
+    #[test]
+    fn t3_the_whole_text_echo_is_counted_separately() {
+        // A test row equal to a CROSS-FRAME product: the candidate text
+        // itself is the eval row → refused by the whole-text index, and the
+        // payload-window counter stays 0 (the text check fires first — the
+        // order is pinned here).
+        let prepared = fixture_prepared_with_test(&["wake me up at two hours on friday"]);
+        let plan = plan_suite(&prepared, &sopts(64, 64)).expect("plan");
+        let texts: Vec<&str> = plan
+            .buckets
+            .values()
+            .flat_map(|v| v.iter().map(|c| c.text.as_str()))
+            .collect();
+        assert!(
+            !texts.contains(&"wake me up at two hours on friday"),
+            "whole-text echo refused, got {texts:?}"
+        );
+        assert!(
+            plan.counts.test_text_echo > 0,
+            "whole-text test echo counted"
+        );
+        assert_eq!(
+            plan.counts.test_payload_echo, 0,
+            "the whole-text check owns this candidate (fires first)"
+        );
+    }
+
+    #[test]
+    fn t2_a_degenerate_row_is_refused_and_counted() {
+        // A pool row that IS a degenerate completion (< 10 chars) must be
+        // refused by the length floor — plant it so mining produces a
+        // candidate whose whole text is short.
+        let mut prepared = fixture_prepared();
+        prepared.train.push(doc("alarm_set", "ok done"));
+        prepared.train.push(doc("alarm_set", "ok now"));
+        // "ok done" / "ok now" share the frame ("", "") — no, both affixes
+        // empty means no frame; make a real short frame instead:
+        prepared
+            .train
+            .push(doc("alarm_set", "hey do it now please"));
+        prepared
+            .train
+            .push(doc("alarm_set", "hey do it later please"));
+        let plan = plan_suite(&prepared, &sopts(64, 64)).expect("plan");
+        let texts: Vec<&str> = plan
+            .buckets
+            .values()
+            .flat_map(|v| v.iter().map(|c| c.text.as_str()))
+            .collect();
+        assert!(
+            texts.iter().all(|t| t.chars().count() >= MIN_PAYLOAD_CHARS),
+            "no sub-floor row survives, got {texts:?}"
+        );
+        // The CoT marker arm: a pool carrying a reasoning-teacher phrase
+        // must have its transplants refused.
+        let mut prepared2 = fixture_prepared();
+        prepared2.train.push(doc(
+            "alarm_set",
+            "wake me up at let's think about nine on friday",
+        ));
+        let plan2 = plan_suite(&prepared2, &sopts(64, 64)).expect("plan");
+        let texts2: Vec<&str> = plan2
+            .buckets
+            .values()
+            .flat_map(|v| v.iter().map(|c| c.text.as_str()))
+            .collect();
+        assert!(
+            !texts2.iter().any(|t| t.contains("let's think")),
+            "CoT-marker transplants refused"
+        );
+        assert!(plan2.counts.cot > 0, "the CoT refusal is counted");
+    }
+
+    #[test]
+    fn t1_every_row_carries_a_verifying_scaffold_hash_and_the_loader_refuses_drift() {
+        let dir = std::env::temp_dir().join(format!("rfx_synth_t1_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let plan = plan_fixture(&sopts(8, 8));
+        let accepted: Vec<SynthCand> = plan
+            .buckets
+            .values()
+            .flat_map(|v| v.iter().take(2).cloned())
+            .collect();
+        assert!(!accepted.is_empty(), "the fixture mines candidates");
+        let mut per_label = BTreeMap::new();
+        per_label.insert(
+            "alarm_set".to_string(),
+            SynthPerLabel {
+                candidates: accepted.len(),
+                allocated: accepted.len(),
+                accepted: accepted.len(),
+                veto_rejected: 0,
+                density_rejected: 0,
+                rescue_rejected: 0,
+                weight: 1.0,
+            },
+        );
+        let meta = SynthArtifactMeta {
+            magic: CORPUS_MAGIC.to_string(),
+            version: CORPUS_VERSION,
+            suite: "fixture".into(),
+            teacher: "openthai".into(),
+            teacher_provenance: "openthai:openthai-systemone".into(),
+            weighting_rule: "uniform".into(),
+            created_utc: "2026-11-22T00:00:00Z".into(),
+            git_sha: "test".into(),
+            host: "test".into(),
+            accepted: accepted.len(),
+            pool_rows: 5,
+            density_rule: None,
+            rescue_rule: None,
+            learnability_rule: None,
+            payload_hardening_rule: Some(PAYLOAD_HARDENING_RULE.to_string()),
+        };
+        let counts = DedupCounts::default();
+        let (path, _hex) =
+            write_artifact(&dir, "fixture_t1", &meta, &per_label, &accepted, &counts)
+                .expect("write");
+        // Every written row carries the tuple + a hash that recomputes.
+        let raw = std::fs::read_to_string(&path).unwrap();
+        for line in raw.lines().skip(1) {
+            let v: serde_json::Value = serde_json::from_str(line).unwrap();
+            assert_eq!(v["kind"], ROW_KIND_TRANSPLANT, "the id tuple's kind");
+            assert_eq!(v["suite"], "fixture_t1", "the id tuple's suite");
+            let recorded = v["scaffold_hash"].as_str().expect("row carries the hash");
+            let recomputed = scaffold_hash_of_row(
+                v["text"].as_str().unwrap(),
+                [
+                    v["span"][0].as_u64().unwrap() as usize,
+                    v["span"][1].as_u64().unwrap() as usize,
+                ],
+            )
+            .expect("span tiles the text");
+            assert_eq!(recorded, recomputed, "the hash verifies from the row alone");
+        }
+        // The header carries the hardening disclosure.
+        let header: serde_json::Value = serde_json::from_str(raw.lines().next().unwrap()).unwrap();
+        assert_eq!(
+            header["hardening"]["rule"].as_str(),
+            Some(PAYLOAD_HARDENING_RULE)
+        );
+
+        // T4 planted violation: drift a row's PAYLOAD BOUNDARY — shrink the
+        // payload by folding two words into one token ("nine pm" →
+        // "ninepm"), keeping the same token counts is impossible, so move
+        // the span boundary: text minus one token at the front, span[0]
+        // unchanged → the recorded hash no longer recomputes. Re-seal so
+        // ONLY the scaffold check can catch it (the blake3 seal passes —
+        // the attacker re-signed).
+        let mut lines: Vec<String> = raw.lines().map(str::to_string).collect();
+        let row_v: serde_json::Value = serde_json::from_str(&lines[1]).unwrap();
+        let mut tampered = row_v.clone();
+        let toks: Vec<String> = row_v["text"]
+            .as_str()
+            .unwrap()
+            .split_whitespace()
+            .map(str::to_string)
+            .collect();
+        let new_text = toks[1..].join(" ");
+        tampered["text"] = serde_json::Value::String(new_text);
+        lines[1] = serde_json::to_string(&tampered).unwrap();
+        let bytes = lines.join("\n") + "\n";
+        std::fs::write(&path, &bytes).unwrap();
+        let seal = blake3::hash(bytes.as_bytes()).to_hex();
+        std::fs::write(format!("{}.blake3", path.display()), format!("{seal}\n")).unwrap();
+        let err = load_synth_corpus(&path).unwrap_err();
+        assert!(
+            err.contains("scaffold hash mismatch") || err.contains("does not tile"),
+            "the re-signed boundary drift must refuse on the scaffold check, got: {err}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn t1_a_legacy_row_without_the_hash_still_loads() {
+        // Backcompat: a pre-hardening artifact (no scaffold_hash field) is
+        // tolerated — the field's presence is the hardening's marker, its
+        // absence a disclosed legacy posture.
+        let dir = std::env::temp_dir().join(format!("rfx_synth_legacy_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let accepted = vec![SynthCand {
+            scaffold: frame_hash("wake me up at", "on friday"),
+            text: "wake me up at seven am on friday".into(),
+            label: "alarm_set".into(),
+            src: 0,
+            span: (4, 2),
+            variant: 1,
+        }];
+        let mut per_label = BTreeMap::new();
+        per_label.insert(
+            "alarm_set".to_string(),
+            SynthPerLabel {
+                candidates: 1,
+                allocated: 1,
+                accepted: 1,
+                veto_rejected: 0,
+                density_rejected: 0,
+                rescue_rejected: 0,
+                weight: 1.0,
+            },
+        );
+        let meta = SynthArtifactMeta {
+            magic: CORPUS_MAGIC.to_string(),
+            version: CORPUS_VERSION,
+            suite: "fixture".into(),
+            teacher: "openthai".into(),
+            teacher_provenance: "openthai:openthai-systemone".into(),
+            weighting_rule: "uniform".into(),
+            created_utc: "2026-11-22T00:00:00Z".into(),
+            git_sha: "test".into(),
+            host: "test".into(),
+            accepted: 1,
+            pool_rows: 5,
+            density_rule: None,
+            rescue_rule: None,
+            learnability_rule: None,
+            payload_hardening_rule: None,
+        };
+        let counts = DedupCounts::default();
+        let (path, _hex) = write_artifact(&dir, "fixture_l", &meta, &per_label, &accepted, &counts)
+            .expect("write");
+        // Strip the hash field from every row (simulating a pre-hardening
+        // artifact), re-seal, load.
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut out = String::new();
+        for (i, line) in raw.lines().enumerate() {
+            if i == 0 {
+                let mut v: serde_json::Value = serde_json::from_str(line).unwrap();
+                v["payload_hardening_rule"] = serde_json::Value::Null;
+                out.push_str(&serde_json::to_string(&v).unwrap());
+            } else {
+                let mut v: serde_json::Value = serde_json::from_str(line).unwrap();
+                v.as_object_mut().unwrap().remove("scaffold_hash");
+                v.as_object_mut().unwrap().remove("suite");
+                v.as_object_mut().unwrap().remove("kind");
+                v.as_object_mut().unwrap().remove("variant");
+                out.push_str(&serde_json::to_string(&v).unwrap());
+            }
+            out.push('\n');
+        }
+        std::fs::write(&path, out.trim_end()).unwrap();
+        let seal = blake3::hash(out.trim_end().as_bytes()).to_hex();
+        std::fs::write(format!("{}.blake3", path.display()), format!("{seal}\n")).unwrap();
+        let (loaded, _docs, _d) = load_synth_corpus(&path).expect("legacy artifact loads");
+        assert_eq!(loaded.payload_hardening_rule, None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

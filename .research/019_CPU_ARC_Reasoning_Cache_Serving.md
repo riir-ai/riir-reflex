@@ -2,7 +2,7 @@
 
 > **Source:** *CPU-ARC: Agentic Reasoning Caching for on-CPU Reasoning Reuse* — Belcak, Heinrich, Muralidharan, Diao, Molchanov (NVIDIA), [arXiv:2611.09891](https://arxiv.org/abs/2611.09891) (2026-11-06, 28pp; full text fetched 2026-11-22 via r.jina.ai). Parent program: NVIDIA "Project Moonshot: Local Frontier Intelligence". Sibling paper from the same lab: "You don't need long context" (arXiv:2611.05306, 2026-11-03) — same small-local-over-big-remote posture, orthogonal mechanism.
 > **Date:** 2026-11-22
-> **Status:** Gain — serving-lane fusion idea (consumer-gated, census task below) + three instruments; training recipe filed as riir-train [Plan 510](../riir-train/.plans/510_cpu_arc_l4_miss_harvest_distill.md); synth-corpus hardening filed as [.issues/131](../.issues/131_cpu_arc_synth_corpus_payload_only_hardening.md)
+> **Status:** Gain — serving-lane fusion idea (consumer-gated, census task below) + three instruments; training recipe filed as riir-train [Plan 510](../riir-train/.plans/510_cpu_arc_l4_miss_harvest_distill.md); synth-corpus hardening LANDED + CLOSED 2026-11-22 (reflex `7a0734b`: scaffold-hash verify + degeneracy + payload-window test-echo closure, always-on; the harvest refusal counted 23,184 massive / 43,999 banking77 on real corpora; the issue's full life `git log --follow -- .issues/131_cpu_arc_synth_corpus_payload_only_hardening.md`)
 > **Related Research:** 004 (ProgramAsWeights serving landscape), 016 (XERJ Query-1 pointer-program serving), 013 (JevAct decision gate)
 > **Classification:** Public — public mechanism + public contract ideas only; no rethink-class content (ESC enforcement/economics consequences named as one-line rethink-side pointers only)
 

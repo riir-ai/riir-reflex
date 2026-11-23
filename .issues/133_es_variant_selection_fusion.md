@@ -1,6 +1,7 @@
 # Issue 133: ES-derived runtime variant selection + confidence-as-reward loop (fusion ideas, novelty TBD)
 
 **Status:** Open — fusion idea filed from research; novelty NOT claimed; promotion blocked on the owed sweep
+**Claimed:** zed-133t1@amo, 1795454364, expires 2026-11-26T17:19Z
 **Date:** 2026-11-23
 **Source:** [riir-train/.research/501_ES_At_Scale_Distill.md](../../riir-train/.research/501_ES_At_Scale_Distill.md) distilling [arXiv:2509.24372](https://arxiv.org/abs/2509.24372) (ES at Scale, ICML 2026). Downgrade target of the research session's C3+C5 candidates — filed here as ideas because the prior-art risk was not swept to the §4 standard.
 **Secondary to:** riir-train Plan 512 (the training track is the primary filing this paper earned).

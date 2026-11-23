@@ -1055,8 +1055,8 @@ mod tests {
             embedder.embed_into(text.as_bytes(), &mut feature);
             ProbeRow { feature, class }
         };
-        let mut cal = Vec::new();
-        let mut test = Vec::new();
+        let mut cal = Vec::with_capacity(per_class_cal);
+        let mut test = Vec::with_capacity(per_class_test);
         for k in 0..per_class_cal {
             for c in 0..N_CLASSES {
                 cal.push(row(c, k));

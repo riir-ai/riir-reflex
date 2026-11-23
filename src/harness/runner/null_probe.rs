@@ -902,8 +902,8 @@ fn null_suite(
     shared: &mut [SharedNullLane],
     kn_route: bool,
 ) -> NullSuiteReport {
-    let mut lanes = Vec::new();
-    let mut skipped = Vec::new();
+    let mut lanes = Vec::with_capacity(shared.len());
+    let mut skipped = Vec::with_capacity(shared.len());
     eprintln!("═══ suite {} (null) ═══", spec.name);
     let choice_cases: Vec<usize> = prepared
         .suite
@@ -1190,7 +1190,7 @@ pub fn run_null_probe(
     }
 
     // Pass 2: probe each suite.
-    let mut suites = Vec::new();
+    let mut suites = Vec::with_capacity(prepared_list.len());
     for (spec, prepared) in &prepared_list {
         suites.push(null_suite(
             spec,
@@ -1405,7 +1405,7 @@ mod tests {
         // Deterministic synthetic: correct rows carry high maxp, incorrect
         // low — the pattern the emotion floor cell says the shipped readout
         // destroys (gate AUROC 0.5253 vs raw 0.7560).
-        let mut cal = Vec::new();
+        let mut cal = Vec::with_capacity(60);
         for i in 0..60 {
             let hi = 0.55 + 0.40 * (i as f64) / 59.0;
             let lo = 0.05 + 0.30 * (i as f64) / 59.0;
@@ -1479,8 +1479,8 @@ mod tests {
     #[test]
     fn candidate_cell_dominates_on_synthetic() {
         // Floor variable (maxp) is noisy; the second feature separates.
-        let mut cal = Vec::new();
-        let mut test = Vec::new();
+        let mut cal = Vec::with_capacity(80);
+        let mut test = Vec::with_capacity(40);
         for i in 0..80 {
             let sep = (i as f64) / 79.0; // the informative feature
             let noise = if i % 2 == 0 { 0.0 } else { 1.0 }; // maxp is noise

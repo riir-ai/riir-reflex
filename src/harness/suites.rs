@@ -619,7 +619,8 @@ pub fn build_finentity(rows_file: &Value, max_rows: usize) -> Suite {
         // (start, end) span labelled two ways is an unresolved annotation
         // conflict — BOTH its rows drop (never a guessed pick). Census
         // 2026-11-12 pins exactly ONE such span in the fetched population.
-        let mut labels_by_span: HashMap<(i64, i64), &str> = HashMap::new();
+        let mut labels_by_span: HashMap<(i64, i64), &str> =
+            HashMap::with_capacity(annotations.len());
         let mut conflicting: Vec<(i64, i64)> = Vec::new();
         for ann in annotations {
             let (Some(start), Some(end), Some(label)) = (
@@ -4824,7 +4825,7 @@ pub fn build_typed_decisions(rows_file: &Value, max_rows: usize) -> Suite {
 #[must_use]
 pub fn typed_gold_events(rows_file: &Value) -> Vec<(String, String, String)> {
     let all = rows_of(rows_file);
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(all.len());
     for row in &all {
         let Some(state_raw) = row_str(row, "state") else {
             continue;
@@ -5670,7 +5671,7 @@ mod selection_slice_tests {
     }
 
     fn grouped_rows(labels: usize, per_label: usize) -> Vec<serde_json::Value> {
-        let mut rows = Vec::new();
+        let mut rows = Vec::with_capacity(labels);
         for label in 0..labels {
             for _ in 0..per_label {
                 rows.push(serde_json::json!({

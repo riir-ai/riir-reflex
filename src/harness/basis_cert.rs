@@ -683,7 +683,7 @@ mod tests {
         };
         // FIT: the fixed permutation [2, 0, 1] over varying states — the
         // pair differences share the same adjacency-shift direction.
-        let mut fit_pairs = Vec::new();
+        let mut fit_pairs = Vec::with_capacity(300usize);
         for i in 0..300usize {
             let identity = mk(None, format!("cluster green case {i} status nominal"));
             let variant = mk(
@@ -694,7 +694,7 @@ mod tests {
         }
         // HOLDOUT: the same permutation on unseen STATES — the direction
         // must transfer across content (the population-metric claim).
-        let mut holdout_pairs = Vec::new();
+        let mut holdout_pairs = Vec::with_capacity(300usize);
         for i in 0..300usize {
             let identity = mk(None, format!("cluster green holdout {i} status nominal"));
             let variant = mk(
@@ -724,8 +724,8 @@ mod tests {
     #[test]
     fn zero_variation_pairs_refuse_unidentified() {
         let opts: [(&str, &str); 3] = [("alpha", "ship"), ("beta", "hold"), ("gamma", "rollback")];
-        let mut fit = Vec::new();
-        let mut hold = Vec::new();
+        let mut fit = Vec::with_capacity(12usize);
+        let mut hold = Vec::with_capacity(12usize);
         for i in 0..12usize {
             let state = format!("state {i}");
             let id = render(&state, "pick", &opts);
@@ -776,7 +776,7 @@ mod tests {
                 descs: &descs,
             })
         };
-        let mut fit = Vec::new();
+        let mut fit = Vec::with_capacity(300usize);
         for i in 0..300usize {
             let state = format!("casing case {i} status nominal");
             fit.push(pair_from(
@@ -837,7 +837,7 @@ mod tests {
                 descs: &descs,
             })
         };
-        let mut fit = Vec::new();
+        let mut fit = Vec::with_capacity(300usize);
         for i in 0..300usize {
             let state = format!("rename case {i} status nominal");
             fit.push(pair_from(
@@ -883,7 +883,7 @@ mod tests {
                 descs: &descs,
             })
         };
-        let mut fit_pairs = Vec::new();
+        let mut fit_pairs = Vec::with_capacity(300usize);
         for i in 0..300usize {
             let identity = mk(None, format!("cluster green case {i} status nominal"));
             let variant = mk(
@@ -892,7 +892,7 @@ mod tests {
             );
             fit_pairs.push(pair_from(&identity, &variant, PairFamily::Ordering));
         }
-        let mut holdout = Vec::new();
+        let mut holdout = Vec::with_capacity(300usize);
         for i in 0..300usize {
             let identity = mk(None, format!("cluster green holdout {i} status nominal"));
             let variant = mk(
@@ -929,7 +929,7 @@ mod tests {
     #[test]
     fn refusal_postures_carry_no_directions() {
         let opts: [(&str, &str); 3] = [("alpha", "ship"), ("beta", "hold"), ("gamma", "rollback")];
-        let mut fit = Vec::new();
+        let mut fit = Vec::with_capacity(12usize);
         for i in 0..12usize {
             let state = format!("state {i}");
             let id = render(&state, "pick", &opts);

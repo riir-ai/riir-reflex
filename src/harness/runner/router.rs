@@ -357,8 +357,8 @@ pub fn run_teacher_router(input_dirs: &[PathBuf], out_dir: &Path) -> Result<Rout
         }
     }
 
-    let mut suites = Vec::new();
-    let mut skipped = Vec::new();
+    let mut suites = Vec::with_capacity(by_suite.len());
+    let mut skipped = Vec::with_capacity(by_suite.len());
     for (suite, columns) in &by_suite {
         let dirs_with: Vec<usize> = {
             let mut d: Vec<usize> = columns.iter().map(|(i, _, _)| *i).collect();

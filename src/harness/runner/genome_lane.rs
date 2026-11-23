@@ -321,7 +321,7 @@ fn descend(
     move_margin: f64,
     max_passes: usize,
 ) -> Result<(GenomePoint, Vec<GenomeMove>, usize), String> {
-    let mut moves = Vec::new();
+    let mut moves = Vec::with_capacity(max_passes);
     let mut passes = 0usize;
     for pass in 0..max_passes {
         let mut moved = false;

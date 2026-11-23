@@ -1488,8 +1488,8 @@ mod tests {
 
     #[test]
     fn ridge_separates_a_linearly_separable_synthetic() {
-        let mut x = Vec::new();
-        let mut gold = Vec::new();
+        let mut x = Vec::with_capacity(20);
+        let mut gold = Vec::with_capacity(20);
         for _ in 0..20 {
             x.push(vec![1.0, 0.0, 0.0]);
             gold.push(0);

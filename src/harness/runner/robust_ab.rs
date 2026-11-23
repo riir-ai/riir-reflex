@@ -241,9 +241,9 @@ pub(crate) fn cross_lane_delta(
         ok_map(enc_clean),
         ok_map(enc_corr),
     );
-    let mut dm = Vec::new();
-    let mut de = Vec::new();
-    let mut dod = Vec::new();
+    let mut dm = Vec::with_capacity(ec.len());
+    let mut de = Vec::with_capacity(ec.len());
+    let mut dod = Vec::with_capacity(ec.len());
     for (k, &e0) in &ec {
         let (Some(&e1), Some(&m0), Some(&m1)) = (ex.get(k), mc.get(k), mx.get(k)) else {
             continue;

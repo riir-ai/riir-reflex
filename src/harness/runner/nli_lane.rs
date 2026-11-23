@@ -1276,8 +1276,8 @@ mod tests {
                 2,
             ),
         };
-        let mut cal_cases = Vec::new();
-        let mut cases = Vec::new();
+        let mut cal_cases = Vec::with_capacity(24usize);
+        let mut cases = Vec::with_capacity(24usize);
         for i in 0..24usize {
             for k in 0..3usize {
                 let (p, h, g) = pair(k);

@@ -441,8 +441,8 @@ mod tests {
 
         // A real SHAPE collapse (all-uniform gold vs all-one-hot synth,
         // 40 questions each) FAILS on the KL leg.
-        let mut shape_a = Vec::new();
-        let mut shape_b = Vec::new();
+        let mut shape_a = Vec::with_capacity(40);
+        let mut shape_b = Vec::with_capacity(40);
         for _ in 0..40 {
             shape_a.push(&[0.5_f64, 0.5_f64][..]);
             shape_b.push(&[1.0_f64, 0.0_f64][..]);

@@ -245,8 +245,8 @@ mod tests {
     /// plain centroid-difference sign would be dragged by the noise dim.
     #[test]
     fn fit_separates_where_signal_lives() {
-        let mut a = Vec::new();
-        let mut b = Vec::new();
+        let mut a = Vec::with_capacity(24);
+        let mut b = Vec::with_capacity(24);
         for i in 0..24 {
             // class a: dim0 high, dim1 alternating +/-2 (variance 4, no signal)
             a.push([

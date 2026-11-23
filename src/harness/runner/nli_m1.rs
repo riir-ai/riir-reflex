@@ -1108,8 +1108,8 @@ mod tests {
     fn logistic_fits_a_separable_rule_and_predicts_it() {
         // y == agree, with c/margin pure noise: the fit must recover a
         // large w3 and predict high on agree / low on disagree.
-        let mut xs = Vec::new();
-        let mut ys = Vec::new();
+        let mut xs = Vec::with_capacity(400);
+        let mut ys = Vec::with_capacity(400);
         for i in 0..400 {
             let agree = i % 2 == 0;
             let c = 0.3 + 0.4 * ((i * 7) % 10) as f64 / 10.0;
@@ -1126,8 +1126,8 @@ mod tests {
 
     #[test]
     fn logistic_fit_on_pure_noise_stays_bounded_and_finite() {
-        let mut xs = Vec::new();
-        let mut ys = Vec::new();
+        let mut xs = Vec::with_capacity(500);
+        let mut ys = Vec::with_capacity(500);
         for i in 0..500 {
             let agree = i % 3 == 0;
             let c = 0.2 + 0.6 * ((i * 11) % 17) as f64 / 17.0;

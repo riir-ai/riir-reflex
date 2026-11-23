@@ -353,7 +353,7 @@ mod tests {
         ));
 
         // Constant input → None (no ranking signal).
-        assert!(spearman_of(&vec![1.0, 1.0, 1.0], &ys).is_none());
+        assert!(spearman_of(&[1.0, 1.0, 1.0], &ys).is_none());
     }
 
     #[test]

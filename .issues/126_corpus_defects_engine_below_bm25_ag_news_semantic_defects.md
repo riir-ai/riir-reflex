@@ -24,6 +24,15 @@ The audit half of the claim is DONE — `.benchmarks/202_i126_per_suite_error_an
 
 Remaining: the implementation engagement (semantic_defects feature lane + corpus growth) and the ag_news overlay owner call; then the fresh two-run re-sweep closes the suite per the A2 law.
 
+## ag_news overlay DECIDED 2026-11-23 ~02:5xZ (Claude delegated-owner verdict, session `f84657b0`, round 1 — recorded per the 2026-11-11 gating law; no credential touch involved)
+
+**Verdict: REVISE → DO with two conditions — the overlay is APPROVED (apply, both lanes, disclosed), gated on a SYMMETRIC audit:**
+1. **The overlay may contain only corrections from an audit covering ALL 62 disagreement rows** (17 engine-lost + 15 reverse + 30 both-wrong) under the same content-obvious standard — Bench 202 audited only the 17; fixing gold only where the engine lost always moves the result toward the engine, so the +1.5pp is an UPPER BOUND, never a predicted number. The reported A2 delta comes out of the full audit, even if below +1.5pp.
+2. **Disclosure denominator = 400 scored rows**: 4 rows = 1.0% (not 0.33%), and the original −0.5pp gap is 2/400 = noise-level — no closing gap may be quoted as an engine result.
+Also ruled: semantic_defects needs NO overlay (gold clean; the corpus growth `b76a57b` + the engine lever if the gap persists carry it); eval:27 stays the separate authoring decision (already re-looked, gold stands); overlay code lands only AFTER sweep c80f8d28 runs and is adjudicated (it builds from this tree).
+
+**Symmetric-audit progress (addendum in `.benchmarks/202_i126_per_suite_error_analysis.md`):** reverse-15 DONE this session (cargo-free content read) — **0 clear gold errors** (11 content-obvious correct, 4 defensible straddles untouched: 125/23/234/297) — direction-neutral, ZERO overlay rows from this half. Both-wrong 30 PENDING: needs the per-row reconstruction (throwaway bin, cargo) — held behind the i1197 boot; natural slot right after c80f8d28's dump lands. **Implementation act order (post-sweep): (1) reconstruct per-row data + audit the 30 both-wrong rows; (2) assemble the overlay from the full-audit corrections ONLY; (3) implement the recorded-overlay load path (both lanes, upstream-pure number published beside the overlay number); (4) fresh two-run record adjudicates.**
+
 ## Corpus growth LANDED 2026-11-23 ~02:30Z (zed-a029893e@amo, the live claim — the no-cargo authoring half, done during the i1197 boot window)
 
 - **eval:27 authoring re-look VERDICT: gold stands.** The fixture (off_by_one) is derivable — the comment promises the last two revisions, the slice `[len() - 1 ..]` yields one, the under-range cousin the corpus already names; every rival class is refutable (nothing is swapped, no condition exists, no Result, no absence). Not ambiguous; no edit.

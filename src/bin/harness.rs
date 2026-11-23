@@ -614,7 +614,10 @@ fn harness_main() {
             "--bm25-floor" => {
                 // Issue 121: the BM25 lexical floor lane (report-only;
                 // ungated — the scorer is std-only and the lane's cost is
-                // one index build per suite).
+                // one index build per suite). Every real floor row carries
+                // the A2 verdict line (PASS / FLOOR-PARITY@n /
+                // CORPUS-DEFECT), computed by `bm25_floor::floor_parity`
+                // from the engine's and the floor's forced rows.
                 opts.bm25_floor = true;
             }
             "--drafter-fix" => {

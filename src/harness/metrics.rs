@@ -567,7 +567,10 @@ pub fn confusion_top(mispairs: &[(String, String)], top: usize) -> Vec<Confusion
 }
 
 /// argmax with first-max-wins on ties (np.argmax semantics).
-fn argmax_first(probs: &[f64]) -> (usize, f64) {
+///
+/// `pub(crate)`: the floor-parity join (`bm25_floor::floor_parity`) reads
+/// the SAME pick law for the floor's rows — one tie rule, one home.
+pub(crate) fn argmax_first(probs: &[f64]) -> (usize, f64) {
     let mut best = 0;
     for i in 1..probs.len() {
         if probs[i] > probs[best] {

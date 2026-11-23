@@ -1,9 +1,8 @@
 # Issue 126 — corpus defects: the modelless engine scores BELOW the BM25 floor on ag_news and semantic_defects
 
-**Status:** Open — filed 2026-11-19 by the 121 standing-sweep lane (zed-b7afc49e@4090; Bench 200, both runs byte-identical). Per issue 121's A2 law: engine < bm25 is a CORPUS-DEFECT finding.
+**Status:** CLOSED 2026-11-23 — both suites resolved under issue 121's A2 law: ag_news **PASS** (engine 0.9200 vs bm25 0.9050, Bench 204, the recorded 15-row gold overlay); semantic_defects **FLOOR-PARITY@102** (engine 0.5686 vs bm25 0.5784 — the engine lever measured NEGATIVE, the small-n parity clause applied by CODE; delegated-owner verdict `060599b8`; Bench 205). Filed 2026-11-19 by the 121 standing-sweep lane (zed-b7afc49e@4090; Bench 200, both runs byte-identical).
 **Lease closed:** amo-idle-housekeeping@amo, 1795148823, was expires 2026-11-22T04:30Z — lapsed unlanded-past-audit; the audit half landed 2026-11-20 per the tail row
-**Claimed:** zed-c499940c@amo, 1795429414, expires 2026-11-25T10:40:00+00:00
-Scope of the live claim (successor of zed-a029893e@amo, whose thread overflowed after `3a1dca5`): the semantic_defects engine-lever half — measured NEGATIVE this session (delegated verdict `060599b8` AGREE, recorded below); the A2 small-n parity clause lands as CODE in the floor lane, the verdict + re-open triggers are recorded, the issue closes. ag_news is CLOSED (Bench 204).
+**Lease closed:** zed-c499940c@amo, 1795429414, was expires 2026-11-25T10:40:00+00:00 — closed 2026-11-23 in-session (successor of zed-a029893e@amo, whose thread overflowed after `3a1dca5`): the semantic_defects lever measured NEGATIVE, the verdict recorded, the A2 parity clause landed as code, the issue closed (Bench 205). The a029893e lease itself: claimed 1795409900, was expires 2026-11-25T02:00:00+00:00 — landed the corpus growth, the re-sweep adjudication, the symmetric audit and the ag_news overlay (`b76a57b`..`3a1dca5`).
 (the per-suite error-analysis lane: on each failing suite extract the bm25-right/engine-wrong rows, classify noise-vs-feature-gap, land the audit record; the re-sweep rides a rig job after the audit names the fix shape)
 
 ## The findings (per-suite, from the run tables)
@@ -57,5 +56,25 @@ Also ruled: semantic_defects needs NO overlay (gold clean; the corpus growth `b7
 - [x] **Step 2 — the recorded artifact:** `src/harness/ag_news_gold_overlay.json` (15 rows, include_str!-compiled, format-pinned).
 - [x] **Step 3 — the load path:** `src/harness/gold_overlay.rs` (pub mod `harness::gold_overlay`) applied at prepare time in the runner (ag_news only, before any lane reads gold — both lanes correct by construction); drift refuses LOUD (absent id / out-of-universe label / no-op relabel / count mismatch = a hard prepare error); gate tests 3/3 (artifact well-formed, content byte-pinned to the audited fifteen, the drift arms) + the standing gates 12/12; the disclosure line prints at every prepare and rides the record; the seat verification (15/15 golds corrected at `prepare_seat`) ran before the deciding sweep.
 - [x] **Step 4 — the fresh two-run record:** [**Bench 204**](../.benchmarks/204_i126_gold_overlay_deciding_record.md) — **ag_news engine 0.9200 vs bm25 floor 0.9050 → +1.5pp, A2 CLOSED** (two runs byte-identical; the delta equals the audit's projection exactly; upstream-pure numbers published side by side: 0.8825/0.8875).
-- [ ] **The engine lever (P3)** — semantic_defects' −0.9pp: idf-weight the hashed-lexicon halves or blend a BM25-shaped fallback vote for tiny corpora; GOAT-gated; the 72-doc corpus is the measurement baseline; the sweep's dumps (44 engine-wrong rows + the census TSV) are its error-analysis feed. **This is the suite's one remaining open half** — the overlay does not touch semantic_defects (its gold is clean).
-- Scratch (`i126_hygiene_sim.py` + candidates) untracked in `.benchmarks/` — deleted at teardown after the cargo gates confirm.
+- [x] **The engine lever (P3) — semantic_defects' −0.9pp: MEASURED NEGATIVE 2026-11-23, closed by delegated verdict (Bench 205).** The pre-registered design fired on the re-sweep's numbers and was measured before any engine code was written: (a) "idf-weight the hashed-lexicon halves" has no signal to weight — with nb/ridge unarmed the REAL binary scores 0.1961 forced (20/102) against a 6-way chance floor of 0.1667, so the hashed 256-bucket cosine carries no class signal on this suite and the engine's whole 0.5686 rides the NB + ridge wide-vocabulary terms; a doc-level nearest-exemplar vote in the same space (the already-shipped `CorpusDistanceGate::max_similarity`) is an exact wash (gold gained 17, lost 17); (b) "a BM25-shaped fallback vote" strong enough to move the suite is the floor itself — REFUSED as circular (it would make `engine ≥ bm25` hold by construction and empty the A2 row of meaning). The gap is one row on n = 102 (McNemar exact p = 1.000; paired 95% CI [−9.8, +7.8] pp) with an 18-case cal front — below the instrument's resolution. **semantic_defects records as `FLOOR-PARITY@102`** — never a PASS.
+- [x] Scratch: the offline replica + run dirs under `/tmp/i126p3` deleted at teardown; the untracked `.benchmarks/i126_resweep_run{1,2}` dumps torn down (their content is absorbed by Bench 204/205 + the committed census TSVs).
+- Scratch (`i126_hygiene_sim.py` + candidates) untracked in `.benchmarks/` — deleted at teardown after the cargo gates confirm. (Done — `ffeb619`.)
+
+## Engine lever ADJUDICATED 2026-11-23 — delegated-owner verdict `060599b8` (round 1 AGREE with three changes, round 2 confirmed; recorded per the 2026-11-11 gating law — no credential touch involved)
+
+The full measurement, the clause text and the two-run landing record live in [Bench 205](../.benchmarks/205_i126_p3_lever_negative_and_a2_parity_clause.md). The verdict, in its binding points:
+
+1. **Lever (a) is refuted, not merely unproven** — the premise that the gap lived in the hashed-lexicon halves was wrong; a channel that carries nothing cannot be idf-weighted into signal.
+2. **Lever (b) is circular, and refusing it is correct.**
+3. **Growing the instrument (≈340 more fixtures for a harness-only family nothing serves) belongs in the re-open triggers, not the plan.**
+4. **The A2 closing rule gains a small-n parity clause** (recorded verbatim in issue 121 and enforced by `bm25_floor::floor_parity`): `FLOOR-PARITY@n` is a separate verdict that retires the CORPUS-DEFECT finding and **never counts as a PASS** for any promotion or GOAT claim; `p ≥ 0.05` alone was judged too loose (absence of evidence), so the clause is restricted to `n_eval < 400` AND capped at a 2.0 pp point deficit; and the parity verdict **expires on any change** to the fixtures, corpus or the engine's route/NB/ridge scoring.
+5. semantic_defects: `FLOOR-PARITY@102 — b=11 c=10, p=1.000, Δ=−0.98pp (engine − bm25), CI [−9.8, +7.8]pp`. ag_news is unaffected (strict PASS).
+
+**Re-open triggers (any one fires a re-adjudication):**
+
+- [ ] the eval set grows to ≥ 400 rows, or the cal front to ≥ 60 cases (≥ 10 per class);
+- [ ] a later two-run sweep breaks the clause (deficit > 2.0 pp at n = 102, or p < 0.05 with the engine behind);
+- [ ] semantic_defects gains a served consumer (instinct board, or any serve posture with nb/ridge scale > 0), or a new tiny-corpus consumer appears (≤ ~20 docs per class);
+- [ ] any change to the engine's scoring for route, NB or ridge.
+
+The verdict's optional follow-up — a route term that self-gates on corpus separability (leave-one-out centroid accuracy over the corpus docs alone; non-circular, GOAT-gated across all suites) — is its own issue, filed after a substrate-first check; it does not re-open this one unless a trigger above fires.

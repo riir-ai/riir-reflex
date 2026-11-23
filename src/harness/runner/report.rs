@@ -389,6 +389,43 @@ pub fn render_markdown(out: &RunOutput, errors: &[String]) -> String {
                     s.push_str(" — A-pre UNMEASURED (arm --nb-select/--ridge-select on the sweep)");
                 }
                 s.push_str("\n\n");
+                // Issue 121 A2 + issue 126's parity clause: the verdict is
+                // COMPUTED by the floor lane and disclosed in full — never
+                // a label typed into a record.
+                if let Some(p) = &f.parity {
+                    use crate::bm25_floor::{
+                        FloorVerdict, PARITY_ALPHA, PARITY_MAX_DEFICIT_PP, PARITY_MAX_N,
+                    };
+                    let note = match p.verdict {
+                        FloorVerdict::Pass => "the strict rule (engine ≥ bm25)".to_string(),
+                        FloorVerdict::FloorParity => format!(
+                            "the small-n parity clause (n < {PARITY_MAX_N} · p ≥ {PARITY_ALPHA} · point \
+                             deficit ≤ {PARITY_MAX_DEFICIT_PP}pp): the CORPUS-DEFECT finding is \
+                             retired — never a PASS, and it re-adjudicates on any fixture, corpus \
+                             or engine-scoring change"
+                        ),
+                        FloorVerdict::CorpusDefect => "a CORPUS-DEFECT finding to file".to_string(),
+                    };
+                    s.push_str(&format!(
+                        "**A2 verdict: {}** — engine {} vs bm25 {} · n={} · b={} (bm25-right/\
+                         engine-wrong) c={} (engine-right/bm25-wrong) · both-right {} both-wrong {} · \
+                         McNemar exact p={:.3} · Δ(engine−bm25) {:+.2}pp · 95% CI [{:+.1}, {:+.1}]pp — \
+                         {}\n\n",
+                        p.verdict.label(p.n),
+                        fmt4(m.hard.accuracy),
+                        fmt4(f.accuracy),
+                        p.n,
+                        p.bm25_right_engine_wrong,
+                        p.engine_right_bm25_wrong,
+                        p.both_right,
+                        p.both_wrong,
+                        p.mcnemar_p,
+                        p.delta_pp,
+                        p.ci95_pp[0],
+                        p.ci95_pp[1],
+                        note
+                    ));
+                }
             }
         }
         // Issue 039 T4/T3 disclosures: the readout candidate report (the

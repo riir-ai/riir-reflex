@@ -402,6 +402,187 @@ pub fn floor_rows(
     rows
 }
 
+// ── Issue 121 A2 — the small-n parity clause (issue 126's verdict) ─────
+//
+// A2's closing rule is strict `engine ≥ bm25`. On a small suite that
+// rule is decided by a handful of rows: at n = 102 the paired 95% interval
+// on (engine − bm25) spans ±9 pp, so a one-row deficit is indistinguishable
+// from a one-row surplus (McNemar p = 1.0). The clause closes such a suite
+// as FLOOR-PARITY — it retires the CORPUS-DEFECT finding and never counts
+// as a PASS for any promotion or GOAT claim.
+
+/// The parity clause applies only BELOW this many scored questions; at or
+/// above it, strict `engine ≥ bm25` applies unchanged.
+pub const PARITY_MAX_N: usize = 400;
+/// The exact two-sided McNemar level a parity verdict must not fall under.
+pub const PARITY_ALPHA: f64 = 0.05;
+/// The largest point deficit (bm25 − engine, percentage points) a parity
+/// verdict tolerates. The cap fires on its own: `p ≥ α` is absence of
+/// evidence, and alone it would let an engine sit well under the floor.
+pub const PARITY_MAX_DEFICIT_PP: f64 = 2.0;
+
+/// A suite's A2 verdict on one two-run record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum FloorVerdict {
+    /// `engine ≥ bm25` — the strict A2 rule.
+    Pass,
+    /// `engine < bm25`, inside the small-n parity clause: the CORPUS-DEFECT
+    /// finding is retired; never a PASS.
+    FloorParity,
+    /// `engine < bm25` and the parity clause does not hold.
+    CorpusDefect,
+}
+
+impl FloorVerdict {
+    /// The label's kind (pinned by the gate test — a rename is a wire
+    /// change on every floor row).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => "PASS",
+            Self::FloorParity => "FLOOR-PARITY",
+            Self::CorpusDefect => "CORPUS-DEFECT",
+        }
+    }
+
+    /// The row label. A parity verdict carries its n: the claim is scoped to
+    /// the instrument's resolution, never to the suite.
+    #[must_use]
+    pub fn label(self, n: usize) -> String {
+        if self == Self::FloorParity {
+            format!("{}@{n}", self.as_str())
+        } else {
+            self.as_str().to_string()
+        }
+    }
+}
+
+/// The paired engine-vs-floor read behind one A2 verdict.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub struct FloorParity {
+    /// Scored questions (both lanes' rows, joined by position).
+    pub n: usize,
+    /// `b` — bm25 right, engine wrong.
+    pub bm25_right_engine_wrong: usize,
+    /// `c` — engine right, bm25 wrong.
+    pub engine_right_bm25_wrong: usize,
+    pub both_right: usize,
+    pub both_wrong: usize,
+    /// Exact two-sided McNemar: `min(1, 2·P(X ≤ min(b, c)))`,
+    /// `X ~ Bin(b + c, ½)`; 1.0 when there is no discordant pair.
+    pub mcnemar_p: f64,
+    /// `engine − bm25` in percentage points (rows × 100 / n).
+    pub delta_pp: f64,
+    /// Wald 95% interval on `delta_pp`:
+    /// `±1.96·√(b + c − (b − c)²/n)/n`.
+    pub ci95_pp: [f64; 2],
+    pub verdict: FloorVerdict,
+}
+
+/// The exact two-sided McNemar p-value on `b` vs `c` discordant pairs.
+///
+/// The conditional binomial is summed in log space — `C(m, i)` overflows
+/// f64 once `m` reaches the hundreds, so the tail probability is a
+/// log-sum-exp over a running `ln C` recurrence, never a ratio of
+/// factorials.
+#[must_use]
+pub fn mcnemar_exact_two_sided(b: usize, c: usize) -> f64 {
+    let m = b + c;
+    let k = b.min(c);
+    if m == 0 {
+        return 1.0;
+    }
+    let ln2 = std::f64::consts::LN_2;
+    let mut log_sum = f64::NEG_INFINITY; // log Σ_{i≤k} C(m, i)
+    let mut ln_c = 0.0f64; // ln C(m, 0)
+    for i in 0..=k {
+        if i > 0 {
+            // ln C(m, i) = ln C(m, i−1) + ln(m − i + 1) − ln i
+            ln_c += ((m - i + 1) as f64).ln() - (i as f64).ln();
+        }
+        let term = ln_c - (m as f64) * ln2;
+        // log-add: log(e^a + e^b) without underflow.
+        log_sum = if log_sum == f64::NEG_INFINITY {
+            term
+        } else {
+            let (hi, lo) = (log_sum.max(term), log_sum.min(term));
+            hi + (lo - hi).exp().ln_1p()
+        };
+    }
+    (2.0 * log_sum.exp()).min(1.0)
+}
+
+/// Join the engine's forced rows with the floor's rows (the SAME
+/// `(gold, probs)` shape and question order [`floor_rows`] and
+/// `Eval::forced_rows` produce) into the paired read + the A2 verdict.
+///
+/// The two lists must be the same length — a mis-joined read is refused
+/// loud, never counted. Picks follow the first-index argmax of
+/// `hard_metrics` ([`crate::harness::metrics::argmax_first`]), so `b`, `c`
+/// and the two agreement cells always reconcile with the two lanes' own
+/// accuracies.
+pub fn floor_parity(
+    engine_rows: &[(usize, Vec<f64>)],
+    floor_rows: &[(usize, Vec<f64>)],
+) -> Result<FloorParity, String> {
+    if engine_rows.len() != floor_rows.len() {
+        return Err(format!(
+            "floor parity: engine {} row(s) vs floor {} row(s) — the lanes' question \
+             orders diverged; refusing the join",
+            engine_rows.len(),
+            floor_rows.len()
+        ));
+    }
+    let n = engine_rows.len();
+    let mut b = 0usize;
+    let mut c = 0usize;
+    let mut both_right = 0usize;
+    let mut both_wrong = 0usize;
+    for ((eg, ep), (fg, fp)) in engine_rows.iter().zip(floor_rows) {
+        if *eg != *fg {
+            return Err(format!(
+                "floor parity: gold {eg} vs {fg} at one position — the lanes scored \
+                 different questions; refusing the join"
+            ));
+        }
+        let e_ok = crate::harness::metrics::argmax_first(ep).0 == *eg;
+        let f_ok = crate::harness::metrics::argmax_first(fp).0 == *fg;
+        match (e_ok, f_ok) {
+            (true, false) => c += 1,
+            (false, true) => b += 1,
+            (true, true) => both_right += 1,
+            (false, false) => both_wrong += 1,
+        }
+    }
+    if n == 0 {
+        return Err("floor parity: no scored questions".to_string());
+    }
+    let p = mcnemar_exact_two_sided(b, c);
+    let delta_pp = ((c as f64) - (b as f64)) * 100.0 / (n as f64);
+    let half =
+        1.96 * ((b + c) as f64 - ((c as f64 - b as f64).powi(2)) / (n as f64)).sqrt() * 100.0
+            / (n as f64);
+    let deficit_pp = -delta_pp;
+    let verdict = if delta_pp >= 0.0 {
+        FloorVerdict::Pass
+    } else if n < PARITY_MAX_N && p >= PARITY_ALPHA && deficit_pp <= PARITY_MAX_DEFICIT_PP {
+        FloorVerdict::FloorParity
+    } else {
+        FloorVerdict::CorpusDefect
+    };
+    Ok(FloorParity {
+        n,
+        bm25_right_engine_wrong: b,
+        engine_right_bm25_wrong: c,
+        both_right,
+        both_wrong,
+        mcnemar_p: p,
+        delta_pp,
+        ci95_pp: [delta_pp - half, delta_pp + half],
+        verdict,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -635,5 +816,171 @@ mod tests {
         }];
         let reason = floor_contract_violation(&cases, &labels).expect("desynced gold must violate");
         assert!(reason.contains("desynced"), "reason: {reason}");
+    }
+
+    // ── issue 121 A2: the small-n parity clause ─────────────────────────
+    //
+    // The vectors are the delegated verdict's own (session 060599b8,
+    // round 2) — each one proves a different arm of the clause.
+
+    /// The two lanes' rows for a contingency table: `b` rows only the floor
+    /// gets right, `c` rows only the engine gets right, `bw` rows both get
+    /// wrong, and the rest both get right.
+    type Rows = Vec<(usize, Vec<f64>)>;
+    fn rows_for(b: usize, c: usize, bw: usize, n: usize) -> (Rows, Rows) {
+        assert!(b + c + bw <= n, "the table needs b + c + bw ≤ n");
+        let ok = (0usize, vec![1.0, 0.0]);
+        let bad = (0usize, vec![0.0, 1.0]);
+        let mut engine = Vec::with_capacity(n);
+        let mut floor = Vec::with_capacity(n);
+        for i in 0..n {
+            // Row i: [0, b) bm25-only-right, [b, b+c) engine-only-right,
+            // [b+c, b+c+bw) both wrong, then both right.
+            engine.push(if i < b || (b + c..b + c + bw).contains(&i) {
+                bad.clone()
+            } else {
+                ok.clone()
+            });
+            floor.push(
+                if (b..b + c).contains(&i) || (b + c..b + c + bw).contains(&i) {
+                    bad.clone()
+                } else {
+                    ok.clone()
+                },
+            );
+        }
+        (engine, floor)
+    }
+
+    fn close(a: f64, want: f64, tol: f64) -> bool {
+        (a - want).abs() <= tol
+    }
+
+    #[test]
+    fn parity_the_closed_case_is_floor_parity_at_102() {
+        // semantic_defects, sweep c80f8d28: engine 58/102, bm25 59/102 —
+        // the full contingency table (48 both-right, 33 both-wrong).
+        let (engine, floor) = rows_for(11, 10, 33, 102);
+        let p = floor_parity(&engine, &floor).expect("same length, same golds");
+        assert_eq!(p.verdict, FloorVerdict::FloorParity);
+        assert_eq!(p.verdict.label(p.n), "FLOOR-PARITY@102");
+        assert_eq!(
+            (p.n, p.bm25_right_engine_wrong, p.engine_right_bm25_wrong),
+            (102, 11, 10)
+        );
+        assert_eq!((p.both_right, p.both_wrong), (48, 33));
+        assert!(close(p.mcnemar_p, 1.0, 1e-12), "p {}", p.mcnemar_p);
+        assert!(close(p.delta_pp, -0.98, 0.01), "delta {}", p.delta_pp);
+        // engine − bm25: the interval mirrors the floor's [−7.8, +9.8].
+        assert!(close(p.ci95_pp[0], -9.8, 0.06), "lo {:?}", p.ci95_pp);
+        assert!(close(p.ci95_pp[1], 7.8, 0.06), "hi {:?}", p.ci95_pp);
+        // The table reconciles with the two lanes' own accuracies.
+        let e_right = p.engine_right_bm25_wrong + p.both_right;
+        let f_right = p.bm25_right_engine_wrong + p.both_right;
+        assert_eq!((e_right, f_right), (58, 59));
+        assert_eq!(e_right + p.bm25_right_engine_wrong + p.both_wrong, p.n);
+    }
+
+    #[test]
+    fn parity_no_discordant_pair_is_p_one_and_nan_free() {
+        // Both lanes identical on every row — the CI must not divide by zero.
+        let (engine, floor) = rows_for(0, 0, 0, 102);
+        let p = floor_parity(&engine, &floor).expect("same length, same golds");
+        assert_eq!(mcnemar_exact_two_sided(0, 0), 1.0);
+        assert_eq!(p.verdict, FloorVerdict::Pass);
+        assert_eq!(p.ci95_pp, [0.0, 0.0]);
+        // Identical and WRONG everywhere is still engine ≥ bm25 (a tie).
+        let both_bad = vec![(0usize, vec![0.0, 1.0]); 102];
+        let tie = floor_parity(&both_bad, &both_bad).expect("same length, same golds");
+        assert_eq!(tie.verdict, FloorVerdict::Pass);
+        assert_eq!((tie.both_right, tie.both_wrong), (0, 102));
+    }
+
+    #[test]
+    fn parity_a_significant_deficit_is_a_corpus_defect() {
+        // p ≈ 0.0215 < 0.05: the significance arm refuses on its own.
+        let (engine, floor) = rows_for(9, 1, 33, 102);
+        let p = floor_parity(&engine, &floor).expect("same length, same golds");
+        assert_eq!(p.verdict, FloorVerdict::CorpusDefect);
+        assert!(close(p.mcnemar_p, 0.0215, 0.0005), "p {}", p.mcnemar_p);
+    }
+
+    #[test]
+    fn parity_the_deficit_cap_fires_on_its_own() {
+        // p = 0.25 ≥ 0.05, but the point deficit 3/102 = 2.94 pp > 2.0 pp:
+        // the cap is the arm that refuses.
+        let (engine, floor) = rows_for(3, 0, 33, 102);
+        let p = floor_parity(&engine, &floor).expect("same length, same golds");
+        assert!(close(p.mcnemar_p, 0.25, 1e-12), "p {}", p.mcnemar_p);
+        assert!(close(p.delta_pp, -2.94, 0.01), "delta {}", p.delta_pp);
+        assert_eq!(p.verdict, FloorVerdict::CorpusDefect);
+    }
+
+    #[test]
+    fn parity_the_clause_does_not_apply_at_or_above_400() {
+        // The same (11, 10) split at n = 400 and just above it: strict A2
+        // applies — engine < bm25 is a CORPUS-DEFECT finding.
+        for n in [400usize, 409] {
+            let (engine, floor) = rows_for(11, 10, 0, n);
+            let p = floor_parity(&engine, &floor).expect("same length, same golds");
+            assert_eq!(p.n, n);
+            assert_eq!(p.verdict, FloorVerdict::CorpusDefect, "n = {n}");
+            assert_eq!(p.verdict.label(p.n), "CORPUS-DEFECT");
+        }
+    }
+
+    #[test]
+    fn parity_engine_above_the_floor_passes_whatever_p_is() {
+        // The mirror of the significant deficit (9, 1): engine 9, bm25 1 —
+        // the same p, the opposite sign, the strict PASS.
+        let (engine, floor) = rows_for(1, 9, 33, 102);
+        let p = floor_parity(&engine, &floor).expect("same length, same golds");
+        assert!(close(p.mcnemar_p, 0.0215, 0.0005), "p {}", p.mcnemar_p);
+        assert!(close(p.delta_pp, 7.84, 0.01), "delta {}", p.delta_pp);
+        assert_eq!(p.verdict, FloorVerdict::Pass);
+        assert_eq!(p.verdict.label(p.n), "PASS");
+    }
+
+    #[test]
+    fn parity_refuses_a_misaligned_join_loud() {
+        let (engine, floor) = rows_for(11, 10, 33, 102);
+        let short = floor[..101].to_vec();
+        let err = floor_parity(&engine, &short).expect_err("a length mismatch must refuse");
+        assert!(err.contains("101"), "{err}");
+        let mut shifted_gold = floor.clone();
+        shifted_gold[50].0 = 1;
+        let err = floor_parity(&engine, &shifted_gold).expect_err("a gold mismatch must refuse");
+        assert!(err.contains("gold"), "{err}");
+        let err = floor_parity(&[], &[]).expect_err("an empty join must refuse");
+        assert!(err.contains("no scored questions"), "{err}");
+    }
+
+    #[test]
+    fn parity_the_exact_tail_survives_large_discordant_counts() {
+        // 300 discordant pairs: C(300, 150) ≈ 1e88 overflows nothing in log
+        // space, and the split is even, so p is 1.
+        assert!(close(mcnemar_exact_two_sided(150, 150), 1.0, 1e-12));
+        // A lopsided 300: the tail is tiny but finite and ordered.
+        let lopsided = mcnemar_exact_two_sided(240, 60);
+        assert!((0.0..1.0).contains(&lopsided), "p {lopsided}");
+        // Known small values: Bin(4, ½) tails.
+        assert!(close(mcnemar_exact_two_sided(3, 1), 0.625, 1e-12));
+        assert!(close(mcnemar_exact_two_sided(4, 0), 0.125, 1e-12));
+        assert!(close(mcnemar_exact_two_sided(1, 1), 1.0, 1e-12));
+    }
+
+    #[test]
+    fn parity_labels_are_pinned() {
+        // A rename or reorder of the verdict strings is a wire change on
+        // every floor row — it must be a deliberate edit here.
+        assert_eq!(FloorVerdict::Pass.as_str(), "PASS");
+        assert_eq!(FloorVerdict::FloorParity.as_str(), "FLOOR-PARITY");
+        assert_eq!(FloorVerdict::CorpusDefect.as_str(), "CORPUS-DEFECT");
+        assert_eq!(FloorVerdict::Pass.label(102), "PASS");
+        assert_eq!(FloorVerdict::CorpusDefect.label(102), "CORPUS-DEFECT");
+        assert_eq!(
+            (PARITY_MAX_N, PARITY_ALPHA, PARITY_MAX_DEFICIT_PP),
+            (400, 0.05, 2.0)
+        );
     }
 }

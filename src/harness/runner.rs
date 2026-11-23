@@ -5013,11 +5013,14 @@ fn run_modelless<const N: usize>(
     // Here, AFTER the selection levers resolved (the A-pre comparators ride
     // their rows) and BEFORE the LaneResult literal consumes the selection
     // values by move. The ridge comparator exists only behind nb_ridge.
+    // The engine's FORCED rows ride in for the A2 verdict (the paired
+    // read joins them with the floor's rows — same cases, same order).
     let bm25_floor = if inp.bm25_floor {
         #[cfg(feature = "nb_ridge")]
-        let floor = bm25_lane::bm25_floor_pass(inp, nb_selected.as_ref(), ridge_selected.as_ref());
+        let floor =
+            bm25_lane::bm25_floor_pass(inp, &forced, nb_selected.as_ref(), ridge_selected.as_ref());
         #[cfg(not(feature = "nb_ridge"))]
-        let floor = bm25_lane::bm25_floor_pass(inp, nb_selected.as_ref(), ());
+        let floor = bm25_lane::bm25_floor_pass(inp, &forced, nb_selected.as_ref(), ());
         Some(floor?)
     } else {
         None

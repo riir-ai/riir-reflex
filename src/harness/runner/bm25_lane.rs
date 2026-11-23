@@ -8,6 +8,10 @@
 //!   modelless row. A suite where the engine < bm25 is a CORPUS-DEFECT
 //!   finding to file (issue 121 A2), never an auto-fix; the wire is
 //!   additive-only and the exit code untouched.
+//! - **A2 verdict** — every real floor row carries the paired read and its
+//!   verdict label (PASS / FLOOR-PARITY@n / CORPUS-DEFECT) from
+//!   [`crate::bm25_floor::floor_parity`]: the small-n parity clause is
+//!   COMPUTED here, never typed into a record by hand.
 //! - **A-pre redundancy** — the floor vs the STANDALONE hashed-lexicon
 //!   scorers. ⚠ The modelless-engine-vs-NB/ridge margins CANNOT establish
 //!   redundancy — the engine CONTAINS those scorers, so that comparison is
@@ -32,8 +36,8 @@ use super::ModellessInput;
 #[cfg(feature = "nb_ridge")]
 use super::ridge_lane::RidgeSelection;
 use crate::bm25_floor::{
-    BM25_B, BM25_K1, BM25_TOP_K, Bm25Index, floor_contract_violation, floor_rows, question_options,
-    question_query,
+    BM25_B, BM25_K1, BM25_TOP_K, Bm25Index, FloorParity, floor_contract_violation, floor_parity,
+    floor_rows, question_options, question_query,
 };
 
 /// One suite's floor row + (when the selection levers ran) the A-pre
@@ -64,6 +68,13 @@ pub struct Bm25FloorReport {
     /// floor row. Additive wire (skip-when-None).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub not_applicable: Option<String>,
+    /// The A2 verdict (issue 121 + issue 126's parity clause): the paired
+    /// engine-vs-floor read — `b`, `c`, the agreement cells, the exact
+    /// McNemar p, the point delta + Wald 95% interval and the verdict
+    /// label. Present on every real floor row; absent on a typed n/a row.
+    /// Additive wire (skip-when-None).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parity: Option<FloorParity>,
     /// The A-pre redundancy read (None = the selection levers didn't run —
     /// UNMEASURED, never folded into a pass).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -90,28 +101,34 @@ pub struct RedundancyRead {
 
 /// Run the floor over the suite: index the pool, answer the test cases,
 /// and (when the selection levers ran) collect the A-pre comparators.
-/// The ridge comparator rides the `nb_ridge` feature (its lane's home);
-/// off-feature every caller passes `None` and the arm compiles out.
+/// `engine_rows` = the modelless lane's FORCED rows over the same test
+/// cases in the same question order — the A2 verdict joins them with the
+/// floor's rows. The ridge comparator rides the `nb_ridge` feature (its
+/// lane's home); off-feature every caller passes `None` and the arm
+/// compiles out.
 #[cfg(feature = "nb_ridge")]
 pub(crate) fn bm25_floor_pass(
     inp: &ModellessInput<'_>,
+    engine_rows: &[(usize, Vec<f64>)],
     nb_selection: Option<&super::NbSelection>,
     ridge_selection: Option<&RidgeSelection>,
 ) -> Result<Bm25FloorReport, String> {
-    bm25_floor_pass_inner(inp, nb_selection, ridge_selection)
+    bm25_floor_pass_inner(inp, engine_rows, nb_selection, ridge_selection)
 }
 
 #[cfg(not(feature = "nb_ridge"))]
 pub(crate) fn bm25_floor_pass(
     inp: &ModellessInput<'_>,
+    engine_rows: &[(usize, Vec<f64>)],
     nb_selection: Option<&super::NbSelection>,
     _ridge_none: (),
 ) -> Result<Bm25FloorReport, String> {
-    bm25_floor_pass_inner(inp, nb_selection, None)
+    bm25_floor_pass_inner(inp, engine_rows, nb_selection, None)
 }
 
 fn bm25_floor_pass_inner(
     inp: &ModellessInput<'_>,
+    engine_rows: &[(usize, Vec<f64>)],
     nb_selection: Option<&super::NbSelection>,
     ridge_selection: Option<&RidgeSelection>,
 ) -> Result<Bm25FloorReport, String> {
@@ -133,6 +150,7 @@ fn bm25_floor_pass_inner(
             n_docs: 0,
             redundancy: redundancy_read(nb_selection, ridge_selection),
             not_applicable: Some(reason),
+            parity: None,
         });
     }
     let index = Bm25Index::build(inp.train, inp.labels);
@@ -153,6 +171,10 @@ fn bm25_floor_pass_inner(
         }
     }
     let redundancy = redundancy_read(nb_selection, ridge_selection);
+    // The A2 verdict: join the floor's rows with the engine's forced rows.
+    // A mis-joined read refuses the pass loud (the whole floor row fails)
+    // rather than print a verdict over misaligned questions.
+    let parity = floor_parity(engine_rows, &rows)?;
     Ok(Bm25FloorReport {
         accuracy: hard.accuracy,
         n_questions: rows.len(),
@@ -163,6 +185,7 @@ fn bm25_floor_pass_inner(
         n_docs: index.n_docs(),
         redundancy,
         not_applicable: None,
+        parity: Some(parity),
     })
 }
 

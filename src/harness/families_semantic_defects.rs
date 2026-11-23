@@ -20,8 +20,11 @@
 //!   answer — a `None` literal, the word "unwrap" in prose, or the class
 //!   names would leak);
 //! - the code SHOWS the defect; the prose never pronounces the verdict;
-//! - 6 × 17 eval balance, corpus 3 docs per class (corpus MAY name the
-//!   classes — that is what teaches the corpus-conditioned drafter).
+//! - 6 × 17 eval balance, corpus 12 docs per class (issue 126 grew the
+//!   corpus 3 → 12 per class to close the engine-vs-bm25 gap; additions
+//!   pre-validated against the zero-3-gram wall + unigram ceilings;
+//!   corpus MAY name the classes — that is what teaches the
+//!   corpus-conditioned drafter).
 
 use crate::harness::families::FamilyDef;
 use crate::harness::suites::QKind;
@@ -74,6 +77,60 @@ pub static DEFECTS: FamilyDef = FamilyDef {
              default is supplied, and a failing sub-call returns its Result upward \
              instead of being reduced to a bare flag.",
         ),
+        // ── clean (0) — issue 126 additions (per-class corpus growth) ──
+        (
+            0,
+            "The ring's write cursor steps `(write + 1) % slots` and lands back \
+             on its first position after serving every reserved entry, so the \
+             storage bound is never crossed.",
+        ),
+        (
+            0,
+            "Bounds are proven before indexing: the check refuses a \
+             length-equal position, and the read beneath it sees only \
+             in-range slots.",
+        ),
+        (
+            0,
+            "Reads that can miss pick their fallback where the read happens — \
+             `unwrap_or_else(Default::default)` spelled once — so no caller \
+             inherits an absent value.",
+        ),
+        (
+            0,
+            "The throttle's condition agrees with its comment: hot paths shed \
+             load while the flag is up, and the quiet path holds its fast lane.",
+        ),
+        (
+            0,
+            "The rollup binds each metric to the header column that names it, \
+             and the export's field order matches the schema, so no figure \
+             lands under a neighbor's label.",
+        ),
+        (
+            0,
+            "Each fallible helper hands its Result to the caller through `?`, \
+             the error naming the step that failed, so a half-finished batch \
+             is visible as exactly that.",
+        ),
+        (
+            0,
+            "The lookup feeds `match`, and the miss arm builds the documented \
+             default; the suite drives both arms through populated and empty \
+             inputs.",
+        ),
+        (
+            0,
+            "The pass consumes precisely the `count` the header declares — the \
+             last element is read once and the loop leaves with the cursor \
+             resting on the end boundary.",
+        ),
+        (
+            0,
+            "Grouping folds whole blocks of four and lets the trailing partial \
+             block fold its own true width, so the final sum matches the byte \
+             count.",
+        ),
         // ── off_by_one (1) ──
         (
             1,
@@ -95,6 +152,58 @@ pub static DEFECTS: FamilyDef = FamilyDef {
              final window; wrap math with `% (capacity + 1)` claims a slot the \
              array never reserved.",
         ),
+        // ── off_by_one (1) — issue 126 additions ──
+        (
+            1,
+            "The paginator's window closes with `..=`, so neighboring pages \
+             share one boundary record and the closing page's upper edge reads \
+             the vector at its length.",
+        ),
+        (
+            1,
+            "Chunked copies step a fixed width without clamping the end; an \
+             array whose length leaves a remainder makes the final slice reach \
+             past the storage.",
+        ),
+        (
+            1,
+            "A walk bounded by `0 ..= n` treats the count as an endpoint and \
+             touches one position past the final valid slot — a sentinel \
+             element no allocation ever held.",
+        ),
+        (
+            1,
+            "Ring math adds one to the capacity before the modulo, so the \
+             write position can equal the size and overwrite the cell adjacent \
+             to the array.",
+        ),
+        (
+            1,
+            "The history cut starts at `len() - 1` beneath a comment promising \
+             the final pair, and the result carries one fewer record than the \
+             contract describes.",
+        ),
+        (
+            1,
+            "Retry bookkeeping loops through `max_attempts` inclusive, so one \
+             extra attempt runs after the policy's final permitted call.",
+        ),
+        (
+            1,
+            "Window arithmetic sums a start and a width and slices on the sum, \
+             never comparing the end position against the data's length.",
+        ),
+        (
+            1,
+            "The scan begins its counter at one and so never touches the first \
+             row — the earliest record is skipped without a warning or a log.",
+        ),
+        (
+            1,
+            "Anchor positions add the span to the base and cut the segment on \
+             the total, reading one byte past the section's end on the final \
+             call.",
+        ),
         // ── inverted_condition (2) ──
         (
             2,
@@ -114,6 +223,60 @@ pub static DEFECTS: FamilyDef = FamilyDef {
             "Equality intended, inequality written (or the boolean literal flipped): \
              the comparison passes precisely when it should fail, so the alarm \
              fires on agreement and sleeps through divergence.",
+        ),
+        // ── inverted_condition (2) — issue 126 additions ──
+        (
+            2,
+            "The gate guards entry with `if !cleared { admit(); }`, so the \
+             badge check lets through exactly the holders it was written to \
+             refuse.",
+        ),
+        (
+            2,
+            "Merge is specified for equal fingerprints, but the branch fires \
+             on `!=` and the store deduplicates the mismatches while identical \
+             records pile up as separate rows.",
+        ),
+        (
+            2,
+            "The backstop re-arms when the queue is EMPTY — the sense of the \
+             emptiness test is reversed, so the watchdog wakes on the one \
+             situation where nothing needs saving.",
+        ),
+        (
+            2,
+            "A flipped boolean literal inverts the policy: the maintenance \
+             window opens on production during business hours and stays shut \
+             for the nightly slot it was built for.",
+        ),
+        (
+            2,
+            "Membership reads `if applicant.external { approve(); }`, though \
+             the doc says approval is for internal accounts; the sign-up flow \
+             waves outsiders through.",
+        ),
+        (
+            2,
+            "The freshness check compares staleness with `<` where the policy \
+             draws the line at `>`, so caches refresh precisely when they are \
+             already current and serve stale data otherwise.",
+        ),
+        (
+            2,
+            "Escalation triggers on success: the pager fires when the job \
+             reports healthy and stays silent through the failing runs it \
+             exists to catch.",
+        ),
+        (
+            2,
+            "The retry clause sits in `if attempts == limit`, spending its \
+             budget on the one attempt that was supposed to give up.",
+        ),
+        (
+            2,
+            "Expiry tests `now < deadline` under a policy that reads \
+             revoke-on-or-after, so lapsed credentials keep their tokens alive \
+             a step past the wall.",
         ),
         // ── unwrapped_none (3) ──
         (
@@ -136,6 +299,61 @@ pub static DEFECTS: FamilyDef = FamilyDef {
              the service is reachable, though the type system offered the \
              fallback arm.",
         ),
+        // ── unwrapped_none (3) — issue 126 additions ──
+        (
+            3,
+            "The optional telemetry endpoint is read with `.unwrap()` during \
+             boot, so a deployment that omits the key dies before the listener \
+             binds.",
+        ),
+        (
+            3,
+            "`config.timeout.expect(\"set\")` decorates an optional knob; the \
+             panic message reassures while the absent case the type allows is \
+             never handled.",
+        ),
+        (
+            3,
+            "The drain task force-pops the queue inside its tick, and the \
+             raced removal between the length check and the read turns an \
+             empty moment into a crash.",
+        ),
+        (
+            3,
+            "A header table parsed from a truncated file force-decodes each \
+             entry, and the missing trailing row panics the loader instead of \
+             reporting the short read.",
+        ),
+        (
+            3,
+            "The cache's `map[key].clone()` assumes presence for a key the \
+             writer may not have published at that point; the reader thread \
+             panics on the first cold lookup.",
+        ),
+        (
+            3,
+            "Environment parsing unwraps the locale variable the docs call \
+             optional, so containers without it refuse to start though a \
+             default existed in the type.",
+        ),
+        (
+            3,
+            "The shutdown path unwraps the handle it may have already closed, \
+             and the second stop request panics the process it was meant to \
+             wind down.",
+        ),
+        (
+            3,
+            "Iterator stepping reads `.next().unwrap()` past the promised \
+             element count; the optional the signature returns exists \
+             precisely so the walk can stop.",
+        ),
+        (
+            3,
+            "The probe decodes an optional measurement with `expect` and the \
+             annotated-absent case — a sensor that reports nothing — kills \
+             the sampling loop.",
+        ),
         // ── swapped_lookup (4) ──
         (
             4,
@@ -156,6 +374,60 @@ pub static DEFECTS: FamilyDef = FamilyDef {
              into `quiet`, `p95` recorded as `p99`, the stable slot read where \
              the rollout candidate was wanted, `en_US` served for `en_GB`.",
         ),
+        // ── swapped_lookup (4) — issue 126 additions ──
+        (
+            4,
+            "Grid indices arrive as `[column][line]` in the renderer's cell \
+             pass; square demo boards hide the flip until rectangular \
+             production data skews each cell.",
+        ),
+        (
+            4,
+            "The resolver consults the alias table where the canonical \
+             registry indexes by UUID; repeated aliases across regions fold \
+             distinct accounts into one balance.",
+        ),
+        (
+            4,
+            "Copy-paste leaves the sibling variable inside the brackets — \
+             `settings[read]` bound where `settings[write]` was intended — \
+             and the two tables share a value type, so the compiler is \
+             silent.",
+        ),
+        (
+            4,
+            "The telemetry path records `quantile(0.95)` into the field the \
+             schema names `p99`, and the dashboard's tail latency reads one \
+             bucket optimistic.",
+        ),
+        (
+            4,
+            "The locale picker serves `en_US` strings for the `en_GB` \
+             requests; the keys sit one token apart in the same table.",
+        ),
+        (
+            4,
+            "The rollout reads the stable slot where the candidate slot was \
+             wanted, so every canary measurement describes the incumbent's \
+             behavior.",
+        ),
+        (
+            4,
+            "Adjacent getters differ by one word — `created_at()` bound where \
+             `updated_at()` was intended — and the change history sorts by \
+             the wrong moment.",
+        ),
+        (
+            4,
+            "The export writes rows under the column order of a previous \
+             schema version; each value lands one column left of its label.",
+        ),
+        (
+            4,
+            "The permissions check reads the role map with the group key, and \
+             because both tables key on strings the lookup succeeds with a \
+             different group's rights.",
+        ),
         // ── swallowed_error (5) ──
         (
             5,
@@ -175,6 +447,59 @@ pub static DEFECTS: FamilyDef = FamilyDef {
             "Durable-write contracts are the common victim: a dropped append, an \
              ignored flush, a torn config that leaves yesterday's policy running \
              — each visible only after the data is gone.",
+        ),
+        // ── swallowed_error (5) — issue 126 additions ──
+        (
+            5,
+            "`let _ = unlink(staging);` precedes the next pass, and leftover \
+             temporaries pile up in the work directory while the descriptor \
+             stays busy.",
+        ),
+        (
+            5,
+            "The scheduling tick calls `publisher.flush().ok();`, so a write \
+             that fails leaves that period's counters unrecorded while the \
+             dashboards stay green.",
+        ),
+        (
+            5,
+            "A wildcard match arm maps every write failure to the default \
+             value, so the importer reports a clean run having skipped an \
+             entire batch.",
+        ),
+        (
+            5,
+            "The checkpoint routine discards the WAL append with `let _ =`, \
+             and the printed checkpoint line claims durability the log never \
+             received.",
+        ),
+        (
+            5,
+            "`send(...).await.ok();` sits in the shutdown drain; queued work \
+             evaporates under load and the process still exits zero.",
+        ),
+        (
+            5,
+            "The config reloader ignores the parse result and keeps \
+             yesterday's policy running through the failed deploy, with no \
+             counter incremented and no log line.",
+        ),
+        (
+            5,
+            "The sync loop drops the replicate result on the floor; outages \
+             read as ordinary empty diffs until the data is gone.",
+        ),
+        (
+            5,
+            "An ignored shrink precedes the rewrite; when the shortening fails \
+             the file keeps its previous length and the previous contents are \
+             read back as if they were new records.",
+        ),
+        (
+            5,
+            "The exporter's error branch returns `Ok(defaults)` for the \
+             failed section; the summary reports success and the missing \
+             section is invisible.",
         ),
     ],
     cal: &[

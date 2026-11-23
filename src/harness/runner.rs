@@ -1511,6 +1511,12 @@ pub struct LaneResult {
     /// Score metrics (typed_decisions score questions / sst5).
     pub score_mae: Option<f64>,
     pub within_1: Option<f64>,
+    /// Issue 132 Item A: the ordinal arena metrics (KS_sim + Spearman on
+    /// the ordered-label suites; `tv` reported beside them everywhere).
+    /// Report-only, additive wire (skip-when-None so a predating run
+    /// serializes nothing). None off the ordinal arm list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ordinal: Option<super::ordinal::OrdinalReport>,
     pub latency_p50_ms: f64,
     pub latency_p99_ms: f64,
     pub latency_tail_support: usize,
@@ -4850,6 +4856,10 @@ fn run_modelless<const N: usize>(
     // Issue 114 R4a queue #7: the chess-move tie-law scorer, on the
     // arm-list suites only.
     let chess_move = chess_move_of(spec.name, &forced, &suite.cases);
+    // Issue 132 Item A: the ordinal arena metrics (KS_sim + per-case
+    // Spearman), on the ordinal arm-list suites only — the same one-home
+    // law; the laya assembly reads the identical scorer.
+    let ordinal = super::ordinal::ordinal_of(spec.name, &forced);
     // Issue 024 T3: the same walk restricted to the unflagged cases. None
     // (feature off / out of scope) stays an absence in results.json.
     let acc_deleaked = inp.leak_flags.and_then(|keep| {
@@ -5083,6 +5093,7 @@ fn run_modelless<const N: usize>(
             brier_soft,
             score_mae,
             within_1,
+            ordinal,
             latency_p50_ms: lat.p50_ms,
             latency_p99_ms: lat.p99_ms,
             latency_tail_support: lat.tail_support,

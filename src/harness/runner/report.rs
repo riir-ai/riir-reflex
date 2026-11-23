@@ -1259,6 +1259,54 @@ pub fn render_markdown(out: &RunOutput, errors: &[String]) -> String {
                 fmt_opt(m.score_mae),
                 fmt_opt(m.within_1)
             ));
+            // Issue 132 Item A — the ordinal arena axes (report-only):
+            // KS_sim the distributional-similarity axis (picked labels vs
+            // gold histogram over the ordered levels), Spearman the
+            // per-case ranking axis (expected label vs gold, seeded
+            // bootstrap CI). A prior-matching lane scores HIGH on KS_sim
+            // while reading ~0 Spearman — the zero-demography persona the
+            // accuracy axis cannot see. `tv` is the order-free twin, kept
+            // beside (never pooled with) the cumulative axis.
+            if let Some(o) = &m.ordinal {
+                let ci = o
+                    .spearman_ci95
+                    .map_or_else(|| "—".to_string(), |(lo, hi)| format!("[{lo:.3}, {hi:.3}]"));
+                s.push_str(&format!(
+                    "\n**{} ordinal axes (modelless):** KS_sim {} · TV {} · Spearman {} (CI95 {ci}) · n {}\n",
+                    suite.name,
+                    fmt_opt(o.ks_sim),
+                    fmt_opt(o.tv),
+                    fmt_opt(o.spearman),
+                    o.n_cases
+                ));
+            }
+        }
+        if matches!(suite.name.as_str(), "sst5" | "sst5_syn") {
+            let mut ordinal_rows: Vec<String> = Vec::new();
+            for r in suite.laya.values() {
+                if let Some(o) = &r.ordinal {
+                    ordinal_rows.push(format!(
+                        "| {}·{} | {} | {} | {} | {} | {} |",
+                        r.lane,
+                        r.model,
+                        fmt_opt(o.ks_sim),
+                        fmt_opt(o.tv),
+                        fmt_opt(o.spearman),
+                        o.spearman_ci95.map_or_else(
+                            || "—".to_string(),
+                            |(lo, hi)| format!("[{lo:.3}, {hi:.3}]"),
+                        ),
+                        o.n_cases
+                    ));
+                }
+            }
+            if !ordinal_rows.is_empty() {
+                s.push_str(&format!(
+                    "\n**{} ordinal axes (encoder lanes):**\n\n| lane · model | KS_sim | TV | Spearman | CI95 | n |\n|---|---|---|---|---|---|\n{}\n",
+                    suite.name,
+                    ordinal_rows.join("\n")
+                ));
+            }
         }
         s.push('\n');
     }

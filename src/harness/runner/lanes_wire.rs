@@ -447,6 +447,10 @@ pub(super) fn assemble_laya_lane_result(
     // Issue 114 R4a queue #7: the chess-move tie-law scorer — the same
     // one-home law (`chess_move_of`).
     let chess_move = super::chess_move_of(suite_name, &forced, cases);
+    // Issue 132 Item A: the ordinal arena metrics — the same one-home law
+    // (`ordinal_of`), so the laya/comparison lanes' numbers cannot diverge
+    // from the modelless walk's.
+    let ordinal = crate::harness::ordinal::ordinal_of(suite_name, &forced);
     let acc_deleaked = leak_flags.and_then(|keep| {
         let per_case: Vec<usize> = cases.iter().map(|c| c.as_ref().questions.len()).collect();
         subset_accuracy(&forced, keep, &per_case)
@@ -559,6 +563,7 @@ pub(super) fn assemble_laya_lane_result(
         brier_soft,
         score_mae,
         within_1,
+        ordinal,
         latency_p50_ms: p50 as f64,
         latency_p99_ms: p99 as f64,
         latency_tail_support: support,

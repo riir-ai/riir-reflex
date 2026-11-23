@@ -68,6 +68,10 @@ pub mod latency;
 #[cfg(feature = "mc_ensemble")]
 pub mod mc_ab;
 pub mod metrics;
+// Issue 132 Item A — the ordinal arena metrics (KS_sim + per-case Spearman
+// on the ordered-label suites, TV beside them everywhere; report-only,
+// ungated + pure).
+pub mod ordinal;
 pub mod pair_heads;
 // Issue 066 — the `--density-gate` fused-abstain density-half A/B arm
 // (report-only; rides the engine feature).

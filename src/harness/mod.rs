@@ -18,6 +18,10 @@ pub mod families_semantic_defects_eval;
 // shared by every in-process fixture authoring; see the module doc for
 // the four-time recurrence record that forced it out of private copies.
 pub mod fixture_hygiene;
+// Issue 126 — the ag_news gold-corrections overlay (the delegated-owner
+// verdict's steps 2+3): the compiled 15-row artifact + the loud-drift
+// apply law. Ungated + pure; the runner wires it at ag_news prepare time.
+pub mod gold_overlay;
 // Issue 072 — measurement-only per-item outcome records (`--dump-items`;
 // rethink 028 T1's instrument). Ungated + pure: reads materialized eval
 // vectors, never runs an engine.

@@ -1,0 +1,67 @@
+{
+  "format": "ag_news_gold_overlay_v1",
+  "source": "riir-reflex issue 126 / Bench 202 addendum \u2014 the symmetric 62-row audit (2026-11-23); delegated-owner verdict AGREE (round 2)",
+  "disclosure": "15 test golds relabelled (content-obvious errors: 4 engine-lost + 11 both-wrong agree-pairs); straddles untouched; applied to BOTH lanes; upstream-pure numbers published beside in every record citing this overlay",
+  "rows": [
+    {
+      "case_id": "ag_news:106",
+      "gold": "business"
+    },
+    {
+      "case_id": "ag_news:196",
+      "gold": "business"
+    },
+    {
+      "case_id": "ag_news:207",
+      "gold": "business"
+    },
+    {
+      "case_id": "ag_news:24",
+      "gold": "business"
+    },
+    {
+      "case_id": "ag_news:248",
+      "gold": "business"
+    },
+    {
+      "case_id": "ag_news:258",
+      "gold": "business"
+    },
+    {
+      "case_id": "ag_news:336",
+      "gold": "world"
+    },
+    {
+      "case_id": "ag_news:346",
+      "gold": "business"
+    },
+    {
+      "case_id": "ag_news:348",
+      "gold": "sports"
+    },
+    {
+      "case_id": "ag_news:355",
+      "gold": "sports"
+    },
+    {
+      "case_id": "ag_news:369",
+      "gold": "sports"
+    },
+    {
+      "case_id": "ag_news:372",
+      "gold": "sports"
+    },
+    {
+      "case_id": "ag_news:56",
+      "gold": "business"
+    },
+    {
+      "case_id": "ag_news:79",
+      "gold": "sports"
+    },
+    {
+      "case_id": "ag_news:88",
+      "gold": "sports"
+    }
+  ]
+}

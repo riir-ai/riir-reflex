@@ -5933,6 +5933,21 @@ fn prepare(spec: &SuiteSpec, dir: &Path) -> Result<Prepared, String> {
         }
     }
 
+    // Issue 126 — the ag_news gold-corrections overlay: applied BEFORE
+    // the Prepared return so every lane (modelless engine, BM25 floor,
+    // selections) reads the same corrected gold. Drift refuses loud
+    // (the overlay module's law); the disclosure rides the run meta via
+    // [`gold_overlay::DISCLOSURE`].
+    let gold_overlay_applied = if spec.name == crate::harness::gold_overlay::OVERLAY_SUITE {
+        let mut suite = suite;
+        crate::harness::gold_overlay::apply_ag_news_overlay(&mut suite, &labels)?;
+        eprintln!("    {}", crate::harness::gold_overlay::DISCLOSURE);
+        (suite, true)
+    } else {
+        (suite, false)
+    };
+    let (suite, _gold_overlay_applied) = gold_overlay_applied;
+
     Ok(Prepared {
         suite,
         train,

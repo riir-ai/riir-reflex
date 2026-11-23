@@ -1,7 +1,9 @@
 # Issue 126 — corpus defects: the modelless engine scores BELOW the BM25 floor on ag_news and semantic_defects
 
 **Status:** Open — filed 2026-11-19 by the 121 standing-sweep lane (zed-b7afc49e@4090; Bench 200, both runs byte-identical). Per issue 121's A2 law: engine < bm25 is a CORPUS-DEFECT finding.
-**Claimed:** amo-idle-housekeeping@amo, 1795148823, expires 2026-11-22T04:30Z
+**Lease closed:** amo-idle-housekeeping@amo, 1795148823, was expires 2026-11-22T04:30Z — lapsed unlanded-past-audit; the audit half landed 2026-11-20 per the tail row
+**Claimed:** zed-a029893e@amo, 1795409900, expires 2026-11-25T02:00:00+00:00
+Scope of the live claim: the implementation engagement (semantic_defects feature lane + corpus growth + the fresh two-run re-sweep); work starts at the 06:15Z wake turn (amo holds the i1197 calibration boot exclusive until then — the no-cargo-on-a-poisoned-window discipline; the ag_news overlay owner call stays parked for the owner either way)
 (the per-suite error-analysis lane: on each failing suite extract the bm25-right/engine-wrong rows, classify noise-vs-feature-gap, land the audit record; the re-sweep rides a rig job after the audit names the fix shape)
 
 ## The findings (per-suite, from the run tables)

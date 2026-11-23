@@ -304,6 +304,12 @@ cargo run --release --features lepski_depth --bin harness -- --lepski-depth --ou
   `.docs/02_protocols/dataset_manifest.md`; raw-JSON mirrors ride the same script's `/resolve/main` lane).
 - Laws: fused-gate thresholds do NOT transfer (fit per suite at cal ρ=30); the cal slice must not sit inside its own
   reference corpora; ECE bins are left-open (zero-confidence rows read n/a, never perfect).
+- The BM25 floor row (`--bm25-floor`) carries a **computed** A2 verdict on every real floor row — PASS /
+  FLOOR-PARITY@n / CORPUS-DEFECT (`bm25_floor::floor_parity`, joined over both lanes' forced rows; never typed
+  into a record): a small-n suite (n < 400) with engine < bm25 but no detectable deficit (exact McNemar p ≥ 0.05
+  AND point deficit ≤ 2.0 pp) closes as FLOOR-PARITY — it retires the corpus-defect finding, never counts as a
+  PASS, and expires on any fixture/corpus/engine-scoring change. Typed n/a rows (the issue-125 label-vote
+  contract: typed_decisions, massive_intent_en) carry no verdict — a disclosed coverage gap, not a pass.
 
 ## No candle (`.issues/006`, owner directive "no candle at all cost")
 

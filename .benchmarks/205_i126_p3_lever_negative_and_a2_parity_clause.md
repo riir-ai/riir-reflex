@@ -95,3 +95,28 @@ Honest disclosures: the offline replica read eval rows for the hashed-space leve
 - Verdict: delegated-owner, session `060599b8` (round 1 AGREE with three changes; round 2 confirmed + the gate-test vectors) — recorded in issue 126.
 - The gap's origin: Bench 200 (standing sweep) → Bench 202 (per-suite audit) → the c80f8d28 re-sweep → Bench 204 (ag_news closed).
 - Gates at the landing: `cargo test --lib bm25_floor` 20/20 (9 new); `cargo clippy --all-targets -- -D warnings` clean; per-file rustfmt clean.
+
+## ADDENDUM — issue 121's closing standing sweep (2026-11-23, two runs, the clause live on every row)
+
+The record issue 121 waited for: Bench 200's six suites **plus `typed_decisions` re-included** (its issue-125 panic class is now a typed n/a row). Same lane as Bench 200, from the landed binary:
+
+```
+harness --skip-laya --suites ag_news,emotion,xnli_en,massive_intent_en,banking77,semantic_defects,typed_decisions \
+  --bm25-floor --nb-select --ridge-select --out <dir>   # ×2
+```
+
+Run line `4af3db8` on amo, 2026-11-23T10:41Z. ⛔ Latency NOT QUOTABLE (the harness's own box-state gate: a sibling job held the load at 16.67 > 6) — accuracy is deterministic and no latency number is cited. Two-run identity: the verdict table below is byte-identical across the runs (`fb571bc2…`, over suite · verdict · n · b · c · both-right · both-wrong · p · Δ · CI · both lanes' accuracies).
+
+| suite | A2 verdict | engine | bm25 | n | b | c | both-right | both-wrong | McNemar p | Δ (engine−bm25) | 95% CI |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| ag_news | **PASS** | 0.9200 | 0.9050 | 400 | 13 | 19 | 349 | 19 | 0.377 | +1.50 pp | [−1.3, +4.3] pp |
+| emotion | **PASS** | 0.8850 | 0.6000 | 400 | 8 | 122 | 232 | 38 | <0.001 | +28.50 pp | [+23.7, +33.3] pp |
+| xnli_en | **PASS** | 0.5233 | 0.3867 | 300 | 44 | 85 | 72 | 99 | <0.001 | +13.67 pp | [+6.4, +20.9] pp |
+| banking77 | **PASS** | 0.8420 | 0.8080 | 500 | 24 | 41 | 380 | 55 | 0.046 | +3.40 pp | [+0.3, +6.5] pp |
+| semantic_defects | **FLOOR-PARITY@102** | 0.5686 | 0.5784 | 102 | 11 | 10 | 48 | 33 | 1.000 | −0.98 pp | [−9.8, +7.8] pp |
+| typed_decisions | n/a — typed row (issue 125) | 0.2940 | — | | | | | | | | |
+| massive_intent_en | n/a — 20-of-59 per-question option space | 0.7800 | — | | | | | | | | |
+
+**No CORPUS-DEFECT finding remains on the standing sweep.** Both typed n/a rows went through the new code path without a parity field and without a panic (the n/a path carries `parity: None` by construction — the 5 `A2 verdict:` lines are exactly the 5 real floor rows). banking77 is the closest strict PASS (p = 0.046 on the engine's side, CI [+0.3, +6.5] pp) — a strict pass, not a parity one: at n = 500 the clause does not apply and was not needed.
+
+**Against Bench 200 (read with one coverage change):** the engine reproduces it exactly on emotion (0.8850), xnli_en (0.5233), massive_intent_en (0.7800) and banking77 (0.8420), and the floor on emotion (0.6000), xnli_en (0.3867) and banking77 (0.8080); ag_news (0.8825/0.8875 → 0.9200/0.9050) and semantic_defects (0.4412/0.4706 → 0.5686/0.5784) moved for the recorded reasons (the Bench 204 overlay, applied to BOTH lanes; the issue-126 corpus growth). **`massive_intent_en` is a coverage change, not a reproduction:** Bench 200 carried a floor row for it (0.4667, n = 300) because it ran BEFORE the issue-125 label-vote contract gate (`ee33ce5`, 2026-11-20); the gate now types the suite n/a — its questions are 20-option subsets of a 59-label universe, outside the floor's contract (the pre-gate row was scored by the degenerate path the gate exists to refuse, so it is superseded, not comparable). **The standing floor therefore covers five suites**; `massive_intent_en` and `typed_decisions` are typed n/a rows with no A2 verdict — a disclosed gap in the floor's coverage, not a pass.

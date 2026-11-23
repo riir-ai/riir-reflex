@@ -135,9 +135,12 @@ fn bm25_floor_pass_inner(
     // Issue 125 — the floor-contract gate BEFORE any row is computed: a
     // suite whose questions carry per-question option spaces outside the
     // doc-label universe gets a typed n/a row, never the pick-0
-    // degenerate number and never the gold-vs-arity panic. The 6 standing
-    // classification suites pass byte-identically (their choice keys ARE
-    // the label universe).
+    // degenerate number and never the gold-vs-arity panic. Measured on the
+    // standing sweep (Bench 205 addendum): five suites carry a real floor
+    // row (ag_news, emotion, xnli_en, banking77, semantic_defects — their
+    // choice keys ARE the label universe); typed_decisions and
+    // massive_intent_en (20-option subsets of a 59-label universe) are
+    // typed n/a — a disclosed gap in the floor's coverage, never a pass.
     if let Some(reason) = floor_contract_violation(&inp.suite.cases, inp.labels) {
         eprintln!("    bm25-floor: n/a — {reason}");
         return Ok(Bm25FloorReport {

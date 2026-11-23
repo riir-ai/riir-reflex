@@ -1,6 +1,8 @@
 # Issue 122 — ESC worthiness gate supervised on outcome-delta (δ) targets
 
-**Status:** OPEN — CLAIMED (zed-4090-house@4090, T1a + T2-CPU half; T3's fresh capture routes at execution time). Routing: the ESC comparison family's lane; production serving-side adoption NOT in scope. Prior lease (zed-amo-i122escdelta@amo, exp 18:00Z 11-19) lapsed unworked-past-landing; T1a's reconciliation EXECUTED under this claim (see the row below).
+**Status:** OPEN — T1a reconciled + T2 landed under the claim below; T3/T4/T5 pending (T3's fresh capture routes at execution time). Routing: the ESC comparison family's lane; production serving-side adoption NOT in scope. Prior lease (zed-amo-i122escdelta@amo, exp 18:00Z 11-19) lapsed unworked-past-landing; T1a's reconciliation EXECUTED under this claim (see the row below).
+**Claimed:** zed-4090-house@4090, 1795435875, expires 2026-11-25T13:00Z
+(claim reshaped 2026-11-23, m3 housekeeping lane zed-5d357908@m3: the holder's claim was embedded mid-line in this Status line — the Issue-1226 blind class, read UNCLAIMED fleet-wide while live; holder + scope unchanged, fresh expiry from the reshape)
 **Source:** riir-reflex `.research/018_Sparse_Reward_Subsystem_Probes.md` (arXiv:2602.00986, sparse reward subsystem) — the paper's dopamine objective (predict step-level improvement δ before the step) applied at our escalation boundary.
 **Date filed:** 2026-11-17
 

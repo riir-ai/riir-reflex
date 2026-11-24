@@ -2,7 +2,7 @@
 
 > **Source:** [arXiv:2611.09385](https://arxiv.org/abs/2611.09385) "Against All Likelihood" — David Lopez-Paz, 2026-11-06, CC-BY 4.0
 > **Date:** 2026-11-15
-> **Status:** DISTILLED — one POC issue filed (reflex [Issue 119](../.issues/119_context_invariance_probe.md), report-only probe with a pre-registered null path); any serving wiring gated on its verdict. **Verdict record (§5 ping-pong):** round 1 REVISE (claude reviewer, 2026-11-15, session 8a40f252) — the placebo arm, the fused-third-channel arm, the primary-cell pin, the G3 rescope, and the honest-family/external-prior rewordings below are all applied; round 2 AGREE (same session) with two riders — the placebo-comparison pinned as a paired-LB95 statistic in G2a/G2b, and this TL;DR's stale attribution line fixed; both folded at commit.
+> **Status:** DISTILLED — one POC issue filed (reflex `Issue 119`, report-only probe with a pre-registered null path); any serving wiring gated on its verdict. **Verdict record (§5 ping-pong):** round 1 REVISE (claude reviewer, 2026-11-15, session 8a40f252) — the placebo arm, the fused-third-channel arm, the primary-cell pin, the G3 rescope, and the honest-family/external-prior rewordings below are all applied; round 2 AGREE (same session) with two riders — the placebo-comparison pinned as a paired-LB95 statistic in G2a/G2b, and this TL;DR's stale attribution line fixed; both folded at commit.
 > **Related Research:** katgpt-rs [.research/499](../../katgpt-rs/.research/499_Jagged_Judges_Epistemic_Stability.md) (Jagged Judges — the margin/invariance head-to-head)
 > **Related Benchmarks (internal, load-bearing):** reflex Bench 092 / Plan 008 (`mc_ensemble` null verdict), Bench 128 (perm spread), Bench 147 (null probe), Bench 174 (gate stability); rethink Bench 089 (ESC paraphrase shadow read)
 > **Classification:** Public
@@ -117,7 +117,7 @@ For a `decision_wire` question q with options O:
 
 **MOAT gate (riir-reflex):** fits the decision-serving moat exactly (first-class abstention + honest comparison arenas); public-safe (public paper, public modelless engine, no rethink-class content); the escalation-composition naming stays instinct-side vocabulary.
 
-**Actionable filed:** reflex [Issue 119](../.issues/119_context_invariance_probe.md) — `--ctx-probe`, report-only, gates G1–G4 pre-registered with the null path.
+**Actionable filed:** reflex `Issue 119` — `--ctx-probe`, report-only, gates G1–G4 pre-registered with the null path.
 
 **Corroborations (no filing, cited for the record):**
 

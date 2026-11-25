@@ -316,9 +316,17 @@ pub fn build_clinc150(rows_file: &Value, max_rows: usize) -> Suite {
 /// four fixed category names, in the `answers` object's key order (uniform
 /// across the split, verified at port), which is ALSO the gold-index order
 /// (the official eval's `answer_names.index(correct_answer)` law).
-pub(crate) const AG_NEWS_KEYS: [&str; 4] = ["world", "sports", "business", "sci_tech"];
-pub(crate) const EMOTION_KEYS: [&str; 6] = ["sadness", "joy", "love", "anger", "fear", "surprise"];
-pub(crate) const XNLI_KEYS: [&str; 3] = ["entailment", "neutral", "contradiction"];
+/// The int-ClassLabel suites' option-KEY tables — the ONE home for the
+/// int → presentation-key mapping (Issue 077's content binding; the
+/// runner's engine-domain labels and `train_row_label` both consume these).
+/// PUB for the export seam (riir-train Issue 708): the instinct arm_b
+/// exporter translates the student universe's int-spelled labels to these
+/// keys at export so the serving seat's Named join resolves — an exporter
+/// hardcoding a private copy would drift the first time a table moves.
+/// Never reorder a row: the index IS the class id across every consumer.
+pub const AG_NEWS_KEYS: [&str; 4] = ["world", "sports", "business", "sci_tech"];
+pub const EMOTION_KEYS: [&str; 6] = ["sadness", "joy", "love", "anger", "fear", "surprise"];
+pub const XNLI_KEYS: [&str; 3] = ["entailment", "neutral", "contradiction"];
 pub(crate) const WISESIGHT_KEYS: [&str; 4] = ["pos", "neu", "neg", "q"];
 
 /// Issue 114 T3 — the When2Call category universe: the four fixed category
@@ -5365,8 +5373,10 @@ pub(crate) fn question_option_count(q: &SuiteQuestion) -> usize {
 /// - `thai_wisesight`: label = `int(category).to_string()`, text = the
 ///   `texts` field (the dataset's own column spelling);
 /// - `massive_intent_en`: label = `label_text`, text = `text`;
-/// - `xnli_en`: label = `int(label).to_string()`, text = premise + "\n" +
-///   hypothesis;
+/// - `xnli_en`: label = the int mapped through [`XNLI_KEYS`] (the option-key
+///   spelling — Issue 077's content binding; the pre-077
+///   `int(label).to_string()` spelling is the defect riir-train Issue 708
+///   repairs on the export side), text = premise + "\n" + hypothesis;
 /// - `wanli_en`: label = the `gold` string (already the option-key
 ///   spelling), text = premise + "\n" + hypothesis;/// - `typed_decisions`: label = `workflow`, text = the raw state string AS
 ///   STORED (no reparse — the compression scorer works on the stored bytes).

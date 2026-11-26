@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `74717fc4` | PASSED (load 3.01) | POISONED ×4 mid-window (Zed 39055 + rustc + cargo + a train engine, 07:19:51-07:21:07Z) | unusable — the ship rows visibly inflated |
 | `24e26c08` | PASSED | POISONED ×1 (the same Zed, 07:26:13-07:26:29Z) + PROVENANCE would have read load 8.0 mid-run | unusable |
-| `01a216c4` | PASSED (load read at start below ceiling) | **PROVENANCE load=6.86 — above the 6.0 ceiling** (the line itself records the breach; nothing flagged it) | labeled OUT-OF-SPEC post-hoc by the verdict — the gate never did |
+| `01a216c4` | PASSED (load read at start below ceiling) | **PROVENANCE load=6.86 — above the 6.0 ceiling** + **POISONED ×16** (a rustc build swarm + cargo + a train engine + Zed, 07:33:27→end) | labeled OUT-OF-SPEC post-hoc by the verdict — the gate never did; ⚠ the poison verdict rode the end MAIL, not the log body — a log-grep read the cell "poison-free" (the detection lesson: the poison state is orchestrator-side, never greppable from the cell's own log) |
 
 The gate's design samples load ONCE at launch; a sibling session (or an owner app — amo's local Zed, pid 39055, was the poisoner in all three windows) starting mid-run raises the load after the gate has certified the box. The cell's numbers are visibly inflated (the ship-pose arms read ~5.4-5.6 ms vs ~4.3-4.5 in a quiet smoke), and nothing in the output names the breach — the record's PROVENANCE line actively asserts a box state that the run's own tail contradicts.
 

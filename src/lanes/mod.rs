@@ -103,3 +103,14 @@ pub mod elephant;
 // (bar 0.7825, one frozen read, train-row wire-smoke only). Ungated: the
 // same import law.
 pub mod opendecider;
+// reflex Issue 134 (feeding rethink Issue 068's local-teacher cell): the
+// SenseNova-Loop-9B SELF-HOSTED lane — the repo's FIRST OpenAI
+// chat-completions wire (every sibling speaks SystemOne; the mammoth
+// model-field-only reuse was REFUTED at the 068 premise check), served by
+// the OpenSenseNova/llama.cpp FORK @ 24ea7bb7 (mainline lacks the arch —
+// the Dory fork-only precedent; weights Apache-2.0, teacher-eligible).
+// MEASUREMENT-ONLY (the mammoth T10.2 law inherited): no RIDT arm. The
+// wire facts (content vs reasoning_content split, path-echo model id) are
+// the 068 probe's recorded observations, never guesses. Ungated: the same
+// import law (suites + http_mini + std + serde_json).
+pub mod sensenova;

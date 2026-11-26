@@ -205,6 +205,7 @@ struct ComparisonLanes {
     mammoth: Option<LaneResult>,
     elephant: Option<LaneResult>,
     opendecider: Option<LaneResult>,
+    sensenova: Option<LaneResult>,
     paw: Option<crate::lanes::paw::PawLaneResult>,
     paw_local: Option<crate::lanes::paw::PawLaneResult>,
 }
@@ -449,6 +450,7 @@ fn run_suite(spec: &SuiteSpec, opts: &RunOptions, errors: &mut Vec<String>) -> O
         mammoth: comparison.mammoth,
         elephant: comparison.elephant,
         opendecider: comparison.opendecider,
+        sensenova: comparison.sensenova,
         paw: comparison.paw,
         paw_local: comparison.paw_local,
         leak: leak_block,
@@ -1118,6 +1120,17 @@ fn run_comparison_lanes(
         opendecider: if opts.opendecider {
             run_comparison_lane("opendecider", spec.name, errors, || {
                 run_opendecider_lane(&prepared.suite, opts.laya_max_questions, leak_flags)
+            })
+        } else {
+            None
+        },
+        // sensenova self-hosted comparison lane (reflex Issue 134 / rethink
+        // Issue 068's local-teacher cell): the OpenAI chat-completions wire
+        // over the OpenSenseNova llama.cpp fork — the 068 probe's recorded
+        // posture.
+        sensenova: if opts.sensenova {
+            run_comparison_lane("sensenova", spec.name, errors, || {
+                run_sensenova_lane(&prepared.suite, opts.laya_max_questions, leak_flags)
             })
         } else {
             None

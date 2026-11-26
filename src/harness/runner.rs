@@ -2358,6 +2358,13 @@ pub struct SuiteResult {
     /// run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opendecider: Option<LaneResult>,
+    /// reflex Issue 134 / rethink Issue 068: the SenseNova-Loop-9B
+    /// SELF-HOSTED comparison lane's row — the OpenAI chat-completions wire
+    /// over the OpenSenseNova llama.cpp fork (Apache-2.0, teacher-eligible;
+    /// the quant posture rides the record). Absent when the lane did not
+    /// run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sensenova: Option<LaneResult>,
     /// Issue 033: the PAW comparison lane's row (ProgramAsWeights, not
     /// affiliated) — free-text answers under the exact-match law, refusals
     /// counted, no probability surface (`src/lanes/paw.rs`). Absent when
@@ -7033,6 +7040,22 @@ pub struct RunOptions {
     /// read rides it). The wire-smoke runs on TRAIN rows only (the 038
     /// gate). Default off.
     pub opendecider: bool,
+    /// Also run the SenseNova-Loop-9B self-hosted comparison lane (reflex
+    /// Issue 134 / rethink Issue 068's local-teacher cell): SenseTime's
+    /// qwen3.5-family looped transformer (Apache-2.0, teacher-eligible)
+    /// served by the OpenSenseNova/llama.cpp FORK @ `24ea7bb7` over
+    /// llama-server's OpenAI chat-completions wire — the repo's first
+    /// non-SystemOne teacher — at `SENSENOVA_SERVE_URL` (default
+    /// `http://127.0.0.1:18080`, the 068 probe's recorded scratch port).
+    /// The no-creds gate is the explicit `SENSENOVA_AUTH_OK=1` + the
+    /// model id + the quant stamp (`SENSENOVA_DEVICE`, the lossy-surface
+    /// law); the handshake is a REAL decide round (the fork's only health
+    /// surface is the completions route); the spend ceiling defaults to
+    /// 50 cases (`SENSENOVA_ALLOW_UNCAPPED=1` records the local
+    /// zero-marginal-cost posture). MEASUREMENT-ONLY — no RIDT arm (the
+    /// mammoth T10.2 law inherited). An unreachable/una­cknowledged lane
+    /// is a LOUD error, never a silent skip. Default off.
+    pub sensenova: bool,
     /// Also run the PAW comparison lane (Issue 033): ProgramAsWeights
     /// compiled per specced suite, answered over their hosted REST via a
     /// `curl` subprocess (`src/lanes/paw.rs`). Default off.
@@ -7310,6 +7333,7 @@ impl RunOptions {
             mammoth: false,
             elephant: false,
             opendecider: false,
+            sensenova: false,
             paw: false,
             paw_local: false,
             clef_local: false,

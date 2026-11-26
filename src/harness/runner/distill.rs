@@ -349,6 +349,19 @@ pub(crate) enum TeacherForward {
         lane: crate::lanes::mammoth::MammothLane,
         provenance: String,
     },
+    /// The SenseNova-Loop-9B SELF-HOSTED service (rethink Issue 068's cell,
+    /// reflex Issue 134): SenseTime's qwen3.5-family looped transformer
+    /// (Apache-2.0, teacher-eligible) served by the OpenSenseNova/llama.cpp
+    /// FORK @ `24ea7bb7` over llama-server's OpenAI chat-completions wire —
+    /// the repo's first non-SystemOne teacher (the mammoth model-field reuse
+    /// was REFUTED at the 068 premise check). MEASUREMENT-ONLY (the mammoth
+    /// T10.2 law inherited): no RIDT arm, no capture artifact. The quant
+    /// posture rides SENSENOVA_DEVICE (the lossy-surface law); the endpoint
+    /// is the operator's attested loopback (the SENSENOVA_AUTH_OK gate).
+    Sensenova {
+        lane: crate::lanes::sensenova::SensenovaLane,
+        provenance: String,
+    },
 }
 
 impl TeacherForward {
@@ -367,6 +380,7 @@ impl TeacherForward {
             Self::Elephant { .. } => "elephant",
             Self::Opendecider { .. } => "opendecider",
             Self::Mammoth { .. } => "mammoth",
+            Self::Sensenova { .. } => "sensenova",
         }
     }
 
@@ -384,6 +398,7 @@ impl TeacherForward {
             Self::Elephant { provenance, .. } => provenance,
             Self::Opendecider { provenance, .. } => provenance,
             Self::Mammoth { provenance, .. } => provenance,
+            Self::Sensenova { provenance, .. } => provenance,
         }
     }
 
@@ -418,6 +433,7 @@ impl TeacherForward {
                       unchanged) per riir-train 640; no LICENSE file ships \
                       (tag+front-matter assertion)",
             ),
+            Self::Sensenova { .. } => Some(crate::lanes::sensenova::LICENSE_LINE),
             _ => None,
         }
     }
@@ -515,6 +531,14 @@ impl TeacherForward {
                 .decide(case)
                 .map(|_| ())
                 .map_err(|e| format!("opendecider warmup: {e}")),
+            // The opendecider law verbatim: the handshake ran at construct
+            // (the ONE-probe noul round over the chat-completions wire);
+            // warmup is the loud proof + the cold-path absorb (llama-server
+            // pages the GGUF + the reasoning cache warms on the first pass).
+            Self::Sensenova { lane, .. } => lane
+                .decide(case)
+                .map(|_| ())
+                .map_err(|e| format!("sensenova warmup: {e}")),
         }
     }
 
@@ -644,6 +668,14 @@ impl TeacherForward {
                     .decide(case)
                     .map_err(|e| format!("opendecider forward ({}): {e}", case.id))?;
                 let keyed = keyed_first_answer(case, &answers, "opendecider")?;
+                let ms = u64::try_from(client_ms.round() as u128).unwrap_or(u64::MAX);
+                Ok((keyed, ms))
+            }
+            Self::Sensenova { lane, .. } => {
+                let (answers, client_ms, _tokens) = lane
+                    .decide(case)
+                    .map_err(|e| format!("sensenova forward ({}): {e}", case.id))?;
+                let keyed = keyed_first_answer(case, &answers, "sensenova")?;
                 let ms = u64::try_from(client_ms.round() as u128).unwrap_or(u64::MAX);
                 Ok((keyed, ms))
             }
@@ -858,6 +890,19 @@ pub(crate) fn construct_teacher(name: &str, spec: &SuiteSpec) -> Result<TeacherF
             let (provenance, _device) = lane.info()?;
             Ok(TeacherForward::Opendecider { lane, provenance })
         }
+        "sensenova" => {
+            // The mammoth no-creds law on the OpenAI wire (reflex Issue
+            // 134, rethink Issue 068): from_env() refuses LOUD without
+            // SENSENOVA_AUTH_OK=1 + the model id + the quant stamp (the
+            // lossy-surface law). The handshake at construct is a REAL
+            // decide round over /v1/chat/completions (the fork's only
+            // health surface is the completions route — the clef law's
+            // OpenAI form); the spend ceiling is checked here too (a slow
+            // self-host is metered like a hosted endpoint).
+            let lane = crate::lanes::sensenova::SensenovaLane::from_env()?;
+            let (provenance, _device) = lane.info()?;
+            Ok(TeacherForward::Sensenova { lane, provenance })
+        }
         "laya" => {
             #[cfg(feature = "laya-riir")]
             {
@@ -891,7 +936,7 @@ pub(crate) fn construct_teacher(name: &str, spec: &SuiteSpec) -> Result<TeacherF
         other => Err(format!(
             "unknown --distill-teacher {other:?} (the seam knows 'laya', 'openthai', \
              'bekko', 'clef', 'pplx', 'd3', 'jeva', 'startlux', 'elephant', \
-             'opendecider' and 'mammoth')"
+             'opendecider', 'mammoth' and 'sensenova')"
         )),
     }
 }

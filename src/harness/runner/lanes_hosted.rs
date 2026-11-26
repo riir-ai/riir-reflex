@@ -1105,6 +1105,52 @@ pub(super) fn run_opendecider_lane(
     let lane = crate::lanes::opendecider::OpenDeciderLane::from_env()?;
     run_teacher_wire_lane(lane, suite, laya_max_questions, leak_flags)
 }
+
+impl TeacherWireLane for crate::lanes::sensenova::SensenovaLane {
+    fn label(&self) -> &'static str {
+        "sensenova"
+    }
+    fn info(&self) -> Result<(String, String), String> {
+        self.info()
+    }
+    fn decide(
+        &self,
+        case: &SuiteCase,
+    ) -> Result<(Vec<crate::lanes::pplx::AnswerTriple>, f64, u64), String> {
+        self.decide(case)
+    }
+    fn decide_raw(&self, case: &SuiteCase) -> Result<String, String> {
+        self.decide_raw(case)
+    }
+    fn determinism_view(raw: &str) -> Result<String, String> {
+        // The OpenAI envelope carries `id`/`created`/`system_fingerprint`
+        // per call BY DESIGN (the mammoth qev-clock lesson, one wire over):
+        // the projection strips the serve-meta blocks, keeps the decision
+        // content (the 068 probe's recorded shape).
+        crate::lanes::sensenova::SensenovaLane::determinism_view(raw)
+    }
+    fn spend_env(&self) -> &'static str {
+        crate::lanes::sensenova::MAX_CASES_ENV
+    }
+    fn uncapped_env(&self) -> &'static str {
+        crate::lanes::sensenova::UNCAPPED_ENV
+    }
+    fn max_cases_default(&self) -> usize {
+        crate::lanes::sensenova::DEFAULT_MAX_CASES
+    }
+}
+
+/// The sensenova lane's thin construction + delegation (reflex Issue 134,
+/// rethink Issue 068's local-teacher cell — the FIRST chat-completions
+/// wire; the no-creds gate + the quant stamp live in from_env).
+pub(super) fn run_sensenova_lane(
+    suite: &Suite,
+    laya_max_questions: usize,
+    leak_flags: Option<&[bool]>,
+) -> Result<LaneResult, String> {
+    let lane = crate::lanes::sensenova::SensenovaLane::from_env()?;
+    run_teacher_wire_lane(lane, suite, laya_max_questions, leak_flags)
+}
 /// `pplx-decider-v1.1-27b` (the JDI 2026-10-07 #1; Apache-2.0, UNGATED —
 /// teacher-eligible, the read decides riir-train 623's pick) served
 /// through THEIR autojev server, measured over HTTP — the agentjev

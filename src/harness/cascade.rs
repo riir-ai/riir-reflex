@@ -134,6 +134,13 @@ pub struct CascadeReport {
     /// What the modelless forced picks would have scored on the same
     /// escalated set (diagnostic — never part of `accuracy`).
     pub escalated_modelless_correct: usize,
+    /// Escalated questions where the think leg was right and the cheap lane
+    /// wrong — the escalation-precision numerator (issue 122 T3's bar-(a)
+    /// read; aggregate only — no per-row test record ever leaves the run).
+    pub escalated_think_only_correct: usize,
+    /// Escalated questions where the cheap lane was right and the think leg
+    /// wrong (the paired counterpart of the think-only count).
+    pub escalated_cheap_only_correct: usize,
     /// Questions the escalator served (any posture) — the coverage face.
     pub escalator_served_questions: usize,
     /// Issue 042 lever 3: the worthiness verdict when the lever is on.
@@ -882,6 +889,8 @@ pub fn compose(
     let mut n_correct = 0usize;
     let mut escalated_laya_correct = 0usize;
     let mut escalated_modelless_correct = 0usize;
+    let mut escalated_think_only_correct = 0usize;
+    let mut escalated_cheap_only_correct = 0usize;
     let mut escalator_served_questions = 0usize;
     let mut ab = extras.filter(|e| e.ab_counts).map(|_| AbCounters {
         covered_abstains: 0,
@@ -925,12 +934,20 @@ pub fn compose(
             match laya_j {
                 Some(&j) if escalation_armed => {
                     n_escalated += 1;
-                    if laya.picks[j][qi] == gold.idx {
+                    let laya_right = laya.picks[j][qi] == gold.idx;
+                    let ml_right = modelless.picks[ci][qi] == gold.idx;
+                    if laya_right {
                         n_correct += 1;
                         escalated_laya_correct += 1;
                     }
-                    if modelless.picks[ci][qi] == gold.idx {
+                    if ml_right {
                         escalated_modelless_correct += 1;
+                    }
+                    if laya_right && !ml_right {
+                        escalated_think_only_correct += 1;
+                    }
+                    if ml_right && !laya_right {
+                        escalated_cheap_only_correct += 1;
                     }
                 }
                 // No escalator coverage (or disarmed by worthiness): the
@@ -959,6 +976,8 @@ pub fn compose(
         n_correct,
         escalated_laya_correct,
         escalated_modelless_correct,
+        escalated_think_only_correct,
+        escalated_cheap_only_correct,
         escalator_served_questions,
         worthiness: worthiness_verdict,
         ab,
@@ -1117,6 +1136,11 @@ mod tests {
         assert!((rep.escalation_rate - 1.0).abs() < 1e-12);
         // gold [0, 1], laya [1, 0] → 0 correct: accuracy IS laya's here.
         assert!((rep.accuracy).abs() < 1e-12);
+        // Issue 122 T3: think-only wins = laya right ∧ modelless wrong.
+        // q0: laya 1 ≠ gold 0, modelless 0 == gold → cheap-only.
+        // q1: laya 0 ≠ gold 1, modelless 0 ≠ gold → both wrong.
+        assert_eq!(rep.escalated_think_only_correct, 0);
+        assert_eq!(rep.escalated_cheap_only_correct, 1);
     }
 
     #[test]
@@ -1153,6 +1177,10 @@ mod tests {
         let rep = compose(&cases, &m, &l, None, None).expect("compose");
         assert_eq!(rep.escalated_laya_correct, 1);
         assert_eq!(rep.escalated_modelless_correct, 1);
+        // Issue 122 T3: one think-only win and no cheap-only win on the
+        // escalated set (c0q0: both right — neither only-count fires).
+        assert_eq!(rep.escalated_think_only_correct, 0);
+        assert_eq!(rep.escalated_cheap_only_correct, 0);
         // now the escalator flips BOTH: cascade +2 where modelless lost one
         // and won one → accuracy strictly better.
         let l2 = lq(vec![0, 1], vec![vec![0, 0], vec![0, 0]]);
@@ -1160,6 +1188,10 @@ mod tests {
         assert!(rep2.accuracy > rep.accuracy);
         assert_eq!(rep2.escalated_laya_correct, 2);
         assert_eq!(rep2.escalated_modelless_correct, 1);
+        // c1q0 is the lone think-only win (laya right, modelless wrong);
+        // c0q0 is both-right — neither only-count fires there.
+        assert_eq!(rep2.escalated_think_only_correct, 1);
+        assert_eq!(rep2.escalated_cheap_only_correct, 0);
     }
 
     // ── Issue 042 lever 3: the worthiness probe ──

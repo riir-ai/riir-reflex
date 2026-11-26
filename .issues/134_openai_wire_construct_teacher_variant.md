@@ -1,10 +1,9 @@
 # Issue 134 — OpenAI-wire `construct_teacher` variant (the SenseNova local-teacher arm)
 
-**Status:** OPEN — routed: riir-rethink Issue 068's local-teacher cell owns the claim
-(`zed-a73720e4@m3`, exp 2026-11-26T15:01Z); this issue is the reflex-side arm that cell
-needs. Claim HERE only once the serving-posture probe (amo, in flight) reports a real
-endpoint — the arm's parser must be written against the observed response shape, never a
-guessed one.
+**Status:** CLAIMED 2026-11-26T02:56Z — the serving-posture probe reported a real endpoint (riir-rethink Issue 068's GGUF serving probe: OpenSenseNova/llama.cpp fork on Metal, OpenAI-compatible wire, wire quirks of record — the parser now has an observed shape to write against, the issue's own claim gate is satisfied). Implementation starts under the lease below.
+**Claimed:** zed-a73720e4@m3, 1795537600, expires 2026-11-28T03:00Z
+
+**Endpoint facts of record (the parser's authority, from the 068 probe):** `http://127.0.0.1:<port>/v1/chat/completions`, OpenAI-compatible llama-server wire; `content` carries ONLY the final answer — the chain-of-thought lands in `message.reasoning_content` (read BOTH or you see empty content on reasoning-token exhaustion); the model id echoes the load path (set it explicitly); finish reasons are standard (`stop`/`length`).
 
 **Why this issue exists (the premise check, 2026-11-24):** rethink Issue 068 serves
 SenseNova-Loop-9B (qwen3.5-family looped transformer, Apache-2.0) behind an

@@ -3,6 +3,8 @@
 **Status:** OPEN — filed 2026-11-26 ~12:5x+07 (zed-31ff0055@m3), from the sprint!020 bars round-3 cell (seal-sprints `.issues/020…` — the delegated verdict round 3's amendment 3: "the round-3 cell hit load 6.86 mid-run against the 6.0 ceiling, which is only checked at launch… the gate certifies box state at launch only and can't see a rise during the run").
 **Claimed:** zed-31ff0055@m3, 1795755000, expires 2026-11-28T12:00Z
 (scope: the filing + the fix design; the fix lands when a lane takes it — the preflight script is this repo's.)
+**Claimed:** zed-71634118@4090, 1795790968, expires 2026-11-30T15:00:00Z
+(scope: the FIX itself — the mid-run sampler + the extended PROVENANCE line + the out-of-spec citation; the filer's design section above is the spec and their line covers filing+design only, per its own "the fix lands when a lane takes it". Coordination note mailed to the holder; the push stays the arbiter.)
 
 **Repos:** [reflex] (the script's home; consumed by every fleet lane quoting a PROVENANCE line)
 

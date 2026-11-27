@@ -392,6 +392,16 @@ declines perf edits under `benches/` — a bench file's numbers ARE its artifact
   `scripts/bench_preflight.ps1` (Issue 065 T3(b)); `box_state::capture()`
   stamps the same verdict in-process (Windows records `ane=na` — no Apple
   ANE axis there), so 4090-hosted harness runs are never UNJUDGED.
+  **The launch gate certifies the box ONCE — the window BETWEEN the edges is
+  the mid-run load watch's (sprint!136, 2026-11-27):** the harness samples
+  `load_1m` on a 30 s cadence through the run and prints the aggregate into
+  its own log body (`load_mid_run_max=` is the grep token); `REFLEX_LOAD_WATCH=0`
+  is the exact-literal demote, `REFLEX_LOAD_WATCH_STRICT=1|true|on`
+  PROMOTE-ONLY turns a breach into exit 2 (the sprint!020 round-3
+  out-of-spec label, automatic), and the breach uses the same strict `>`
+  comparison as the launch gate so the two posts can never disagree at
+  `MAX_LOAD`. A microsecond-tail-sensitive cell takes the demote knowingly —
+  the sampler's own probe is a subprocess every cadence tick.
 
 ## Documentation Shape
 

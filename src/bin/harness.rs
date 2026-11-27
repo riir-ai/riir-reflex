@@ -312,12 +312,36 @@ use riir_reflex::harness::runner::{self, DEFAULT_DATASETS_DIR, RunOptions};
 const HARNESS_STACK_BYTES: usize = 64 << 20;
 
 fn main() {
+    // Sprint!136 — the mid-run load watch spans the WHOLE run (every
+    // exclusive early-exit probe mode included, one seam): the launch gate
+    // certifies the box once; this thread samples THROUGH the window so a
+    // mid-run load rise surfaces in the record's own log body.
+    // `REFLEX_LOAD_WATCH=0` (exact) is the demote — byte-identical incumbent.
+    let load_watch = riir_reflex::harness::load_watch::LoadWatch::from_env();
     let worker = std::thread::Builder::new()
         .name("harness".to_string())
         .stack_size(HARNESS_STACK_BYTES)
         .spawn(harness_main)
         .expect("spawn the harness thread");
-    if worker.join().is_err() {
+    let joined = worker.join();
+    // The mid-run line prints BEFORE the exit-code handling — a poisoned
+    // window must surface even when the run also fails for other reasons.
+    if let Some(w) = load_watch {
+        let mrl = w.finish();
+        println!("{}", mrl.render_line());
+        if mrl.ceiling_breach().is_some()
+            && riir_reflex::harness::load_watch::MidRunLoad::strict_armed()
+        {
+            // PROMOTE-ONLY strict mode: the out-of-spec label the sprint!020
+            // verdict lane applied post-hoc becomes automatic (exit 2).
+            eprintln!(
+                "harness: strict load watch — the mid-run ceiling was crossed; exiting 2 \
+                 (unset REFLEX_LOAD_WATCH_STRICT to stay flag-only)"
+            );
+            std::process::exit(2);
+        }
+    }
+    if joined.is_err() {
         // The panic message already printed on the worker thread.
         std::process::exit(101);
     }

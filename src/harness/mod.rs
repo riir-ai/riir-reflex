@@ -4,6 +4,8 @@
 //! engine, so it rides the same feature.
 // Box-state provenance stamped into every run's meta (Issue 021 T7).
 pub mod box_state;
+// Sprint!136 — the mid-run load sampler (the window BETWEEN the edges).
+pub mod load_watch;
 // Issue 038 T4′ — the cascade lane's pure composer (ungated: no engine dep).
 pub mod cascade;
 pub mod families;

@@ -3,7 +3,7 @@
 //! Usage:
 //! ```text
 //! cargo run --release --bin harness -- [--suites a,b] [--laya-max-questions N]
-//!                                      [--skip-laya] [--dump-items] [--laya-python] [--out DIR]
+//!                                      [--skip-laya] [--sensenova] [--dump-items] [--laya-python] [--out DIR]
 //!                                      [--robust-ab] [--label-smooth-ab]
 //!                                      [--corpus-cap N] [--cal-select-cap [LIST]]
 //!                                      [--head-scale F] [--head-select]
@@ -502,6 +502,11 @@ fn harness_main() {
                     .unwrap_or_else(|| die("--laya-max-questions needs a number"));
             }
             "--skip-laya" => opts.skip_laya = true,
+            // Issue 134 (rethink 068's local-teacher cell): the SenseNova
+            // self-hosted comparison lane — the OpenAI chat-completions wire
+            // over the OpenSenseNova llama.cpp fork. The no-creds gate + the
+            // quant stamp live in SensenovaLane::from_env (refuse LOUD).
+            "--sensenova" => opts.sensenova = true,
             "--dump-items" => opts.dump_items = true,
             "--robust-ab" => opts.robust_ab = true,
             "--label-smooth-ab" => opts.label_smooth_ab = true,

@@ -67,14 +67,24 @@ is the selection posture and reproduces byte-exact — nothing to re-baseline).
 - Cross-pair probes therefore cannot straddle the bake boundary; both mixed pairs were
   attempted and both refused to resolve (the scaffolding at /tmp/i135_bisect/ documents it).
 
-## At-the-wake checklist (replaces the old bisect runbook)
+## At-the-wake checklist (replaces the old bisect runbook; updated 08:2xZ after zed-d4108612's independent verification)
 
 1. Claim reflex 135 after 09:00Z per the standing discipline (fetch + claim_lease_check;
-   holder zed-ee5ceb7b@m3 expiring 09:00Z; yield if renewed).
+   holder zed-ee5ceb7b@m3 expiring 09:00Z; yield if renewed). Race note: zed-8374bc82@amo
+   also claims 09:05Z — first **Claimed:** push wins; the closure content is identical either way.
 2. Append the closure to the issue: verdict NO-REGRESSION (posture-comparator error), cite
    this file + the probe dirs (/tmp/i135/probe_*), close the bisect lane (no re-baseline —
    the published 0.3967 is the selection posture and reproduces digit-exact; if a BARE sst5
    board row is wanted, it is a NEW posture row (0.2017), never a regression fix).
+   **Closure MUST ALSO NAME: the i132 stop-condition delegated verdict whose premise was
+   "a regression exists" — refuted by this posture finding; cite it explicitly, never
+   silently supersede (records-integrity obligation surfaced by zed-d4108612).**
+   **Published-posture precision (from bench 137's RECORD.md run line, verified first-hand
+   by zed-d4108612): the full posture is `--skip-laya --nb-select --oc-select --ridge-select
+   --drafter-fix per_byte`. This lane's positive control used only `--nb-select --ridge-select`
+   and reproduced 0.3967 digit-exact — the oc-select and drafter-fix axes do not move sst5's
+   hard acc; state the full line in the closure for exactness, the two-flag reproduction as
+   the control evidence.**
 3. Fold the two 08:55Z/09:05Z scheduled wakes (they are self-mail; let them fire and no-op
    against this record, or cancel: `agent-mail scheduled` under zed-d4108612).
 4. Teardown: `git worktree remove /tmp/i135_bisect/{reflex,katgpt-rs}` + prune + rm -rf

@@ -79,7 +79,23 @@
 //! * `SENSENOVA_SMOKE_MAX_CASES` — the spend ceiling (cases per suite),
 //!   default 50 (a slow self-host is metered like a hosted endpoint — the
 //!   clef A6 law); a larger run refuses unless `SENSENOVA_ALLOW_UNCAPPED=1`.
-
+//!
+//! **Reasoning-class checkpoints (the i068 cell's recorded constraint):**
+//! a REASONING-trained checkpoint served WITHOUT a reasoning dial needs
+//! `SENSENOVA_TIMEOUT_MS` and `SENSENOVA_MAX_TOKENS` sized to its reasoning
+//! length, not to the answer's — SenseNova-Loop-9B at Metal-Q4 reasoned
+//! 2000–4000+ tokens per trivial question (~7.3 t/s ⇒ 300 s+ before the
+//! first content token; both the 2048 budget and the 120 s/300 s timeouts
+//! starved before any answer). The OpenSenseNova fork's dials are the
+//! escape: `--reasoning-budget 0` (or `--reasoning off`) at serve time
+//! collapses the reasoning phase — the i068 cell's practical posture (1
+//! s/case at the dial vs 300+ s trained). TRADE-OFF of record: the no-CoT
+//! posture answers off-contract often enough that the verbatim-key
+//! extraction grammar aborts suites under the harness's refuses-loud law
+//! (banking77 died at case 3, massive at 187 — the reasoning phase was
+//! organizing the answers; strip it and the prose goes sloppy). Full
+//! full record: rethink Issue 068 (parked, UNDECIDABLE-by-absence).
+//!
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};

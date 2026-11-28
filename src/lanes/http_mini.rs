@@ -52,6 +52,15 @@ pub(crate) enum LaneHttpError {
     Write(io::Error),
     /// Response read failed.
     Read(io::Error),
+    /// A socket read-timeout expiry, NAMED. On macOS a `SO_RCVTIMEO`
+    /// expiry surfaces as `EAGAIN`/`EWOULDBLOCK` (errno 35) — the
+    /// masked-timeout class the i068 B5 completion diagnosed (two
+    /// handshakes died as "os error 35" while the server was fine;
+    /// a blocking read that should block never EAGAINs unless the
+    /// socket timeout fired). Classified at the read site so a lane
+    /// can retry the class or name the knob, never a cryptic socket
+    /// error.
+    ReadTimeout { timeout_secs: u64 },
     /// The response bytes are not HTTP/1.1-shaped (separator, status
     /// line, or chunk framing).
     Parse(String),
@@ -66,6 +75,11 @@ impl std::fmt::Display for LaneHttpError {
             Self::SetTimeout(e) => write!(f, "set timeout: {e}"),
             Self::Write(e) => write!(f, "write: {e}"),
             Self::Read(e) => write!(f, "read: {e}"),
+            Self::ReadTimeout { timeout_secs } => write!(
+                f,
+                "read timed out after {timeout_secs}s (the socket timeout \
+                 expired mid-reply — raise the lane's TIMEOUT_MS or retry)"
+            ),
             Self::Parse(m) => write!(f, "{m}"),
         }
     }
@@ -119,7 +133,21 @@ pub(crate) fn request(
         .and_then(|_| stream.flush())
         .map_err(LaneHttpError::Write)?;
     let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).map_err(LaneHttpError::Read)?;
+    if let Err(source) = stream.read_to_end(&mut raw) {
+        // The masked-timeout classification (the i068 completion's
+        // diagnosis): macOS reports a SO_RCVTIMEO expiry as
+        // WouldBlock/EAGAIN — a blocking read that should block never
+        // EAGAINs unless the timeout fired.
+        if matches!(
+            source.kind(),
+            io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+        ) {
+            return Err(LaneHttpError::ReadTimeout {
+                timeout_secs: timeout.as_secs(),
+            });
+        }
+        return Err(LaneHttpError::Read(source));
+    }
     parse_http_response(&raw)
 }
 
@@ -429,5 +457,88 @@ mod tests {
             e.to_string().contains("connect 127.0.0.1:"),
             "display must name the target: {e}"
         );
+    }
+
+    /// The masked-timeout class the i068 B5 completion diagnosed: macOS
+    /// reports a SO_RCVTIMEO expiry as EAGAIN (errno 35) — the lane saw
+    /// "os error 35" on reads that should block. Both timeout spellings
+    /// carry the WouldBlock/TimedOut kinds the read site classifies.
+    #[test]
+    fn socket_timeout_spellings_carry_the_timeout_kinds() {
+        let eagain = std::io::Error::from_raw_os_error(35);
+        let etimedout = std::io::Error::from_raw_os_error(60);
+        assert!(matches!(eagain.kind(), std::io::ErrorKind::WouldBlock));
+        assert!(matches!(etimedout.kind(), std::io::ErrorKind::TimedOut));
+    }
+
+    /// A server that accepts, READS the request, and NEVER replies: the
+    /// client's socket timeout fires and the request returns the NAMED
+    /// ReadTimeout (not a raw io error) — the fix for the i068 class
+    /// (two handshakes died as "os error 35" while the server was
+    /// healthy). The holder reads before holding: an unread request
+    /// racing the client's abort can kernel-RST the loopback connection
+    /// and mask the timeout as ConnectionReset — the read-then-hold
+    /// shape is the deterministic silent server.
+    #[test]
+    fn silent_server_yields_named_readtimeout_not_a_raw_io_error() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        std::thread::spawn(move || {
+            loop {
+                let Ok((stream, _)) = listener.accept() else {
+                    continue;
+                };
+                std::thread::spawn(move || {
+                    let writer = match stream.try_clone() {
+                        Ok(w) => w,
+                        Err(_) => return,
+                    };
+                    let mut reader = BufReader::new(stream);
+                    let mut request_line = String::new();
+                    if reader.read_line(&mut request_line).is_err() {
+                        return;
+                    }
+                    let mut content_length = 0usize;
+                    let mut line = String::new();
+                    loop {
+                        line.clear();
+                        match reader.read_line(&mut line) {
+                            Ok(0) | Err(_) => break,
+                            Ok(_) => {
+                                let trimmed = line.trim_end();
+                                if trimmed.is_empty() {
+                                    break;
+                                }
+                                if let Some((k, v)) = trimmed.split_once(':')
+                                    && k.eq_ignore_ascii_case("content-length")
+                                {
+                                    content_length = v.trim().parse().unwrap_or(0);
+                                }
+                            }
+                        }
+                    }
+                    let mut body = vec![0u8; content_length];
+                    let _ = reader.read_exact(&mut body);
+                    // Request fully read — now hold, never reply.
+                    std::thread::sleep(Duration::from_secs(30));
+                    drop(writer);
+                });
+            }
+        });
+        let err = request(
+            "127.0.0.1",
+            addr.port(),
+            "GET",
+            "/health",
+            None,
+            Duration::from_millis(500),
+            &[],
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, LaneHttpError::ReadTimeout { .. }),
+            "expected ReadTimeout, got {err:?}"
+        );
+        assert!(err.to_string().contains("read timed out"), "{err}");
     }
 }

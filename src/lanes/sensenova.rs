@@ -566,16 +566,41 @@ impl SensenovaLane {
     }
 
     fn post(&self, body: &str) -> Result<http_mini::HttpReply, String> {
-        http_mini::request(
-            &self.host,
-            self.port,
-            "POST",
-            "/v1/chat/completions",
-            Some(body.as_bytes()),
-            self.timeout,
-            &[],
-        )
-        .map_err(|e| e.to_string())
+        // One bounded retry on the timeout class (the i068 completion's
+        // diagnosis: a handshake read can stall past SENSENOVA_TIMEOUT_MS
+        // when the server serializes a prior request — typed's 2000 fine
+        // decisions vs two dead handshakes). A retry opens a FRESH
+        // connection; llama-server cancels the abandoned task on
+        // disconnect (the read2 log's "cancel task" lines), so the retry
+        // is clean — never a double generation. Any second timeout is a
+        // LOUD named error carrying the knob.
+        let mut last_timeout: Option<u64> = None;
+        for attempt in 0..2 {
+            if attempt > 0 {
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            match http_mini::request(
+                &self.host,
+                self.port,
+                "POST",
+                "/v1/chat/completions",
+                Some(body.as_bytes()),
+                self.timeout,
+                &[],
+            ) {
+                Ok(reply) => return Ok(reply),
+                Err(http_mini::LaneHttpError::ReadTimeout { timeout_secs }) => {
+                    last_timeout = Some(timeout_secs);
+                }
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+        Err(format!(
+            "sensenova post: read timed out after {}s on BOTH attempts — the \
+             server stalled past the socket timeout twice; raise \
+             SENSENOVA_TIMEOUT_MS or check the serve",
+            last_timeout.unwrap_or_default()
+        ))
     }
 }
 
@@ -948,5 +973,133 @@ mod tests {
         let lane = SensenovaLane::for_test(addr, "the-load-path.gguf", 64);
         let (model_echo, _device) = lane.info().unwrap();
         assert_eq!(model_echo, "the-load-path.gguf");
+    }
+
+    /// The i068 completion's defect class, fixed: a first request that
+    /// STALLS past the socket timeout (the read2/read3 handshake EAGAINs)
+    /// is retried ONCE on a fresh connection — the second request
+    /// answers and the lane completes. The stall stub holds the first
+    /// connection without replying (the client's 1s timeout fires), the
+    /// second gets the canned reply.
+    #[test]
+    fn post_retries_the_timeout_class_once_and_completes() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let canned = chat_reply("positive", "stop");
+        std::thread::spawn(move || {
+            let mut first = true;
+            loop {
+                let (stream, _) = match listener.accept() {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                let mut writer = match stream.try_clone() {
+                    Ok(w) => w,
+                    Err(_) => continue,
+                };
+                let mut reader = BufReader::new(stream);
+                let mut request_line = String::new();
+                if reader.read_line(&mut request_line).is_err() {
+                    continue;
+                }
+                let mut content_length = 0usize;
+                let mut line = String::new();
+                loop {
+                    line.clear();
+                    match reader.read_line(&mut line) {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => {
+                            let trimmed = line.trim_end();
+                            if trimmed.is_empty() {
+                                break;
+                            }
+                            if let Some((k, v)) = trimmed.split_once(':')
+                                && k.eq_ignore_ascii_case("content-length")
+                            {
+                                content_length = v.trim().parse().unwrap_or(0);
+                            }
+                        }
+                    }
+                }
+                let mut body = vec![0u8; content_length];
+                let _ = reader.read_exact(&mut body);
+                if first {
+                    // The stall: hold the connection well past the
+                    // client's timeout, never reply — ON A DETACHED
+                    // THREAD, so the accept loop stays free for the
+                    // retry's connection (a blocking hold here would
+                    // strand the retry in the listen backlog and defeat
+                    // the test's own purpose).
+                    first = false;
+                    std::thread::spawn(move || {
+                        std::thread::sleep(Duration::from_secs(5));
+                        drop(writer);
+                    });
+                    continue;
+                }
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    canned.len(),
+                    canned
+                );
+                let _ = writer.write_all(resp.as_bytes());
+                let _ = writer.flush();
+            }
+        });
+        let lane = SensenovaLane {
+            host: addr.ip().to_string(),
+            port: addr.port(),
+            model: "m".to_string(),
+            timeout: Duration::from_millis(1000),
+            max_tokens: 64,
+        };
+        let case = SuiteCase {
+            id: "c0".into(),
+            state: Value::String("The movie was great.".into()),
+            questions: vec![choice_q()],
+            gold: vec![],
+        };
+        let (answers, _ms, _tokens) = lane.decide(&case).expect("the retry must complete");
+        assert_eq!(answers[0].0, vec![0.0, 0.0, 1.0]);
+    }
+
+    /// Both attempts stalling is a LOUD named error carrying the knob
+    /// (never a cryptic socket error — the i068 class named at the lane
+    /// surface).
+    #[test]
+    fn double_stall_names_sensenova_timeout_ms_loud() {
+        // A stub that stalls EVERY connection (accept on its own thread
+        // — the accept loop must stay free, the honest silent-server
+        // shape).
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        std::thread::spawn(move || {
+            loop {
+                let Ok((stream, _)) = listener.accept() else {
+                    continue;
+                };
+                std::thread::spawn(move || {
+                    // Hold without replying; dropped at the end.
+                    std::thread::sleep(Duration::from_secs(30));
+                    drop(stream);
+                });
+            }
+        });
+        let lane = SensenovaLane {
+            host: addr.ip().to_string(),
+            port: addr.port(),
+            model: "m".to_string(),
+            timeout: Duration::from_millis(300),
+            max_tokens: 64,
+        };
+        let case = SuiteCase {
+            id: "c0".into(),
+            state: Value::Null,
+            questions: vec![choice_q()],
+            gold: vec![],
+        };
+        let err = lane.decide(&case).unwrap_err();
+        assert!(err.contains("SENSENOVA_TIMEOUT_MS"), "{err}");
+        assert!(err.contains("BOTH attempts"), "{err}");
     }
 }

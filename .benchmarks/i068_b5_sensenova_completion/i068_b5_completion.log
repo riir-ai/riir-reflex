@@ -1,0 +1,22 @@
+harness: datasets .raw/datasets · suites ["banking77", "massive_intent_en"]
+═══ suite massive_intent_en ═══
+    300 cases / 300 questions · 59 domains
+    slice-integrity: test 300 (fnv1a64-328f111f90d7a0c1) · cal 200 (fnv1a64-74b76416cdd836d5) · pool 11314 (fnv1a64-fb5a4f0d9147dc0d) · OK
+    readout-report: best-on-cal dispatch (dispatch 0.3684, max_prob 0.3684, inv_entropy 0.4270 vs dispatch 0.3684; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.6100 · ece(maxp) 0.5454 · p50 0.082 ms · 0.1 s
+    sensenova: running…
+    [sensenova] service up: /tmp/sensanova-gguf/SenseNova-Loop-9B-Q4_K_M.gguf on metal+q4_k_m-ngl99
+═══ suite banking77 ═══
+    500 cases / 500 questions · 77 domains
+    slice-integrity: test 500 (fnv1a64-cb0b5cbcb0cdfcce) · cal 200 (fnv1a64-8f14f68a2e55799f) · pool 9793 (fnv1a64-14a38d138e218d1b) · OK
+    readout-report: best-on-cal dispatch (dispatch 0.3791, max_prob 0.3791, inv_entropy 0.3934 vs dispatch 0.3791; margin 0.005; REPORT-ONLY — the arming lever is demoted, Bench 052)
+    modelless: acc 0.3940 · ece(maxp) 0.3780 · p50 0.281 ms · 0.6 s
+    sensenova: running…
+    [sensenova] service up: /tmp/sensanova-gguf/SenseNova-Loop-9B-Q4_K_M.gguf on metal+q4_k_m-ngl99
+harness: wrote .benchmarks/i068_b5_sensenova_completion/results.json
+harness: wrote .benchmarks/i068_b5_sensenova_completion/TABLES.md
+harness: 2 absence(s)/error(s):
+  - massive_intent_en (sensenova): sensenova lane (case 187): qid intent: content names no presented option key: "None of the provided options match the user's request to \"open the folder app.\"" — the extraction grammar is verbatim-key, never a guess (the model answered off-contract)
+  - banking77 (sensenova): sensenova lane (case 3): qid intent: content is ambiguous across 2 option keys (card payment wrong exchange rate, exchange rate) — a prose answer naming two options is not an answer: "card payment wrong exchange rate" (the model answered off-contract)
+harness: PASSED WITH ABSENCES — 2 suite(s), 2 absence(s) listed above and in TABLES.md
+- mid-run load watch (sprint!136): samples=7 unread=0 window=240.6s cadence=30s min=6.60 load_mid_run_max=12.27 mean=8.58 max@216s — ⛔ load_mid_run_max=12.27 exceeds 6 — the window did NOT hold; out-of-spec beside the launch gate (sprint!020 round-3 precedent)

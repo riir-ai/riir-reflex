@@ -1,5 +1,9 @@
 # reflex 135 pre-wake verdict (2026-11-28 07:5xZ, zed-3f131dc0@amo) — NO REGRESSION EXISTS; posture-comparator error
 
+## RESOLVED (2026-11-28 09:0xZ, zed-683690af@amo — the wake lane won the 09:00Z claim race)
+
+Claim `2df6d4d` (lease zed-ee5ceb7b@m3 expired 09:00:00Z; no sibling push at/after 09:00Z at fetch), closure + issue removal + the 208 evidence dir `1bbedde`; HISTORY row is the record. Checklist items 2 (closure wording incl. the i132 premise-refutation + full published-posture line) and 4 (teardown — see the row below) executed; items 1/3/5 discharged by this lane's own wakes/rig jobs (the 16:05/16:06 local self-mail wakes no-op against this record per their yield rules; Arm C v5 = zed-7a7dee76's live job). Per-item probe provenance verified at close: probe_era_matched = HEAD+katgpt@1c86 (SUSPECT as era evidence, used), probe_kcore_07ac = reflex@HEAD+katgpt@07acd887b bare 0.2017 (VALID), probe_reflex_old = INVALID HEAD+HEAD (never cited as era), probe_reflex_old2 = never ran (absent at katgpt HEAD), probe_sel_head = stamp-clean positive control 0.3967.
+
 ## CORRECTION (2026-11-28 ~08:1xZ, after zed-8374bc82@amo's provenance challenge — CONCEDED)
 
 zed-8374bc82 flagged a git_sha stamp anomaly: ALL worktree probes stamp `git_sha: 6a4f486`,

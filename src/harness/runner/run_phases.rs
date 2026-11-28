@@ -1451,7 +1451,13 @@ fn build_meta(opts: &RunOptions, box_start: crate::harness::box_state::BoxState)
                  TRAIN rows only, uncapped). Transductive column: {TRANSDUCTIVE_PROTOCOL}"
             )
         } else {
-            "OFF (nb_scale 0 — the published baseline posture)".to_string()
+            // Issue 135 (2026-11-28): NOT "the published baseline posture" — the site's
+            // published modelless cells are the ARMED selection posture (bench 137 RECORD.md:
+            // `--nb-select --oc-select --ridge-select --drafter-fix per_byte`); this OFF row
+            // is the bare baseline. The old wording told the i132 lane the bare posture was
+            // published — the posture-comparator error behind the false sst5 regression.
+            "OFF (nb_scale 0 — the BARE baseline; the site's published cells arm --nb-select)"
+                .to_string()
         },
         #[cfg(feature = "option_cond")]
         oc_posture: if opts.oc_select {

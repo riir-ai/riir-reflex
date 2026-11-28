@@ -1,7 +1,7 @@
 # Issue 135 — modelless sst5 regression: the served arm reads ~chance (0.2017 vs the published 0.3967); root-cause before any re-baseline
 
 **Status:** OPEN — filed 2026-11-26 (zed-ee5ceb7b@m3) out of the i132 A3-republish data event's pre-registered stop condition (delegated-owner verdict, session `9dc5c21b`, 2 rounds AGREE).
-**Claimed:** zed-ee5ceb7b@m3, 1795683600, expires 2026-11-28T09:00:00Z
+**Claimed:** zed-683690af@amo, 1795948801, expires 2026-11-30T09:00:00+00:00
 
 ## The finding (all cells measured 2026-11-26)
 

@@ -2,6 +2,12 @@
 
 Compacted 2026-11-20: every heading kept verbatim, bodies <=2 lines of durable facts; full pre-compaction text in git history (pre-compaction HEAD 17463a3d). Operational rules live in `AGENTS.md`.
 
+## 2026-11-28 — Issue 122 CLOSED NEGATIVE + REMOVED: ESC worthiness gate supervised on outcome-delta (δ) targets — Bench 207 honest-death, NO GAIN
+
+T3 served-side read (rig job `01a2209c`, 05:27–05:29Z): all three arms row-identical (precision 0.1040 / value −0.0983 / rate 0.577) — bar (a) FAIL (Newcombe CI straddles), the T4 inverted control's non-collapse confirming the T2 invariance served-side. Load-bearing posture finding: `gate-fit-calibrated`'s percentile threshold cannot express a target-driven cut, so the δ signal had no surface to act on; T5a's routing-ceiling row (oracle 85.5% / served-think 70.1% / cheap-alone 55.6% over the fired 117) landed in the RESULTS. Closure + lease folds: `fbdc79f`; durable record `.benchmarks/207_esc_delta_target_cell/RESULTS.md`; file removed by the hygiene pass this row is (T1's corpus floor was met by the Bench-195 capture, T5a's row was already in RESULTS — the two stale boxes discharged at removal).
+
+Re-open trigger (from the closure's T6): a mechanism that moves the cut off the percentile posture (a direct δ head over escalation features) — its own issue, fresh bars; never a ρ/margin re-tune.
+
 ## 2026-11-23 — Issue 126 CLOSED + REMOVED: corpus defects vs the BM25 floor — ag_news PASS by a recorded gold overlay (Bench 204), semantic_defects FLOOR-PARITY@102 with the engine lever REFUTED (Bench 205)
 
 Ag_news: a 15-row gold-corrections overlay (the symmetric 62-row audit; `src/harness/gold_overlay.rs`, applied at prepare to BOTH lanes, drift refuses loud) → engine 0.9200 vs floor 0.9050, strict PASS. semantic_defects: the corpus grew 3 → 12 docs/class (engine 0.4412 → 0.5686) and the pre-registered engine lever was then MEASURED NEGATIVE before any engine code — with nb/ridge unarmed the real binary scores 0.1961 forced (chance 0.1667), so the hashed-lexicon halves carry no class signal there (lever (a) has nothing to weight); a nearest-exemplar vote in that space is an exact wash; a BM25-shaped vote strong enough to move the suite is the floor itself (refused as circular). Delegated-owner verdict `060599b8` AGREE: the one-row gap (b=11, c=10, exact McNemar p=1.000, paired 95% CI [−9.8, +7.8] pp, an 18-case cal front) is below the instrument's resolution → `FLOOR-PARITY@102`, never a PASS.

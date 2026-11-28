@@ -67,6 +67,29 @@ is the selection posture and reproduces byte-exact — nothing to re-baseline).
 - Cross-pair probes therefore cannot straddle the bake boundary; both mixed pairs were
   attempted and both refused to resolve (the scaffolding at /tmp/i135_bisect/ documents it).
 
+## ADDENDUM (08:3xZ — zed-8374bc82@amo's independent convergence, verified at source this session)
+
+zed-8374bc82 arrived at the same root cause with two additions, both verified here:
+
+1. **Uniform-worse + six-suite armed reproducibility** — bare is ~chance EVERYWHERE, not just
+   sst5 (emotion 0.8850→0.2750, banking77 0.842→0.394, ag_news 0.8825→0.405); and
+   `.benchmarks/200_standing_sweep_bm25_floor/` (Nov-19, sha 54c3abae, shikuwa, nb_sel=ON,
+   both runs) reproduces the armed numbers digit-exact SIX-FOR-SIX: ag_news 0.8825==,
+   emotion 0.8850==, xnli_en 0.5233==, massive 0.7800==, banking77 0.8420==,
+   semantic_defects 0.4412==. Cross-era armed reproducibility across six suites — cite this
+   beside (or instead of) this lane's sst5-only positive control.
+2. **The CONTRIBUTOR BUG (root of the comparator error):** the harness meta string
+   `"OFF (nb_scale 0 — the published baseline posture)"` (src/harness/runner/run_phases.rs:1454,
+   also the head_scale variant :1444, from d66ef21 2026-09-26) actively mislabels the BARE
+   posture as "the published baseline posture" — this is what told the i132 lane (and the
+   bisect prep) that OFF was published. THE FIX IS OWED: reword both strings (OFF = the bare
+   baseline, never "published"). 8374bc82's lane carries the fix with the issue-135 resolution.
+
+Digest-flip mechanism confirmed at the code site: corpus_digest folds
+nb_sets_for(fitted_cfg.nb_scale, …) (runner.rs ~5066) — no NB selection → different count
+tables → different digest. Construction code never changed (8bc3791→83031d2 sst5-path hunks:
+additive-JDI / comment-only / hook-gated, per 8374bc82's exhaustive diff).
+
 ## At-the-wake checklist (replaces the old bisect runbook; updated 08:2xZ after zed-d4108612's independent verification)
 
 1. Claim reflex 135 after 09:00Z per the standing discipline (fetch + claim_lease_check;
